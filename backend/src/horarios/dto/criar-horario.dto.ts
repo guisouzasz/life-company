@@ -1,0 +1,10 @@
+import { IsString, IsEnum, IsInt, IsBoolean, IsOptional, Min, Max } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class CriarHorarioDto {
+  @ApiProperty() @IsString() modalidadeId: string;
+  @ApiProperty({ enum: ['SEGUNDA','TERCA','QUARTA','QUINTA','SEXTA'] }) @IsEnum(['SEGUNDA','TERCA','QUARTA','QUINTA','SEXTA']) diaSemana: string;
+  @ApiProperty({ example: '07:00' }) @IsString() horaInicio: string;
+  @ApiProperty({ example: '08:00' }) @IsString() horaFim: string;
+  @ApiProperty({ default: 4 }) @IsOptional() @IsInt() @Min(1) @Max(20) capacidadeMaxima?: number;
+}

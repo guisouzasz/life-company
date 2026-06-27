@@ -1,0 +1,130 @@
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import * as dayjs from "dayjs";
+import { AuthService } from "../auth/auth.service";
+import { PrismaService } from "../prisma/prisma.service";
+import { CriarUsuarioDto } from "./dto/criar-usuario.dto";
+
+@Injectable()
+export class UsuariosService {
+  constructor(
+    private prisma: PrismaService,
+    private authService: AuthService,
+  ) {}
+
+  async criar(dto: CriarUsuarioDto) {
+    const cpfNorm = dto.cpf.replace(/\D/g, "");
+    const existe = await this.prisma.usuario.findFirst({
+      where: { OR: [{ cpf: cpfNorm }, { email: dto.email }] },
+    });
+    if (existe) throw new ConflictException("CPF ou e-mail já cadastrado");
+    const usuario = await this.prisma.usuario.create({
+      data: {
+        nome: dto.nome,
+        cpf: cpfNorm,
+        email: dto.email,
+        telefone: dto.telefone,
+        ativo: false,
+      },
+    });
+    const inicioSemana = dayjs().startOf("week").add(1, "day").toDate();
+    await this.prisma.usuarioPlano.create({
+      data: {
+        usuarioId: usuario.id,
+        planoId: dto.planoId,
+        modalidadeId: dto.modalidadeId,
+        vigenciaInicio: new Date(),
+        semanaReferencia: inicioSemana,
+      },
+    });
+    const { link } = await this.authService.gerarLinkPrimeiroAcesso(usuario.id);
+    return { usuario, linkAcesso: link };
+  }
+
+  async listar(busca?: string) {
+    return this.prisma.usuario.findMany({
+      where: {
+        tipoUsuario: "ALUNO",
+        ...(busca
+          ? {
+              OR: [
+                { nome: { contains: busca, mode: "insensitive" } },
+                { cpf: { contains: busca } },
+                { email: { contains: busca, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
+      include: {
+        usuarioPlanos: {
+          include: { plano: true, modalidade: true },
+          where: { vigenciaFim: null },
+        },
+      },
+      orderBy: { nome: "asc" },
+    });
+  }
+
+  async buscarPorId(id: string) {
+    const u = await this.prisma.usuario.findUnique({
+      where: { id },
+      include: {
+        usuarioPlanos: { include: { plano: true, modalidade: true } },
+      },
+    });
+    if (!u) throw new NotFoundException("Usuário não encontrado");
+    return u;
+  }
+
+  async atualizar(id: string, data: Partial<CriarUsuarioDto>) {
+    await this.buscarPorId(id);
+    return this.prisma.usuario.update({
+      where: { id },
+      data: { nome: data.nome, email: data.email, telefone: data.telefone },
+    });
+  }
+
+  async excluir(id: string) {
+    await this.buscarPorId(id);
+    await this.prisma.usuario.update({ where: { id }, data: { ativo: false } });
+    return { mensagem: "Usuário desativado" };
+  }
+
+  async saldoSemanal(usuarioId: string) {
+    const plano = await this.prisma.usuarioPlano.findFirst({
+      where: { usuarioId, vigenciaFim: null },
+      include: { plano: true, modalidade: true },
+    });
+    if (!plano) throw new NotFoundException("Plano não encontrado");
+    // Verifica reset semanal
+    const inicioSemana = dayjs().startOf("isoWeek").toDate();
+    if (dayjs(plano.semanaReferencia).isBefore(inicioSemana)) {
+      await this.prisma.usuarioPlano.update({
+        where: { id: plano.id },
+        data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemana },
+      });
+      plano.aulasUsadasSemana = 0;
+    }
+    return {
+      usadas: plano.aulasUsadasSemana,
+      total: plano.plano.aulasSemanais,
+      modalidade: plano.modalidade.nome,
+      plano: plano.plano.nome,
+    };
+  }
+
+  async gerarLink(usuarioId: string) {
+    return this.authService.gerarLinkPrimeiroAcesso(usuarioId);
+  }
+
+  async atualizarFcmToken(usuarioId: string, fcmToken: string) {
+    await this.prisma.usuario.update({
+      where: { id: usuarioId },
+      data: { fcmToken },
+    });
+    return { mensagem: "Token FCM atualizado" };
+  }
+}

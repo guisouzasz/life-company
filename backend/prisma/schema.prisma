@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TipoUsuario {
+  ADMIN
+  ALUNO
+}
+
+enum DiaSemana {
+  SEGUNDA
+  TERCA
+  QUARTA
+  QUINTA
+  SEXTA
+}
+
+enum StatusAgendamento {
+  CONFIRMADO
+  CANCELADO
+  REALIZADO
+  FALTOU
+}
+
+model Usuario {
+  id          String      @id @default(uuid())
+  nome        String
+  cpf         String      @unique
+  email       String      @unique
+  telefone    String?
+  senhaHash   String?     @map("senha_hash")
+  tipoUsuario TipoUsuario @default(ALUNO) @map("tipo_usuario")
+  ativo       Boolean     @default(true)
+  fcmToken    String?     @map("fcm_token")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  agendamentos   Agendamento[]
+  usuarioPlanos  UsuarioPlano[]
+  primeiroAcesso PrimeiroAcesso?
+  refreshTokens  RefreshToken[]
+
+  @@map("usuarios")
+}
+
+model Plano {
+  id            String @id @default(uuid())
+  nome          String
+  aulasSemanais Int    @map("aulas_semanais")
+
+  usuariosPlano UsuarioPlano[]
+
+  @@map("planos")
+}
+
+model Modalidade {
+  id   String @id @default(uuid())
+  nome String @unique
+
+  horarios      Horario[]
+  usuariosPlano UsuarioPlano[]
+
+  @@map("modalidades")
+}
+
+model Horario {
+  id               String    @id @default(uuid())
+  modalidadeId     String    @map("modalidade_id")
+  diaSemana        DiaSemana @map("dia_semana")
+  horaInicio       String    @map("hora_inicio")
+  horaFim          String    @map("hora_fim")
+  capacidadeMaxima Int       @default(4) @map("capacidade_maxima")
+  ativo            Boolean   @default(true)
+
+  modalidade   Modalidade    @relation(fields: [modalidadeId], references: [id])
+  agendamentos Agendamento[]
+
+  @@map("horarios")
+}
+
+model UsuarioPlano {
+  id                String     @id @default(uuid())
+  usuarioId         String     @map("usuario_id")
+  planoId           String     @map("plano_id")
+  modalidadeId      String     @map("modalidade_id")
+  vigenciaInicio    DateTime   @map("vigencia_inicio")
+  vigenciaFim       DateTime?  @map("vigencia_fim")
+  aulasUsadasSemana Int        @default(0) @map("aulas_usadas_semana")
+  semanaReferencia  DateTime   @map("semana_referencia")
+
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id])
+  plano      Plano      @relation(fields: [planoId], references: [id])
+  modalidade Modalidade @relation(fields: [modalidadeId], references: [id])
+
+  @@map("usuario_planos")
+}
+
+model Agendamento {
+  id        String            @id @default(uuid())
+  usuarioId String            @map("usuario_id")
+  horarioId String            @map("horario_id")
+  dataAula  DateTime          @map("data_aula")
+  status    StatusAgendamento @default(CONFIRMADO)
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  usuario  Usuario   @relation(fields: [usuarioId], references: [id])
+  horario  Horario   @relation(fields: [horarioId], references: [id])
+  presenca Presenca?
+
+  @@unique([usuarioId, horarioId, dataAula])
+  @@map("agendamentos")
+}
+
+model Presenca {
+  id            String      @id @default(uuid())
+  agendamentoId String      @unique @map("agendamento_id")
+  compareceu    Boolean     @default(false)
+  registradoEm  DateTime    @default(now()) @map("registrado_em")
+
+  agendamento Agendamento @relation(fields: [agendamentoId], references: [id])
+
+  @@map("presencas")
+}
+
+model PrimeiroAcesso {
+  id        String   @id @default(uuid())
+  usuarioId String   @unique @map("usuario_id")
+  token     String   @unique @default(uuid())
+  expiraEm  DateTime @map("expira_em")
+  usado     Boolean  @default(false)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("primeiro_acesso")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  usuarioId String   @map("usuario_id")
+  token     String   @unique
+  expiraEm  DateTime @map("expira_em")
+  revogado  Boolean  @default(false)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("refresh_tokens")
+}
