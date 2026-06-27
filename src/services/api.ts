@@ -1,6 +1,13 @@
+import { Platform } from "react-native";
 
-// URL fixa da API em produção (Railway)
-export const BASE_URL = "https://life-company-production.up.railway.app";
+const DEV_URL = Platform.select({
+  web: "http://localhost:3000",
+  default: "http://10.0.2.2:3000",
+});
+
+export const BASE_URL = __DEV__
+  ? DEV_URL!
+  : "https://life-company-production.up.railway.app";
 
 export class ApiError extends Error {
   status: number;
@@ -24,7 +31,7 @@ async function request(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
       ...headers,
@@ -32,10 +39,10 @@ async function request(
     },
   });
 
-  const data = await response.json().catch(() => ({}));
+  const data = await res.json().catch(() => ({}));
 
-  if (!response.ok) {
-    throw new ApiError(response.status, data.message || "Erro na requisição");
+  if (!res.ok) {
+    throw new ApiError(res.status, data.message || "Erro na requisição");
   }
 
   return data;
