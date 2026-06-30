@@ -1,4 +1,5 @@
-import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/auth';
 import { LC } from '../constants/theme';
@@ -6,29 +7,22 @@ import { TabBar } from '../components/tab-bar';
 import { Avatar } from '../components/ui/avatar';
 import { Card } from '../components/ui/card';
 import { Icon, type IconName } from '../components/ui/icon';
+import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { useMe } from '../services/auth/auth.queries';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
 import { useLogout } from '../services/auth/auth.mutations';
-
-const EM_BREVE = () =>
-  Alert.alert('Disponível em breve', 'Para alterar seus dados, fale com a recepção do studio.');
 
 export default function Perfil() {
   const nome = useAuthStore((s) => s.nome);
   const me = useMe();
   const saldo = useSaldo();
   const logout = useLogout();
-
-  const sair = () => {
-    Alert.alert('Sair da conta', 'Deseja realmente sair?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Sair', style: 'destructive', onPress: () => logout.mutate() },
-    ]);
-  };
+  const [confirmarSaida, setConfirmarSaida] = useState(false);
+  const [emBreve, setEmBreve] = useState(false);
 
   const menu: { label: string; icon: IconName; onPress: () => void }[] = [
-    { label: 'Dados pessoais', icon: 'person-outline', onPress: EM_BREVE },
-    { label: 'Alterar senha', icon: 'lock-closed-outline', onPress: EM_BREVE },
+    { label: 'Dados pessoais', icon: 'person-outline', onPress: () => setEmBreve(true) },
+    { label: 'Alterar senha', icon: 'lock-closed-outline', onPress: () => setEmBreve(true) },
     { label: 'Notificações', icon: 'notifications-outline', onPress: () => router.push('/notificacoes') },
   ];
 
@@ -50,7 +44,7 @@ export default function Perfil() {
         <View style={s.avatarSection}>
           <View>
             <Avatar nome={nome} size={88} />
-            <Pressable style={s.editBadge} onPress={EM_BREVE} hitSlop={6}>
+            <Pressable style={s.editBadge} onPress={() => setEmBreve(true)} hitSlop={6}>
               <Icon name="create-outline" size={14} color={LC.primary} />
             </Pressable>
           </View>
@@ -86,12 +80,29 @@ export default function Perfil() {
         </Card>
 
         {/* Sair */}
-        <Pressable style={({ pressed }) => [s.logout, pressed && s.pressed]} onPress={sair}>
+        <Pressable style={({ pressed }) => [s.logout, pressed && s.pressed]} onPress={() => setConfirmarSaida(true)}>
           <Icon name="log-out-outline" size={20} color={LC.danger} />
           <Text style={s.logoutText}>Sair da conta</Text>
         </Pressable>
       </ScrollView>
       <TabBar />
+
+      <ConfirmModal
+        visible={confirmarSaida}
+        title="Sair da conta"
+        message="Deseja realmente sair?"
+        confirmLabel="Sair"
+        destructive
+        loading={logout.isPending}
+        onConfirm={() => logout.mutate()}
+        onCancel={() => setConfirmarSaida(false)}
+      />
+      <InfoModal
+        visible={emBreve}
+        title="Disponível em breve"
+        message="Para alterar seus dados, fale com a recepção do studio."
+        onClose={() => setEmBreve(false)}
+      />
     </View>
   );
 }

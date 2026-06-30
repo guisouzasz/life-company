@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
-import { Alert, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
 import { LC } from '../../constants/theme';
 import { DIAS_PT } from '../../constants/app';
 import { iconePorModalidade } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
+import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useHorarios } from '../../services/horarios/horarios.queries';
 import { useBloquearHorario } from '../../services/horarios/horarios.mutations';
@@ -18,6 +19,8 @@ const ORDEM: DiaSemana[] = ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA'];
 export default function AdminHorarios() {
   const horarios = useHorarios();
   const bloquear = useBloquearHorario();
+  const [alvo, setAlvo] = useState<HorarioAdmin | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
   const grupos = useMemo(() => {
     const map = new Map<DiaSemana, HorarioAdmin[]>();
@@ -28,16 +31,15 @@ export default function AdminHorarios() {
     return ORDEM.filter((d) => map.has(d)).map((d) => [d, map.get(d)!] as const);
   }, [horarios.data]);
 
-  const confirmarBloqueio = (h: HorarioAdmin) => {
-    Alert.alert('Bloquear horário', `Bloquear ${h.modalidade.nome} às ${h.horaInicio}? Ele deixará de aceitar agendamentos.`, [
-      { text: 'Voltar', style: 'cancel' },
-      {
-        text: 'Bloquear',
-        style: 'destructive',
-        onPress: () =>
-          bloquear.mutate(h.id, { onError: (e) => Alert.alert('Erro', e instanceof ApiError ? e.message : 'Tente novamente.') }),
+  const confirmarBloqueio = () => {
+    if (!alvo) return;
+    bloquear.mutate(alvo.id, {
+      onSuccess: () => setAlvo(null),
+      onError: (e) => {
+        setAlvo(null);
+        setErro(e instanceof ApiError ? e.message : 'Não foi possível bloquear.');
       },
-    ]);
+    });
   };
 
   return (
@@ -70,7 +72,7 @@ export default function AdminHorarios() {
                       {h.horaInicio} - {h.horaFim} • {h.agendados}/{h.capacidadeMaxima} ocupação
                     </Text>
                   </View>
-                  <Pressable style={s.blockBtn} onPress={() => confirmarBloqueio(h)} hitSlop={6}>
+                  <Pressable style={s.blockBtn} onPress={() => setAlvo(h)} hitSlop={6}>
                     <Icon name="lock-closed-outline" size={18} color={LC.danger} />
                   </Pressable>
                 </Card>
@@ -81,6 +83,19 @@ export default function AdminHorarios() {
         </ScrollView>
       )}
       <TabBar isAdmin />
+
+      <ConfirmModal
+        visible={!!alvo}
+        title="Bloquear horário"
+        message={alvo ? `Bloquear ${alvo.modalidade.nome} às ${alvo.horaInicio}? Ele deixará de aceitar agendamentos.` : ''}
+        confirmLabel="Bloquear"
+        cancelLabel="Voltar"
+        destructive
+        loading={bloquear.isPending}
+        onConfirm={confirmarBloqueio}
+        onCancel={() => setAlvo(null)}
+      />
+      <InfoModal visible={!!erro} title="Erro" message={erro ?? ''} onClose={() => setErro(null)} />
     </View>
   );
 }

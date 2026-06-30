@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -21,6 +20,7 @@ import { Assets } from '../constants/assets';
 import { Button } from '../components/ui/button';
 import { Input, PasswordToggle } from '../components/ui/input';
 import { Icon } from '../components/ui/icon';
+import { InfoModal } from '../components/ui/modal';
 import { useLogin } from '../services/auth/auth.mutations';
 import { ApiError } from '../services/http';
 
@@ -33,6 +33,7 @@ type FormData = z.infer<typeof schema>;
 
 export default function Login() {
   const [showSenha, setShowSenha] = useState(false);
+  const [esqueceu, setEsqueceu] = useState(false);
   const login = useLogin();
 
   const {
@@ -125,12 +126,7 @@ export default function Login() {
                 )}
               />
 
-              <Pressable
-                style={s.forgot}
-                onPress={() =>
-                  Alert.alert('Esqueceu sua senha?', 'Entre em contato com a recepção do studio para redefinir sua senha.')
-                }
-              >
+              <Pressable style={s.forgot} onPress={() => setEsqueceu(true)}>
                 <Text style={s.forgotText}>Esqueceu sua senha?</Text>
               </Pressable>
 
@@ -145,6 +141,13 @@ export default function Login() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <InfoModal
+        visible={esqueceu}
+        title="Esqueceu sua senha?"
+        message="Entre em contato com a recepção do studio para redefinir sua senha."
+        onClose={() => setEsqueceu(false)}
+      />
     </View>
   );
 }

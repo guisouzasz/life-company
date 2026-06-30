@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LC } from '../constants/theme';
@@ -9,6 +9,7 @@ import { TabBar } from '../components/tab-bar';
 import { Icon } from '../components/ui/icon';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { AppModal, InfoModal } from '../components/ui/modal';
 import { Loading, EmptyState } from '../components/ui/states';
 import { useModalidades } from '../services/modalidades/modalidades.queries';
 import { useVagas } from '../services/horarios/horarios.queries';
@@ -26,6 +27,8 @@ export default function Agendamento() {
   const [modalSel, setModalSel] = useState<Modalidade | null>(null);
   const [diaSel, setDiaSel] = useState<Dia>(dias[0]);
   const [detalhe, setDetalhe] = useState<HorarioVaga | null>(null);
+  const [sucesso, setSucesso] = useState<string | null>(null);
+  const [erroAg, setErroAg] = useState<string | null>(null);
   const criar = useCriarAgendamento();
 
   useEffect(() => {
@@ -41,15 +44,32 @@ export default function Agendamento() {
       {
         onSuccess: () => {
           setDetalhe(null);
-          Alert.alert('Aula agendada!', `${horario.modalidade.nome} • ${diaSel.diaNome} ${diaSel.diaNum} às ${horario.horaInicio}`, [
-            { text: 'Ver minhas aulas', onPress: () => router.push('/minhas-aulas') },
-            { text: 'OK', style: 'cancel' },
-          ]);
+          setSucesso(`${horario.modalidade.nome} • ${diaSel.diaNome} ${diaSel.diaNum} às ${horario.horaInicio}`);
         },
-        onError: (e) => Alert.alert('Não foi possível agendar', e instanceof ApiError ? e.message : 'Tente novamente.'),
+        onError: (e) => setErroAg(e instanceof ApiError ? e.message : 'Não foi possível agendar.'),
       },
     );
   };
+
+  const feedbackModais = (
+    <>
+      <AppModal visible={!!sucesso} onClose={() => setSucesso(null)} title="Aula agendada!">
+        <Text style={s.modalMsg}>{sucesso}</Text>
+        <View style={s.modalActions}>
+          <Button title="Fechar" variant="outline" onPress={() => setSucesso(null)} style={{ flex: 1 }} />
+          <Button
+            title="Minhas aulas"
+            onPress={() => {
+              setSucesso(null);
+              router.push('/minhas-aulas');
+            }}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </AppModal>
+      <InfoModal visible={!!erroAg} title="Não foi possível agendar" message={erroAg ?? ''} onClose={() => setErroAg(null)} />
+    </>
+  );
 
   // ── Detalhes da Aula ───────────────────────────────────────────────
   if (detalhe) {
@@ -93,6 +113,7 @@ export default function Agendamento() {
             style={s.detBtn}
           />
         </View>
+        {feedbackModais}
       </View>
     );
   }
@@ -173,6 +194,7 @@ export default function Agendamento() {
         <View style={{ height: 8 }} />
       </ScrollView>
       <TabBar />
+      {feedbackModais}
     </View>
   );
 }
@@ -232,4 +254,6 @@ const s = StyleSheet.create({
   detKey: { fontSize: 14, color: LC.textSecondary },
   detVal: { fontSize: 14, fontWeight: '700', color: LC.textPrimary, flexShrink: 1, textAlign: 'right' },
   detBtn: { marginVertical: 16 },
+  modalMsg: { fontSize: 15, color: LC.textPrimary, marginBottom: 18, lineHeight: 22 },
+  modalActions: { flexDirection: 'row', gap: 10 },
 });

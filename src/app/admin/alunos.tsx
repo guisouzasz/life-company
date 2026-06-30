@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { LC } from '../../constants/theme';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
@@ -9,24 +10,66 @@ import { Avatar } from '../../components/ui/avatar';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
+import { AppModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
-import { useGerarLink } from '../../services/usuarios/usuarios.mutations';
+import { useGerarLink, useAtualizarAluno } from '../../services/usuarios/usuarios.mutations';
+import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { ApiError } from '../../services/http';
 
 export default function AdminAlunos() {
   const [busca, setBusca] = useState('');
   const alunos = useAlunos(busca.trim() || undefined);
   const gerarLink = useGerarLink();
+  const atualizar = useAtualizarAluno();
 
-  const handleGerarLink = (id: string) => {
+  // Modal de link gerado
+  const [link, setLink] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+
+  // Modal de edição
+  const [editando, setEditando] = useState<AlunoAdmin | null>(null);
+  const [form, setForm] = useState({ nome: '', email: '', telefone: '' });
+  const [erroEdicao, setErroEdicao] = useState<string | null>(null);
+
+  const abrirEdicao = (aluno: AlunoAdmin) => {
+    setEditando(aluno);
+    setErroEdicao(null);
+    setForm({ nome: aluno.nome, email: aluno.email, telefone: aluno.telefone ?? '' });
+  };
+
+  const salvarEdicao = () => {
+    if (!editando) return;
+    if (!form.nome.trim() || !form.email.trim()) {
+      setErroEdicao('Nome e e-mail são obrigatórios.');
+      return;
+    }
+    atualizar.mutate(
+      { id: editando.id, payload: { nome: form.nome.trim(), email: form.email.trim(), telefone: form.telefone.trim() || undefined } },
+      {
+        onSuccess: () => setEditando(null),
+        onError: (e) => setErroEdicao(e instanceof ApiError ? e.message : 'Não foi possível salvar.'),
+      },
+    );
+  };
+
+  const gerar = (id: string) => {
     gerarLink.mutate(id, {
-      onSuccess: (data) =>
-        Alert.alert('Link de primeiro acesso', data.link, [
-          { text: 'Fechar', style: 'cancel' },
-        ]),
-      onError: (e) => Alert.alert('Erro', e instanceof ApiError ? e.message : 'Tente novamente.'),
+      onSuccess: (data) => {
+        setCopiado(false);
+        setLink(data.link);
+      },
+      onError: (e) => {
+        setCopiado(false);
+        setLink(`Erro: ${e instanceof ApiError ? e.message : 'tente novamente.'}`);
+      },
     });
+  };
+
+  const copiar = async () => {
+    if (!link) return;
+    await Clipboard.setStringAsync(link);
+    setCopiado(true);
   };
 
   return (
@@ -71,17 +114,24 @@ export default function AdminAlunos() {
                     </View>
                     <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
                   </View>
-                  {!aluno.ativo ? (
+                  <View style={s.actions}>
                     <Button
-                      title="Gerar link de acesso"
+                      title="Editar"
                       variant="outline"
                       size="sm"
-                      onPress={() => handleGerarLink(aluno.id)}
-                      loading={gerarLink.isPending && gerarLink.variables === aluno.id}
-                      leftIcon={<Icon name="link-outline" size={16} color={LC.primary} />}
-                      style={s.linkBtn}
+                      onPress={() => abrirEdicao(aluno)}
+                      leftIcon={<Icon name="create-outline" size={16} color={LC.primary} />}
+                      style={s.actionBtn}
                     />
-                  ) : null}
+                    <Button
+                      title="Gerar link"
+                      size="sm"
+                      onPress={() => gerar(aluno.id)}
+                      loading={gerarLink.isPending && gerarLink.variables === aluno.id}
+                      leftIcon={<Icon name="link-outline" size={16} color="#fff" />}
+                      style={s.actionBtn}
+                    />
+                  </View>
                 </Card>
               );
             })
@@ -96,6 +146,37 @@ export default function AdminAlunos() {
         <Icon name="add" size={28} color="#fff" />
       </Pressable>
       <TabBar isAdmin />
+
+      {/* Modal: link de primeiro acesso */}
+      <AppModal visible={!!link} onClose={() => setLink(null)} title="Link de primeiro acesso">
+        <Text style={s.modalHint}>Envie este link ao aluno para ele criar a senha:</Text>
+        <View style={s.linkBox}>
+          <Text style={s.linkText} selectable>{link}</Text>
+        </View>
+        <View style={s.modalActions}>
+          <Button title="Fechar" variant="outline" onPress={() => setLink(null)} style={{ flex: 1 }} />
+          <Button
+            title={copiado ? 'Copiado!' : 'Copiar'}
+            onPress={copiar}
+            leftIcon={<Icon name={copiado ? 'checkmark' : 'copy-outline'} size={16} color="#fff" />}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </AppModal>
+
+      {/* Modal: editar aluno */}
+      <AppModal visible={!!editando} onClose={() => setEditando(null)} title="Editar aluno">
+        <View style={s.editForm}>
+          <Input label="Nome" value={form.nome} onChangeText={(t) => setForm((f) => ({ ...f, nome: t }))} autoCapitalize="words" />
+          <Input label="E-mail" value={form.email} onChangeText={(t) => setForm((f) => ({ ...f, email: t }))} keyboardType="email-address" autoCapitalize="none" />
+          <Input label="Telefone" value={form.telefone} onChangeText={(t) => setForm((f) => ({ ...f, telefone: t }))} keyboardType="phone-pad" />
+          {erroEdicao ? <Text style={s.erro}>{erroEdicao}</Text> : null}
+        </View>
+        <View style={s.modalActions}>
+          <Button title="Cancelar" variant="outline" onPress={() => setEditando(null)} style={{ flex: 1 }} />
+          <Button title="Salvar" loading={atualizar.isPending} onPress={salvarEdicao} style={{ flex: 1 }} />
+        </View>
+      </AppModal>
     </View>
   );
 }
@@ -113,9 +194,16 @@ const s = StyleSheet.create({
   nome: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
   email: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   plano: { fontSize: 11, color: LC.textMuted, marginTop: 2 },
-  linkBtn: { marginTop: 12 },
+  actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  actionBtn: { flex: 1 },
   fab: {
     position: 'absolute', right: 20, bottom: 92, width: 56, height: 56, borderRadius: 28,
     backgroundColor: LC.primary, alignItems: 'center', justifyContent: 'center', ...LC.shadowStrong,
   },
+  modalHint: { fontSize: 13, color: LC.textSecondary, marginBottom: 10 },
+  linkBox: { backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, borderRadius: LC.radius.md, padding: 12, marginBottom: 16 },
+  linkText: { fontSize: 13, color: LC.textPrimary },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  editForm: { gap: 14, marginBottom: 18 },
+  erro: { fontSize: 13, color: LC.danger },
 });

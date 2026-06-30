@@ -27,6 +27,13 @@ export interface CriarAlunoResposta {
   linkAcesso: string;
 }
 
+/** PUT /usuarios/:id — backend atualiza nome, email e telefone. */
+export interface AtualizarAlunoPayload {
+  nome?: string;
+  email?: string;
+  telefone?: string;
+}
+
 export interface GerarLinkResposta {
   link: string;
   token: string;

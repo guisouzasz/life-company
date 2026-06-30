@@ -1,4 +1,5 @@
-import { Alert, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../constants/theme';
 import { STUDIO_NOME, DIAS_PT } from '../constants/app';
@@ -7,6 +8,7 @@ import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
 import { Button } from '../components/ui/button';
+import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
 import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
 import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mutations';
@@ -16,19 +18,18 @@ import { formatDate } from '../services/date';
 export default function MinhasAulas() {
   const meus = useMeusAgendamentos();
   const cancelar = useCancelarAgendamento();
+  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
 
-  const confirmarCancelamento = (id: string) => {
-    Alert.alert('Cancelar aula', 'Tem certeza que deseja cancelar este agendamento?', [
-      { text: 'Voltar', style: 'cancel' },
-      {
-        text: 'Cancelar aula',
-        style: 'destructive',
-        onPress: () =>
-          cancelar.mutate(id, {
-            onError: (e) => Alert.alert('Não foi possível cancelar', e instanceof ApiError ? e.message : 'Tente novamente.'),
-          }),
+  const confirmarCancelamento = () => {
+    if (!cancelId) return;
+    cancelar.mutate(cancelId, {
+      onSuccess: () => setCancelId(null),
+      onError: (e) => {
+        setCancelId(null);
+        setErro(e instanceof ApiError ? e.message : 'Não foi possível cancelar.');
       },
-    ]);
+    });
   };
 
   return (
@@ -74,7 +75,7 @@ export default function MinhasAulas() {
                   variant="danger-outline"
                   size="sm"
                   fullWidth={false}
-                  onPress={() => confirmarCancelamento(ag.id)}
+                  onPress={() => setCancelId(ag.id)}
                   loading={cancelar.isPending && cancelar.variables === ag.id}
                   style={s.cancelBtn}
                 />
@@ -93,6 +94,19 @@ export default function MinhasAulas() {
         </ScrollView>
       )}
       <TabBar />
+
+      <ConfirmModal
+        visible={!!cancelId}
+        title="Cancelar aula"
+        message="Tem certeza que deseja cancelar este agendamento?"
+        confirmLabel="Cancelar aula"
+        cancelLabel="Voltar"
+        destructive
+        loading={cancelar.isPending}
+        onConfirm={confirmarCancelamento}
+        onCancel={() => setCancelId(null)}
+      />
+      <InfoModal visible={!!erro} title="Não foi possível cancelar" message={erro ?? ''} onClose={() => setErro(null)} />
     </View>
   );
 }

@@ -1,6 +1,12 @@
 import { http } from '../http';
 import type { SaldoSemanal } from './usuarios.types';
-import type { AlunoAdmin, CriarAlunoPayload, CriarAlunoResposta, GerarLinkResposta } from './usuarios.admin.types';
+import type {
+  AlunoAdmin,
+  AtualizarAlunoPayload,
+  CriarAlunoPayload,
+  CriarAlunoResposta,
+  GerarLinkResposta,
+} from './usuarios.admin.types';
 
 export const usuariosService = {
   async saldo(): Promise<SaldoSemanal> {
@@ -16,6 +22,11 @@ export const usuariosService = {
 
   async criar(payload: CriarAlunoPayload): Promise<CriarAlunoResposta> {
     const { data } = await http.post<CriarAlunoResposta>('/usuarios', payload);
+    return data;
+  },
+
+  async atualizar(id: string, payload: AtualizarAlunoPayload): Promise<AlunoAdmin> {
+    const { data } = await http.put<AlunoAdmin>(`/usuarios/${id}`, payload);
     return data;
   },
 

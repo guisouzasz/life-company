@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { LC } from '../../constants/theme';
 import { iconePorModalidade } from '../../constants/assets';
 import { Header } from '../../components/ui/header';
@@ -8,6 +9,7 @@ import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
+import { AppModal, InfoModal } from '../../components/ui/modal';
 import { usePlanos } from '../../services/planos/planos.queries';
 import { useModalidades } from '../../services/modalidades/modalidades.queries';
 import { useCriarAluno } from '../../services/usuarios/usuarios.mutations';
@@ -34,21 +36,31 @@ export default function NovoAluno() {
   const modalidades = useModalidades();
   const criar = useCriarAluno();
 
+  const [linkCriado, setLinkCriado] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
+
   const submit = () => {
     if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || !email.trim() || !planoId || !modalidadeId) {
-      Alert.alert('Campos obrigatórios', 'Preencha nome, CPF (11 dígitos), e-mail, plano e modalidade.');
+      setErro('Preencha nome, CPF (11 dígitos), e-mail, plano e modalidade.');
       return;
     }
     criar.mutate(
       { nome: nome.trim(), cpf: cpf.replace(/\D/g, ''), email: email.trim(), telefone: telefone.trim() || undefined, planoId, modalidadeId },
       {
-        onSuccess: (data) =>
-          Alert.alert('Aluno criado!', `Link de primeiro acesso:\n\n${data.linkAcesso}`, [
-            { text: 'OK', onPress: () => router.back() },
-          ]),
-        onError: (e) => Alert.alert('Erro ao criar aluno', e instanceof ApiError ? e.message : 'Tente novamente.'),
+        onSuccess: (data) => {
+          setCopiado(false);
+          setLinkCriado(data.linkAcesso);
+        },
+        onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível criar o aluno.'),
       },
     );
+  };
+
+  const copiar = async () => {
+    if (!linkCriado) return;
+    await Clipboard.setStringAsync(linkCriado);
+    setCopiado(true);
   };
 
   return (
@@ -103,6 +115,40 @@ export default function NovoAluno() {
           <Button title="Criar aluno e gerar link" size="lg" loading={criar.isPending} onPress={submit} style={s.submit} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Modal: link de primeiro acesso */}
+      <AppModal
+        visible={!!linkCriado}
+        onClose={() => {
+          setLinkCriado(null);
+          router.back();
+        }}
+        title="Aluno criado!"
+      >
+        <Text style={s.modalHint}>Envie este link ao aluno para ele criar a senha:</Text>
+        <View style={s.linkBox}>
+          <Text style={s.linkText} selectable>{linkCriado}</Text>
+        </View>
+        <View style={s.modalActions}>
+          <Button
+            title="Concluir"
+            variant="outline"
+            onPress={() => {
+              setLinkCriado(null);
+              router.back();
+            }}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title={copiado ? 'Copiado!' : 'Copiar'}
+            onPress={copiar}
+            leftIcon={<Icon name={copiado ? 'checkmark' : 'copy-outline'} size={16} color="#fff" />}
+            style={{ flex: 1 }}
+          />
+        </View>
+      </AppModal>
+
+      <InfoModal visible={!!erro} title="Atenção" message={erro ?? ''} onClose={() => setErro(null)} />
     </View>
   );
 }
@@ -125,4 +171,8 @@ const s = StyleSheet.create({
   modNome: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
   modNomeSel: { color: LC.primary, fontWeight: '700' },
   submit: { marginTop: 4 },
+  modalHint: { fontSize: 13, color: LC.textSecondary, marginBottom: 10 },
+  linkBox: { backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, borderRadius: LC.radius.md, padding: 12, marginBottom: 16 },
+  linkText: { fontSize: 13, color: LC.textPrimary },
+  modalActions: { flexDirection: 'row', gap: 10 },
 });
