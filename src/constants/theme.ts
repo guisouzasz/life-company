@@ -4,10 +4,16 @@ import { Platform } from "react-native";
 // ─── Life Company Design System ───────────────────────────────────────────────
 export const LC = {
   // ── Brand ─────────────────────────────────────────────────────────
-  primary: "#16B8A7", // verde Life Company (mockup)
-  primaryDark: "#0E8C80", // secondary / pressed
-  primaryLight: "#E8F8F6", // fundo suave verde
-  primaryMid: "#1DCFBC", // variante clara
+  brand: "#028E94", // teal oficial extraído do logo
+  primary: "#0E9488", // ação primária (botões, ativos)
+  primaryDark: "#0B6F66", // secondary / pressed
+  primaryLight: "#E6F4F1", // fundo suave verde
+  primaryMid: "#16B8A7", // variante clara
+  primarySoft: "#D2ECE7", // chip/avatar bg
+
+  // Gradiente do hero (login / splash)
+  gradientHero: ["#063A3D", "#055F63", "#028E94"] as const,
+  gradientCard: ["#0E9488", "#0B6F66"] as const,
 
   // ── Neutrals ──────────────────────────────────────────────────────
   bg: "#F8FAFC", // background geral (mockup)

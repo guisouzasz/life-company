@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import {
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,17 +12,20 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LC } from '../constants/theme';
+import { Assets } from '../constants/assets';
 import { Button } from '../components/ui/button';
 import { Input, PasswordToggle } from '../components/ui/input';
+import { Icon } from '../components/ui/icon';
 import { useLogin } from '../services/auth/auth.mutations';
 import { ApiError } from '../services/http';
 
 const schema = z.object({
-  email: z.string().min(1, 'Informe seu e-mail').email('E-mail inválido'),
+  email: z.string().min(1, 'Informe seu e-mail').email('Digite um e-mail válido'),
   senha: z.string().min(6, 'Mínimo de 6 caracteres'),
 });
 
@@ -42,8 +47,7 @@ export default function Login() {
   const onSubmit = handleSubmit((values) => {
     login.mutate(values, {
       onSuccess: (data) => {
-        if (data.tipoUsuario === 'ADMIN') router.replace('/admin/dashboard');
-        else router.replace('/dashboard');
+        router.replace(data.tipoUsuario === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
       },
     });
   });
@@ -57,32 +61,26 @@ export default function Login() {
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={LC.bgDark} />
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <StatusBar barStyle="light-content" />
+      <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          {/* Hero / marca */}
-          <View style={s.hero}>
-            <View style={s.logoBadge}>
-              <Text style={s.logoText}>LC</Text>
-            </View>
-            <Text style={s.brand}>Life Company</Text>
-            <Text style={s.tagline}>Seu treino, no seu ritmo.</Text>
-          </View>
+          {/* Hero */}
+          <LinearGradient colors={LC.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
+            <Image source={Assets.logoColor} style={s.logo} resizeMode="contain" />
+            <Text style={s.welcome}>Bem-vindo de volta!</Text>
+            <Text style={s.welcomeSub}>Faça login para continuar</Text>
+          </LinearGradient>
 
-          {/* Card de login */}
+          {/* Card de formulário */}
           <View style={s.card}>
-            <Text style={s.title}>Entrar</Text>
-            <Text style={s.subtitle}>Acesse sua conta para continuar</Text>
-
             {erroApi ? (
               <View style={s.errorBanner}>
+                <Icon name="alert-circle" size={18} color={LC.danger} />
                 <Text style={s.errorBannerText}>{erroApi}</Text>
               </View>
             ) : null}
@@ -93,7 +91,7 @@ export default function Login() {
                 name="email"
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
-                    label="E-mail"
+                    label="E-mail ou CPF"
                     placeholder="seu@email.com"
                     autoCapitalize="none"
                     autoComplete="email"
@@ -102,7 +100,7 @@ export default function Login() {
                     onChangeText={onChange}
                     onBlur={onBlur}
                     error={errors.email?.message}
-                    leftIcon={<Text style={s.fieldIcon}>✉️</Text>}
+                    leftIcon={<Icon name="mail-outline" size={18} color={LC.textMuted} />}
                   />
                 )}
               />
@@ -121,32 +119,27 @@ export default function Login() {
                     onBlur={onBlur}
                     onSubmitEditing={onSubmit}
                     error={errors.senha?.message}
-                    leftIcon={<Text style={s.fieldIcon}>🔒</Text>}
-                    rightSlot={
-                      <PasswordToggle
-                        visible={showSenha}
-                        onToggle={() => setShowSenha((v) => !v)}
-                      />
-                    }
+                    leftIcon={<Icon name="lock-closed-outline" size={18} color={LC.textMuted} />}
+                    rightSlot={<PasswordToggle visible={showSenha} onToggle={() => setShowSenha((v) => !v)} />}
                   />
                 )}
               />
 
-              <Button
-                title="Entrar"
-                size="lg"
-                loading={login.isPending}
-                onPress={onSubmit}
-                style={s.submit}
-              />
+              <Pressable
+                style={s.forgot}
+                onPress={() =>
+                  Alert.alert('Esqueceu sua senha?', 'Entre em contato com a recepção do studio para redefinir sua senha.')
+                }
+              >
+                <Text style={s.forgotText}>Esqueceu sua senha?</Text>
+              </Pressable>
+
+              <Button title="Entrar" size="lg" loading={login.isPending} onPress={onSubmit} />
             </View>
 
-            <Pressable
-              style={s.firstAccess}
-              onPress={() => router.push('/primeiro-acesso')}
-            >
+            <Pressable style={s.firstAccess} onPress={() => router.push('/primeiro-acesso')}>
               <Text style={s.firstAccessText}>
-                Primeiro acesso? <Text style={s.firstAccessLink}>Ative sua conta</Text>
+                Ainda não tem uma conta? <Text style={s.firstAccessLink}>Primeiro acesso</Text>
               </Text>
             </Pressable>
           </View>
@@ -157,43 +150,43 @@ export default function Login() {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: LC.bgDark },
+  root: { flex: 1, backgroundColor: LC.bg },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: 'center', paddingBottom: 32 },
-  hero: { alignItems: 'center', paddingTop: 64, paddingBottom: 32 },
-  logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: LC.radius.xl,
-    backgroundColor: LC.primary,
+  scroll: { flexGrow: 1 },
+  hero: {
+    paddingTop: 96,
+    paddingBottom: 72,
     alignItems: 'center',
     justifyContent: 'center',
-    ...LC.shadowStrong,
   },
-  logoText: { color: '#fff', fontSize: 28, fontWeight: '800', letterSpacing: 1 },
-  brand: { color: '#fff', fontSize: 24, fontWeight: '800', marginTop: 16 },
-  tagline: { color: 'rgba(255,255,255,0.6)', fontSize: 14, marginTop: 4 },
+  logo: { width: 150, height: 92, tintColor: '#FFFFFF' },
+  welcome: { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 12 },
+  welcomeSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 4 },
   card: {
+    flex: 1,
     backgroundColor: LC.bgCard,
-    marginHorizontal: 20,
-    borderRadius: LC.radius.xxl,
-    padding: 24,
-    ...LC.shadowStrong,
+    marginTop: -32,
+    borderTopLeftRadius: LC.radius.xxl,
+    borderTopRightRadius: LC.radius.xxl,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 28,
   },
-  title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
-  subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 4, marginBottom: 20 },
   errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: LC.dangerBg,
     borderRadius: LC.radius.md,
     paddingVertical: 10,
     paddingHorizontal: 14,
     marginBottom: 16,
   },
-  errorBannerText: { color: LC.danger, fontSize: 13, fontWeight: '500' },
+  errorBannerText: { color: LC.danger, fontSize: 13, fontWeight: '500', flex: 1 },
   form: { gap: 16 },
-  fieldIcon: { fontSize: 15 },
-  submit: { marginTop: 4 },
-  firstAccess: { marginTop: 20, alignItems: 'center' },
+  forgot: { alignSelf: 'flex-end', marginTop: -6 },
+  forgotText: { color: LC.primary, fontSize: 13, fontWeight: '600' },
+  firstAccess: { marginTop: 24, alignItems: 'center' },
   firstAccessText: { fontSize: 14, color: LC.textSecondary },
   firstAccessLink: { color: LC.primary, fontWeight: '700' },
 });

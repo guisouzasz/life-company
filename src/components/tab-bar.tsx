@@ -1,19 +1,28 @@
-import { TouchableOpacity, View, Text, StyleSheet, Platform } from 'react-native';
+import { Pressable, View, Text, StyleSheet, Platform } from 'react-native';
 import { router, usePathname } from 'expo-router';
 import { LC } from '../constants/theme';
+import { Icon, type IconName } from './ui/icon';
 
-const TABS = [
-  { label: 'Início',    route: '/dashboard',   icon: '⌂',  activeRoutes: ['/dashboard'] },
-  { label: 'Agenda',    route: '/agendamento', icon: '▦',  activeRoutes: ['/agendamento', '/minhas-aulas'] },
-  { label: 'Histórico', route: '/historico',   icon: '↺',  activeRoutes: ['/historico'] },
-  { label: 'Perfil',    route: '/perfil',      icon: '◯',  activeRoutes: ['/perfil', '/meu-plano', '/notificacoes'] },
+type Tab = {
+  label: string;
+  route: string;
+  icon: IconName;
+  iconActive: IconName;
+  activeRoutes: string[];
+};
+
+const TABS: Tab[] = [
+  { label: 'Início', route: '/dashboard', icon: 'home-outline', iconActive: 'home', activeRoutes: ['/dashboard'] },
+  { label: 'Agenda', route: '/agendamento', icon: 'calendar-outline', iconActive: 'calendar', activeRoutes: ['/agendamento', '/minhas-aulas'] },
+  { label: 'Histórico', route: '/historico', icon: 'time-outline', iconActive: 'time', activeRoutes: ['/historico'] },
+  { label: 'Perfil', route: '/perfil', icon: 'person-outline', iconActive: 'person', activeRoutes: ['/perfil', '/meu-plano', '/notificacoes'] },
 ];
 
-const ADMIN_TABS = [
-  { label: 'Início',     route: '/admin/dashboard',  icon: '⌂',  activeRoutes: ['/admin/dashboard'] },
-  { label: 'Alunos',     route: '/admin/alunos',     icon: '◉',  activeRoutes: ['/admin/alunos', '/admin/novo-aluno'] },
-  { label: 'Horários',   route: '/admin/horarios',   icon: '▦',  activeRoutes: ['/admin/horarios'] },
-  { label: 'Frequência', route: '/admin/frequencia', icon: '↺',  activeRoutes: ['/admin/frequencia'] },
+const ADMIN_TABS: Tab[] = [
+  { label: 'Início', route: '/admin/dashboard', icon: 'home-outline', iconActive: 'home', activeRoutes: ['/admin/dashboard'] },
+  { label: 'Alunos', route: '/admin/alunos', icon: 'people-outline', iconActive: 'people', activeRoutes: ['/admin/alunos', '/admin/novo-aluno'] },
+  { label: 'Horários', route: '/admin/horarios', icon: 'calendar-outline', iconActive: 'calendar', activeRoutes: ['/admin/horarios'] },
+  { label: 'Frequência', route: '/admin/frequencia', icon: 'stats-chart-outline', iconActive: 'stats-chart', activeRoutes: ['/admin/frequencia'] },
 ];
 
 export function TabBar({ isAdmin = false }: { isAdmin?: boolean }) {
@@ -22,20 +31,23 @@ export function TabBar({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <View style={s.bar}>
-      {tabs.map(tab => {
-        const active = tab.activeRoutes.some(r => pathname === r || pathname.startsWith(r + '/'));
+      {tabs.map((tab) => {
+        const active = tab.activeRoutes.some((r) => pathname === r || pathname.startsWith(r + '/'));
         return (
-          <TouchableOpacity
+          <Pressable
             key={tab.route}
             style={s.tab}
-            onPress={() => router.push(tab.route as any)}
-            activeOpacity={0.7}
+            onPress={() => router.replace(tab.route as any)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
           >
-            <View style={[s.iconWrap, active && s.iconWrapActive]}>
-              <Text style={[s.icon, active && s.iconActive]}>{tab.icon}</Text>
-            </View>
+            <Icon
+              name={active ? tab.iconActive : tab.icon}
+              size={24}
+              color={active ? LC.primary : LC.textMuted}
+            />
             <Text style={[s.label, active && s.labelActive]}>{tab.label}</Text>
-          </TouchableOpacity>
+          </Pressable>
         );
       })}
     </View>
@@ -48,18 +60,11 @@ const s = StyleSheet.create({
     backgroundColor: LC.bgCard,
     borderTopWidth: 1,
     borderTopColor: LC.border,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
     paddingTop: 10,
     paddingHorizontal: 4,
   },
-  tab: { flex: 1, alignItems: 'center', gap: 3 },
-  iconWrap: {
-    width: 44, height: 30, borderRadius: 15,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  iconWrapActive: { backgroundColor: LC.primaryLight },
-  icon: { fontSize: 17, color: LC.textMuted },
-  iconActive: { color: LC.primary },
-  label: { fontSize: 10, color: LC.textMuted, fontWeight: '500' },
+  tab: { flex: 1, alignItems: 'center', gap: 4 },
+  label: { fontSize: 11, color: LC.textMuted, fontWeight: '500' },
   labelActive: { color: LC.primary, fontWeight: '700' },
 });
