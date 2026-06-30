@@ -1,20 +1,26 @@
 import { useEffect } from 'react';
 import { Stack, router } from 'expo-router';
 import { View, ActivityIndicator, StatusBar } from 'react-native';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { LC } from '../constants/theme';
-import { AuthProvider, useAuthStore } from '../store/auth';
+import { useAuthStore } from '../store/auth';
+import { queryClient } from '../lib/query-client';
 
-function RootLayout() {
-  const { isLoading, isAuthenticated, tipoUsuario, loadFromStorage } = useAuthStore();
-
-  useEffect(() => { loadFromStorage(); }, []);
+function RootNavigator() {
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const tipoUsuario = useAuthStore((s) => s.tipoUsuario);
+  const hydrate = useAuthStore((s) => s.hydrate);
 
   useEffect(() => {
-    if (!isLoading) {
-      if (!isAuthenticated) router.replace('/');
-      else if (tipoUsuario === 'ADMIN') router.replace('/admin/dashboard');
-      else router.replace('/dashboard');
-    }
+    hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) router.replace('/');
+    else if (tipoUsuario === 'ADMIN') router.replace('/admin/dashboard');
+    else router.replace('/dashboard');
   }, [isLoading, isAuthenticated, tipoUsuario]);
 
   if (isLoading) {
@@ -36,8 +42,8 @@ function RootLayout() {
 
 export default function Layout() {
   return (
-    <AuthProvider>
-      <RootLayout />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <RootNavigator />
+    </QueryClientProvider>
   );
 }

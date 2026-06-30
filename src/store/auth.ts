@@ -1,11 +1,21 @@
 /**
- * Store de autenticação usando React Context + useReducer
- * Sem dependências externas (zustand não está instalado)
+ * Store de autenticação (Zustand).
+ * Mantém usuário, tokens e estado de sessão.
+ * Fora de React, o token é lido via useAuthStore.getState().accessToken
+ * (usado pelo interceptor do axios em services/http.ts).
  */
-import { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
+import { create } from 'zustand';
 import { Storage } from '../services/storage';
 
 export type TipoUsuario = 'ADMIN' | 'ALUNO';
+
+export interface Sessao {
+  accessToken: string;
+  refreshToken: string;
+  tipoUsuario: TipoUsuario;
+  usuarioId: string;
+  nome: string;
+}
 
 interface AuthState {
   accessToken: string | null;
@@ -15,40 +25,23 @@ interface AuthState {
   nome: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-}
-
-type AuthAction =
-  | { type: 'SET_TOKENS'; payload: Omit<AuthState, 'isAuthenticated' | 'isLoading'> }
-  | { type: 'LOGOUT' }
-  | { type: 'SET_LOADING'; value: boolean };
-
-const initial: AuthState = {
-  accessToken: null, refreshToken: null, tipoUsuario: null,
-  usuarioId: null, nome: null, isAuthenticated: false, isLoading: true,
-};
-
-function reducer(state: AuthState, action: AuthAction): AuthState {
-  switch (action.type) {
-    case 'SET_TOKENS': return { ...action.payload, isAuthenticated: true, isLoading: false };
-    case 'LOGOUT': return { ...initial, isLoading: false };
-    case 'SET_LOADING': return { ...state, isLoading: action.value };
-    default: return state;
-  }
-}
-
-// Context
-import React from 'react';
-const AuthCtx = createContext<{
-  state: AuthState;
-  setTokens: (data: { accessToken: string; refreshToken: string; tipoUsuario: TipoUsuario; usuarioId: string; nome: string }) => Promise<void>;
+  setTokens: (data: Sessao) => Promise<void>;
   logout: () => Promise<void>;
-  loadFromStorage: () => Promise<void>;
-} | null>(null);
+  hydrate: () => Promise<void>;
+}
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initial);
+const STORAGE_KEYS = ['accessToken', 'refreshToken', 'tipoUsuario', 'usuarioId', 'nome'] as const;
 
-  const setTokens = useCallback(async (data: any) => {
+export const useAuthStore = create<AuthState>((set) => ({
+  accessToken: null,
+  refreshToken: null,
+  tipoUsuario: null,
+  usuarioId: null,
+  nome: null,
+  isAuthenticated: false,
+  isLoading: true,
+
+  setTokens: async (data) => {
     await Storage.multiSet([
       ['accessToken', data.accessToken],
       ['refreshToken', data.refreshToken ?? ''],
@@ -56,49 +49,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ['usuarioId', data.usuarioId ?? ''],
       ['nome', data.nome ?? ''],
     ]);
-    dispatch({ type: 'SET_TOKENS', payload: { ...data, isAuthenticated: true, isLoading: false } });
-  }, []);
+    set({ ...data, isAuthenticated: true, isLoading: false });
+  },
 
-  const logout = useCallback(async () => {
-    await Storage.multiRemove(['accessToken', 'refreshToken', 'tipoUsuario', 'usuarioId', 'nome']);
-    dispatch({ type: 'LOGOUT' });
-  }, []);
+  logout: async () => {
+    await Storage.multiRemove([...STORAGE_KEYS]);
+    set({
+      accessToken: null,
+      refreshToken: null,
+      tipoUsuario: null,
+      usuarioId: null,
+      nome: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+  },
 
-  const loadFromStorage = useCallback(async () => {
+  hydrate: async () => {
     try {
-      const pairs = await Storage.multiGet(['accessToken', 'refreshToken', 'tipoUsuario', 'usuarioId', 'nome']);
-      const map = Object.fromEntries(pairs);
+      const pairs = await Storage.multiGet([...STORAGE_KEYS]);
+      const map = Object.fromEntries(pairs) as Record<string, string | null>;
       if (map.accessToken) {
-        dispatch({
-          type: 'SET_TOKENS',
-          payload: {
-            accessToken: map.accessToken,
-            refreshToken: map.refreshToken,
-            tipoUsuario: map.tipoUsuario as TipoUsuario,
-            usuarioId: map.usuarioId,
-            nome: map.nome,
-            isAuthenticated: true,
-            isLoading: false,
-          },
+        set({
+          accessToken: map.accessToken,
+          refreshToken: map.refreshToken ?? null,
+          tipoUsuario: (map.tipoUsuario as TipoUsuario) ?? null,
+          usuarioId: map.usuarioId ?? null,
+          nome: map.nome ?? null,
+          isAuthenticated: true,
+          isLoading: false,
         });
       } else {
-        dispatch({ type: 'SET_LOADING', value: false });
+        set({ isLoading: false });
       }
     } catch {
-      dispatch({ type: 'SET_LOADING', value: false });
+      set({ isLoading: false });
     }
-  }, []);
-
-  return React.createElement(AuthCtx.Provider, { value: { state, setTokens, logout, loadFromStorage } }, children);
-}
-
-export function useAuthStore() {
-  const ctx = useContext(AuthCtx);
-  if (!ctx) throw new Error('useAuthStore deve ser usado dentro de AuthProvider');
-  return {
-    ...ctx.state,
-    setTokens: ctx.setTokens,
-    logout: ctx.logout,
-    loadFromStorage: ctx.loadFromStorage,
-  };
-}
+  },
+}));

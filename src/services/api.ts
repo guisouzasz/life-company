@@ -1,13 +1,36 @@
-import { Platform } from "react-native";
+/**
+ * Camada de compatibilidade fina sobre o cliente axios (services/http.ts).
+ *
+ * Mantida para as telas legadas que chamam api.get/post/patch.
+ * O token é injetado automaticamente pelo interceptor — o parâmetro `token`
+ * permanece apenas por compatibilidade de assinatura e é ignorado.
+ *
+ * Código novo deve usar os services/hooks de cada módulo (services/<modulo>),
+ * que consomem `http` diretamente.
+ */
+import { http, BASE_URL, ApiError } from './http';
 
-const DEV_URL = Platform.select({
-  web: "http://localhost:3000",
-  default: "http://10.0.2.2:3000",
-});
+export { BASE_URL, ApiError, http };
 
-export const BASE_URL = "https://life-company-production.up.railway.app";
-
-console.log("==========");
-console.log("BASE_URL =", BASE_URL);
-console.log("DEV =", __DEV__);
-console.log("==========");
+export const api = {
+  async get<T = any>(path: string, _token?: string): Promise<T> {
+    const { data } = await http.get<T>(path);
+    return data;
+  },
+  async post<T = any>(path: string, body?: unknown, _token?: string): Promise<T> {
+    const { data } = await http.post<T>(path, body ?? {});
+    return data;
+  },
+  async patch<T = any>(path: string, body?: unknown, _token?: string): Promise<T> {
+    const { data } = await http.patch<T>(path, body ?? {});
+    return data;
+  },
+  async put<T = any>(path: string, body?: unknown, _token?: string): Promise<T> {
+    const { data } = await http.put<T>(path, body ?? {});
+    return data;
+  },
+  async del<T = any>(path: string, _token?: string): Promise<T> {
+    const { data } = await http.delete<T>(path);
+    return data;
+  },
+};
