@@ -60,7 +60,7 @@ export default function AdminDashboard() {
           <View style={s.heroTop}>
             <View>
               <Text style={s.heroTitle}>Painel Admin</Text>
-              <Text style={s.heroSub}>Olá, {nome?.split(' ')[0] || 'Admin'} 👋</Text>
+              <Text style={s.heroSub}>Olá, {nome?.split(' ')[0] || 'Admin'}</Text>
             </View>
             <Pressable style={s.logoutBtn} onPress={() => logout.mutate()} hitSlop={8}>
               <Icon name="log-out-outline" size={20} color="#fff" />

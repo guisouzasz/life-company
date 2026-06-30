@@ -1,83 +1,97 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Alert, StatusBar } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { useAuthStore } from '../store/auth';
-import { api, ApiError } from '../services/api';
 import { LC } from '../constants/theme';
+import { STUDIO_NOME, DIAS_PT } from '../constants/app';
+import { iconePorModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
+import { Card } from '../components/ui/card';
+import { Icon } from '../components/ui/icon';
+import { Button } from '../components/ui/button';
+import { Loading, EmptyState, ErrorState } from '../components/ui/states';
+import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
+import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mutations';
+import { ApiError } from '../services/http';
 import { formatDate } from '../services/date';
 
 export default function MinhasAulas() {
-  const { accessToken, logout } = useAuthStore();
-  const [agendamentos, setAgendamentos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const meus = useMeusAgendamentos();
+  const cancelar = useCancelarAgendamento();
 
-  const carregar = async () => {
-    try {
-      const data = await api.get('/agendamentos/meus', accessToken!);
-      setAgendamentos(data);
-    } catch (e) { if (e instanceof ApiError && e.status === 401) logout(); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { carregar(); }, []);
-
-  const cancelar = (id: string) => {
-    Alert.alert('Cancelar aula', 'Tem certeza?', [
-      { text: 'Não', style: 'cancel' },
-      { text: 'Sim', style: 'destructive', onPress: async () => {
-        try { await api.patch(`/agendamentos/${id}/cancelar`, undefined, accessToken!); carregar(); }
-        catch (e) { Alert.alert('Erro', String(e instanceof ApiError ? e.message : e)); }
-      }},
+  const confirmarCancelamento = (id: string) => {
+    Alert.alert('Cancelar aula', 'Tem certeza que deseja cancelar este agendamento?', [
+      { text: 'Voltar', style: 'cancel' },
+      {
+        text: 'Cancelar aula',
+        style: 'destructive',
+        onPress: () =>
+          cancelar.mutate(id, {
+            onError: (e) => Alert.alert('Não foi possível cancelar', e instanceof ApiError ? e.message : 'Tente novamente.'),
+          }),
+      },
     ]);
   };
 
-  const MOD_ICON: Record<string, string> = { Funcional: '🤸', Pilates: '🧘', Academia: '🏋️' };
-  const MOD_COLOR: Record<string, string> = { Funcional: '#E8F5FF', Pilates: '#F0FDF4', Academia: '#FEF3C7' };
-  const DIAS_PT: Record<string, string> = { SEGUNDA: 'Segunda', TERCA: 'Terça', QUARTA: 'Quarta', QUINTA: 'Quinta', SEXTA: 'Sexta' };
-
-  if (loading) return <View style={s.center}><ActivityIndicator color={LC.primary} size="large" /></View>;
-
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={LC.bg} />
+      <StatusBar barStyle="dark-content" />
       <View style={s.header}>
-        <Text style={s.titulo}>Minhas Aulas</Text>
+        <Text style={s.title}>Minhas aulas</Text>
+        <Text style={s.subtitle}>Seus próximos treinos agendados</Text>
       </View>
-      <FlatList
-        data={agendamentos}
-        keyExtractor={i => i.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
-        ListEmptyComponent={
-          <View style={s.empty}>
-            <Text style={s.emptyText}>Nenhuma aula agendada</Text>
-            <TouchableOpacity onPress={() => router.push('/agendamento')}>
-              <Text style={s.emptyLink}>Agendar uma aula →</Text>
-            </TouchableOpacity>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const nome = item.horario?.modalidade?.nome || '';
-          const icone = MOD_ICON[nome] || '📍';
-          const cor = MOD_COLOR[nome] || LC.primaryLight;
-          const dia = DIAS_PT[item.horario?.diaSemana] || '';
-          return (
-            <View style={s.card}>
-              <View style={[s.iconWrap, { backgroundColor: cor }]}>
-                <Text style={s.icon}>{icone}</Text>
-              </View>
-              <View style={s.info}>
-                <Text style={s.modalidade}>{nome}</Text>
-                <Text style={s.dataTexto}>{dia} • {item.horario?.horaInicio} - {item.horario?.horaFim}</Text>
-                <Text style={s.local}>Studio Life Company</Text>
-              </View>
-              <TouchableOpacity style={s.cancelBtn} onPress={() => cancelar(item.id)}>
-                <Text style={s.cancelBtnText}>Cancelar</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        }}
-      />
+
+      {meus.isLoading ? (
+        <Loading />
+      ) : meus.isError ? (
+        <ErrorState onRetry={() => meus.refetch()} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={() => meus.refetch()} colors={[LC.primary]} tintColor={LC.primary} />}
+        >
+          {meus.data && meus.data.length > 0 ? (
+            meus.data.map((ag) => (
+              <Card key={ag.id} style={s.card} padding={16}>
+                <View style={s.dateBubble}>
+                  <Text style={s.dateNum}>{formatDate(ag.dataAula, 'DD')}</Text>
+                  <Text style={s.dateMes}>{formatDate(ag.dataAula, 'MMM')}</Text>
+                </View>
+                <View style={s.info}>
+                  <Text style={s.modalidade}>{ag.horario.modalidade.nome}</Text>
+                  <View style={s.infoLine}>
+                    <Icon name="time-outline" size={13} color={LC.textSecondary} />
+                    <Text style={s.infoText}>
+                      {DIAS_PT[ag.horario.diaSemana]} • {ag.horario.horaInicio} - {ag.horario.horaFim}
+                    </Text>
+                  </View>
+                  <View style={s.infoLine}>
+                    <Icon name="location-outline" size={13} color={LC.textMuted} />
+                    <Text style={s.infoStudio}>{STUDIO_NOME}</Text>
+                  </View>
+                </View>
+                <Button
+                  title="Cancelar"
+                  variant="danger-outline"
+                  size="sm"
+                  fullWidth={false}
+                  onPress={() => confirmarCancelamento(ag.id)}
+                  loading={cancelar.isPending && cancelar.variables === ag.id}
+                  style={s.cancelBtn}
+                />
+              </Card>
+            ))
+          ) : (
+            <EmptyState
+              icon="calendar-outline"
+              title="Nenhuma aula agendada"
+              description="Reserve seu próximo treino na agenda."
+              actionLabel="Ir para a agenda"
+              onAction={() => router.push('/agendamento')}
+            />
+          )}
+          <View style={{ height: 8 }} />
+        </ScrollView>
+      )}
       <TabBar />
     </View>
   );
@@ -85,19 +99,18 @@ export default function MinhasAulas() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingTop: 56, paddingBottom: 12, paddingHorizontal: 20, backgroundColor: LC.bg },
-  titulo: { fontSize: 22, fontWeight: '700', color: LC.textPrimary },
-  card: { backgroundColor: LC.bgCard, borderRadius: LC.radius.lg, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12, ...LC.shadow },
-  iconWrap: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  icon: { fontSize: 22 },
-  info: { flex: 1 },
-  modalidade: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
-  dataTexto: { fontSize: 13, color: LC.textSecondary, marginTop: 2 },
-  local: { fontSize: 12, color: LC.textMuted, marginTop: 1 },
-  cancelBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: LC.radius.full, borderWidth: 1.5, borderColor: LC.danger },
-  cancelBtnText: { color: LC.danger, fontWeight: '600', fontSize: 12 },
-  empty: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: LC.textMuted, fontSize: 15 },
-  emptyLink: { color: LC.primary, fontWeight: '600', marginTop: 8, fontSize: 14 },
+  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
+  subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
+  scroll: { padding: 16, paddingBottom: 16 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
+  dateBubble: { width: 52, height: 52, borderRadius: 14, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  dateNum: { fontSize: 18, fontWeight: '800', color: LC.primary, lineHeight: 20 },
+  dateMes: { fontSize: 10, fontWeight: '700', color: LC.primary, textTransform: 'uppercase' },
+  info: { flex: 1, gap: 3 },
+  modalidade: { fontSize: 16, fontWeight: '700', color: LC.textPrimary },
+  infoLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  infoText: { fontSize: 12, color: LC.textSecondary },
+  infoStudio: { fontSize: 12, color: LC.textMuted },
+  cancelBtn: { paddingHorizontal: 14 },
 });

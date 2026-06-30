@@ -20,8 +20,9 @@ export interface AuthResponse {
   nome: string;
 }
 
-/** Resposta de GET /auth/me (payload do JWT). */
+/** Resposta de GET /auth/me. */
 export interface UsuarioLogado {
-  sub: string;
+  id: string;
+  email: string;
   tipo: TipoUsuario;
 }

@@ -8,6 +8,7 @@ import {
   type TextInputProps,
 } from 'react-native';
 import { LC } from '../../constants/theme';
+import { Icon } from './icon';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -64,7 +65,7 @@ export function PasswordToggle({
 }) {
   return (
     <Pressable hitSlop={8} onPress={onToggle}>
-      <Text style={styles.toggle}>{visible ? '🙈' : '👁️'}</Text>
+      <Icon name={visible ? 'eye-off-outline' : 'eye-outline'} size={18} color={LC.textMuted} />
     </Pressable>
   );
 }
@@ -89,5 +90,4 @@ const styles = StyleSheet.create({
   right: { paddingLeft: 4 },
   input: { flex: 1, fontSize: 15, color: LC.textPrimary, paddingVertical: 12 },
   errorText: { fontSize: 12, color: LC.danger },
-  toggle: { fontSize: 16 },
 });

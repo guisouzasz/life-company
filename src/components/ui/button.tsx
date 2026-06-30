@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { LC } from '../../constants/theme';
 
-type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'danger-outline';
 type Size = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends Omit<PressableProps, 'style'> {
@@ -40,6 +40,7 @@ export function Button({
   const isDisabled = disabled || loading;
   const bg = BG[variant];
   const txtColor = TXT[variant];
+  const isOutline = variant === 'outline' || variant === 'danger-outline';
 
   return (
     <Pressable
@@ -48,7 +49,7 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         { height: HEIGHT[size], backgroundColor: bg },
-        variant === 'outline' && styles.outline,
+        isOutline && { borderWidth: 1.5, borderColor: txtColor },
         fullWidth && styles.fullWidth,
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
@@ -74,6 +75,7 @@ const BG: Record<Variant, string> = {
   outline: 'transparent',
   ghost: 'transparent',
   danger: LC.danger,
+  'danger-outline': 'transparent',
 };
 
 const TXT: Record<Variant, string> = {
@@ -82,6 +84,7 @@ const TXT: Record<Variant, string> = {
   outline: LC.primary,
   ghost: LC.primary,
   danger: LC.textWhite,
+  'danger-outline': LC.danger,
 };
 
 const styles = StyleSheet.create({
@@ -92,7 +95,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: LC.space.xl,
   },
   fullWidth: { alignSelf: 'stretch' },
-  outline: { borderWidth: 1.5, borderColor: LC.primary },
   content: { flexDirection: 'row', alignItems: 'center', gap: LC.space.sm },
   label: { fontWeight: '700' },
   pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },

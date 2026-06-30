@@ -8,3 +8,11 @@ export function useSaldo() {
     queryFn: usuariosService.saldo,
   });
 }
+
+/** Lista de alunos (admin), com busca opcional. */
+export function useAlunos(busca?: string) {
+  return useQuery({
+    queryKey: ['usuarios', 'alunos', busca ?? ''],
+    queryFn: () => usuariosService.listar(busca),
+  });
+}

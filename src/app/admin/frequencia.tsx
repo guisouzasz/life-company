@@ -1,62 +1,79 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar } from 'react-native';
-import { router } from 'expo-router';
-import { useAuthStore } from '../../store/auth';
-import { api, ApiError } from '../../services/api';
+import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
 import { TabBar } from '../../components/tab-bar';
+import { Card } from '../../components/ui/card';
+import { Avatar } from '../../components/ui/avatar';
+import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
+import { useRelatorioFrequencia } from '../../services/relatorios/relatorios.queries';
+import type { AlunoFrequencia } from '../../services/relatorios/relatorios.types';
+
+function resumo(aluno: AlunoFrequencia) {
+  const presencas = aluno.agendamentos.filter((a) => a.presenca?.compareceu).length;
+  const faltas = aluno.agendamentos.filter((a) => a.presenca && !a.presenca.compareceu).length;
+  const avaliadas = presencas + faltas;
+  const pct = avaliadas > 0 ? Math.round((presencas / avaliadas) * 100) : null;
+  return { presencas, faltas, pct };
+}
 
 export default function AdminFrequencia() {
-  const { accessToken, logout } = useAuthStore();
-  const [dados, setDados] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/relatorios/frequencia', accessToken!)
-      .then(setDados)
-      .catch(e => { if (e instanceof ApiError && e.status === 401) logout(); })
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <View style={s.center}><ActivityIndicator size="large" color={LC.primary} /></View>;
+  const frequencia = useRelatorioFrequencia();
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={LC.bg} />
+      <StatusBar barStyle="dark-content" />
       <View style={s.header}>
-        <TouchableOpacity onPress={() => router.back()}><Text style={s.back}>‹</Text></TouchableOpacity>
-        <Text style={s.titulo}>Frequência</Text>
+        <Text style={s.title}>Frequência</Text>
+        <Text style={s.subtitle}>Presenças e faltas por aluno</Text>
       </View>
-      <FlatList
-        data={dados}
-        keyExtractor={d => d.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
-        renderItem={({ item }) => {
-          const total = item.agendamentos.length;
-          const presentes = item.agendamentos.filter((a: any) => a.presenca?.compareceu).length;
-          const taxa = total > 0 ? Math.round((presentes / total) * 100) : 0;
-          const plano = item.usuarioPlanos?.[0];
-          const cor = taxa >= 70 ? LC.success : taxa >= 40 ? LC.warning : LC.danger;
-          return (
-            <View style={s.card}>
-              <View style={s.cardTop}>
-                <View style={[s.avatar, { backgroundColor: LC.primaryLight }]}>
-                  <Text style={[s.avatarText, { color: LC.primary }]}>{item.nome.charAt(0)}</Text>
+
+      {frequencia.isLoading ? (
+        <Loading />
+      ) : frequencia.isError ? (
+        <ErrorState onRetry={() => frequencia.refetch()} />
+      ) : !frequencia.data || frequencia.data.length === 0 ? (
+        <EmptyState icon="stats-chart-outline" title="Sem dados de frequência" description="Os registros de presença aparecerão aqui." />
+      ) : (
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          {frequencia.data.map((aluno) => {
+            const { presencas, faltas, pct } = resumo(aluno);
+            const plano = aluno.usuarioPlanos?.[0];
+            return (
+              <Card key={aluno.id} style={s.card} padding={16}>
+                <View style={s.top}>
+                  <Avatar nome={aluno.nome} size={44} />
+                  <View style={s.info}>
+                    <Text style={s.nome}>{aluno.nome}</Text>
+                    {plano ? (
+                      <Text style={s.plano}>
+                        {plano.modalidade?.nome}{plano.plano ? ` • ${plano.plano.nome}` : ''}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={s.pct}>{pct != null ? `${pct}%` : '—'}</Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.nome}>{item.nome}</Text>
-                  {plano && <Text style={s.plano}>{plano.modalidade?.nome} • {plano.plano?.nome} • {plano.aulasUsadasSemana}/{plano.plano?.aulasSemanais} esta semana</Text>}
+
+                {pct != null ? (
+                  <View style={s.progressTrack}>
+                    <View style={[s.progressFill, { width: `${pct}%` }]} />
+                  </View>
+                ) : null}
+
+                <View style={s.statsRow}>
+                  <View style={s.statItem}>
+                    <View style={[s.dot, { backgroundColor: LC.success }]} />
+                    <Text style={s.statText}>{presencas} presenças</Text>
+                  </View>
+                  <View style={s.statItem}>
+                    <View style={[s.dot, { backgroundColor: LC.danger }]} />
+                    <Text style={s.statText}>{faltas} faltas</Text>
+                  </View>
                 </View>
-                <Text style={[s.taxa, { color: cor }]}>{taxa}%</Text>
-              </View>
-              <View style={s.progBg}>
-                <View style={[s.progFill, { width: `${taxa}%`, backgroundColor: cor }]} />
-              </View>
-              <Text style={s.progSub}>{presentes} presenças de {total} aulas</Text>
-            </View>
-          );
-        }}
-      />
+              </Card>
+            );
+          })}
+          <View style={{ height: 8 }} />
+        </ScrollView>
+      )}
       <TabBar isAdmin />
     </View>
   );
@@ -64,18 +81,20 @@ export default function AdminFrequencia() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 56, paddingBottom: 12, paddingHorizontal: 20 },
-  back: { fontSize: 28, color: LC.textPrimary },
-  titulo: { fontSize: 22, fontWeight: '700', color: LC.textPrimary },
-  card: { backgroundColor: LC.bgCard, borderRadius: LC.radius.lg, padding: 14, marginBottom: 10, ...LC.shadow },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  avatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { fontWeight: '700', fontSize: 18 },
-  nome: { fontSize: 15, fontWeight: '600', color: LC.textPrimary },
-  plano: { fontSize: 11, color: LC.textMuted, marginTop: 2 },
-  taxa: { fontSize: 22, fontWeight: '700' },
-  progBg: { height: 6, backgroundColor: LC.border, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
-  progFill: { height: '100%', borderRadius: 3 },
-  progSub: { fontSize: 12, color: LC.textMuted },
+  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
+  subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
+  scroll: { padding: 16, paddingBottom: 16 },
+  card: { marginBottom: 10 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  info: { flex: 1 },
+  nome: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
+  plano: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  pct: { fontSize: 20, fontWeight: '800', color: LC.primary },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: LC.border, overflow: 'hidden', marginTop: 14 },
+  progressFill: { height: '100%', borderRadius: 4, backgroundColor: LC.primary },
+  statsRow: { flexDirection: 'row', gap: 18, marginTop: 12 },
+  statItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  statText: { fontSize: 12, color: LC.textSecondary, fontWeight: '600' },
 });

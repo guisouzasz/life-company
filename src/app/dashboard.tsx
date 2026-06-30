@@ -55,7 +55,7 @@ export default function Dashboard() {
         {/* Header */}
         <View style={s.header}>
           <View style={{ flex: 1 }}>
-            <Text style={s.greeting}>Olá, {primeiroNome}! 👋</Text>
+            <Text style={s.greeting}>Olá, {primeiroNome}!</Text>
             <Text style={s.greetingSub}>Bem-vindo(a) ao seu espaço.</Text>
           </View>
           <Pressable style={s.bell} onPress={() => router.push('/notificacoes')} hitSlop={8}>

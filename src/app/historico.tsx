@@ -1,79 +1,98 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, StatusBar } from 'react-native';
-import { router } from 'expo-router';
-import { useAuthStore } from '../store/auth';
-import { api, ApiError } from '../services/api';
+import { useMemo } from 'react';
+import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../constants/theme';
+import { iconePorModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
+import { Card } from '../components/ui/card';
+import { Icon } from '../components/ui/icon';
+import { Badge, type BadgeVariant } from '../components/ui/badge';
+import { Loading, EmptyState, ErrorState } from '../components/ui/states';
+import { useHistorico } from '../services/agendamentos/agendamentos.queries';
+import type { Agendamento } from '../services/agendamentos/agendamentos.types';
 import { formatDate } from '../services/date';
 
-const STATUS_COLOR: Record<string, string> = { CONFIRMADO: LC.success, CANCELADO: LC.danger, REALIZADO: LC.info, FALTOU: LC.warning };
-const STATUS_LABEL: Record<string, string> = { CONFIRMADO: 'Confirmada', CANCELADO: 'Cancelada', REALIZADO: 'Realizada', FALTOU: 'Faltou' };
+function badgeDoHistorico(ag: Agendamento): { label: string; variant: BadgeVariant } {
+  if (ag.presenca) {
+    return ag.presenca.compareceu
+      ? { label: 'Presença', variant: 'success' }
+      : { label: 'Falta', variant: 'danger' };
+  }
+  switch (ag.status) {
+    case 'CONFIRMADO':
+      return { label: 'Agendada', variant: 'primary' };
+    case 'CANCELADO':
+      return { label: 'Cancelada', variant: 'danger' };
+    case 'REALIZADO':
+      return { label: 'Concluída', variant: 'info' };
+    case 'FALTOU':
+      return { label: 'Falta', variant: 'danger' };
+    default:
+      return { label: ag.status, variant: 'neutral' };
+  }
+}
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export default function Historico() {
-  const { accessToken, logout } = useAuthStore();
-  const [historico, setHistorico] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const historico = useHistorico();
 
-  const carregar = async (p = 1) => {
-    try {
-      const data = await api.get(`/agendamentos/historico?page=${p}`, accessToken!);
-      if (p === 1) setHistorico(data); else setHistorico(prev => [...prev, ...data]);
-      setHasMore(data.length === 20);
-    } catch (e) { if (e instanceof ApiError && e.status === 401) logout(); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { carregar(); }, []);
-
-  if (loading) return <View style={s.center}><ActivityIndicator size="large" color={LC.primary} /></View>;
+  const grupos = useMemo(() => {
+    const map = new Map<string, Agendamento[]>();
+    (historico.data ?? []).forEach((ag) => {
+      const chave = capitalize(formatDate(ag.dataAula, 'MMMM YYYY'));
+      if (!map.has(chave)) map.set(chave, []);
+      map.get(chave)!.push(ag);
+    });
+    return Array.from(map.entries());
+  }, [historico.data]);
 
   return (
     <View style={s.root}>
-      <StatusBar barStyle="dark-content" backgroundColor={LC.bg} />
+      <StatusBar barStyle="dark-content" />
       <View style={s.header}>
-        <Text style={s.titulo}>Histórico</Text>
-        <TouchableOpacity style={s.periodoBtn}>
-          <Text style={s.periodoText}>Este mês ▾</Text>
-        </TouchableOpacity>
+        <Text style={s.title}>Histórico</Text>
+        <Text style={s.subtitle}>Suas aulas anteriores</Text>
       </View>
-      <FlatList
-        data={historico}
-        keyExtractor={i => i.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 20 }}
-        ListEmptyComponent={<View style={s.empty}><Text style={s.emptyText}>Nenhuma aula no histórico</Text></View>}
-        onEndReached={() => { if (hasMore) { const p = page + 1; setPage(p); carregar(p); } }}
-        onEndReachedThreshold={0.3}
-        renderItem={({ item }) => {
-          const presente = item.presenca?.compareceu;
-          const temPresenca = item.presenca != null;
-          return (
-            <View style={s.card}>
-              <View style={s.dateBubble}>
-                <Text style={s.dateNum}>{formatDate(item.dataAula, 'DD')}</Text>
-                <Text style={s.dateMes}>{formatDate(item.dataAula, 'MMM')}</Text>
-              </View>
-              <View style={s.info}>
-                <Text style={s.modalidade}>{item.horario?.modalidade?.nome}</Text>
-                <Text style={s.dataTexto}>{item.horario?.horaInicio} • Professor Lucas</Text>
-              </View>
-              {temPresenca ? (
-                <View style={[s.badge, { backgroundColor: presente ? LC.successBg : LC.dangerBg }]}>
-                  <Text style={[s.badgeText, { color: presente ? LC.success : LC.danger }]}>
-                    {presente ? 'Presença' : 'Falta'}
-                  </Text>
-                </View>
-              ) : (
-                <View style={[s.badge, { backgroundColor: (STATUS_COLOR[item.status] || '#eee') + '25' }]}>
-                  <Text style={[s.badgeText, { color: STATUS_COLOR[item.status] }]}>{STATUS_LABEL[item.status]}</Text>
-                </View>
-              )}
+
+      {historico.isLoading ? (
+        <Loading />
+      ) : historico.isError ? (
+        <ErrorState onRetry={() => historico.refetch()} />
+      ) : grupos.length === 0 ? (
+        <EmptyState icon="time-outline" title="Nenhuma aula no histórico" description="Suas aulas realizadas aparecerão aqui." />
+      ) : (
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={() => historico.refetch()} colors={[LC.primary]} tintColor={LC.primary} />}
+        >
+          {grupos.map(([mes, itens]) => (
+            <View key={mes} style={s.group}>
+              <Text style={s.groupTitle}>{mes}</Text>
+              {itens.map((ag) => {
+                const badge = badgeDoHistorico(ag);
+                return (
+                  <Card key={ag.id} style={s.card} padding={14}>
+                    <View style={s.iconWrap}>
+                      <Icon name={iconePorModalidade(ag.horario.modalidade.nome)} size={18} color={LC.primary} />
+                    </View>
+                    <View style={s.info}>
+                      <Text style={s.modalidade}>{ag.horario.modalidade.nome}</Text>
+                      <Text style={s.meta}>
+                        {formatDate(ag.dataAula, 'DD/MM')} • {ag.horario.horaInicio}
+                      </Text>
+                    </View>
+                    <Badge label={badge.label} variant={badge.variant} />
+                  </Card>
+                );
+              })}
             </View>
-          );
-        }}
-      />
+          ))}
+          <View style={{ height: 8 }} />
+        </ScrollView>
+      )}
       <TabBar />
     </View>
   );
@@ -81,20 +100,15 @@ export default function Historico() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 56, paddingBottom: 12, paddingHorizontal: 20, backgroundColor: LC.bg },
-  titulo: { fontSize: 22, fontWeight: '700', color: LC.textPrimary },
-  periodoBtn: { backgroundColor: LC.bgCard, borderRadius: LC.radius.md, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: LC.border },
-  periodoText: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
-  card: { backgroundColor: LC.bgCard, borderRadius: LC.radius.lg, padding: 14, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 12, ...LC.shadow },
-  dateBubble: { width: 44, height: 44, borderRadius: 12, backgroundColor: LC.primaryLight, justifyContent: 'center', alignItems: 'center' },
-  dateNum: { fontSize: 16, fontWeight: '700', color: LC.primary },
-  dateMes: { fontSize: 10, color: LC.primary, textTransform: 'uppercase', fontWeight: '600' },
+  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
+  subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
+  scroll: { padding: 16, paddingBottom: 16 },
+  group: { marginBottom: 8 },
+  groupTitle: { fontSize: 13, fontWeight: '700', color: LC.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginLeft: 4 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
+  iconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1 },
-  modalidade: { fontSize: 15, fontWeight: '600', color: LC.textPrimary },
-  dataTexto: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: LC.radius.full },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-  empty: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: LC.textMuted, fontSize: 15 },
+  modalidade: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
+  meta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
 });
