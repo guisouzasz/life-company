@@ -106,11 +106,7 @@ export default function AdminAlunos() {
                     <View style={s.cardInfo}>
                       <Text style={s.nome}>{aluno.nome}</Text>
                       <Text style={s.email} numberOfLines={1}>{aluno.email}</Text>
-                      {plano?.modalidade || plano?.plano ? (
-                        <Text style={s.plano}>
-                          {plano?.modalidade?.nome}{plano?.plano ? ` • ${plano.plano.nome}` : ''}
-                        </Text>
-                      ) : null}
+                      {plano?.plano ? <Text style={s.plano}>{plano.plano.nome}</Text> : null}
                     </View>
                     <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
                   </View>

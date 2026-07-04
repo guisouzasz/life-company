@@ -3,7 +3,6 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, Style
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { LC } from '../../constants/theme';
-import { iconePorModalidade } from '../../constants/assets';
 import { Header } from '../../components/ui/header';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -30,7 +29,6 @@ export default function NovoAluno() {
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [planoId, setPlanoId] = useState('');
-  const [modalidadeId, setModalidadeId] = useState('');
 
   const planos = usePlanos();
   const modalidades = useModalidades();
@@ -41,8 +39,15 @@ export default function NovoAluno() {
   const [copiado, setCopiado] = useState(false);
 
   const submit = () => {
-    if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || !email.trim() || !planoId || !modalidadeId) {
-      setErro('Preencha nome, CPF (11 dígitos), e-mail, plano e modalidade.');
+    if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || !email.trim() || !planoId) {
+      setErro('Preencha nome, CPF (11 dígitos), e-mail e plano.');
+      return;
+    }
+    // O plano dá acesso a todas as modalidades; o backend exige um modalidadeId
+    // por schema, então usamos a primeira disponível (não restringe agendamentos).
+    const modalidadeId = modalidades.data?.[0]?.id;
+    if (!modalidadeId) {
+      setErro('Aguarde carregar as modalidades e tente novamente.');
       return;
     }
     criar.mutate(
@@ -94,21 +99,11 @@ export default function NovoAluno() {
                 );
               })}
             </View>
-          </Card>
-
-          {/* Modalidade */}
-          <Card style={s.section} padding={16}>
-            <Text style={s.sectionTitle}>Modalidade *</Text>
-            <View style={s.modGrid}>
-              {modalidades.data?.map((m) => {
-                const sel = modalidadeId === m.id;
-                return (
-                  <Pressable key={m.id} style={[s.modCard, sel && s.modCardSel]} onPress={() => setModalidadeId(m.id)}>
-                    <Icon name={iconePorModalidade(m.nome)} size={24} color={sel ? LC.primary : LC.textSecondary} />
-                    <Text style={[s.modNome, sel && s.modNomeSel]}>{m.nome}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={s.hintRow}>
+              <Icon name="information-circle-outline" size={16} color={LC.primary} />
+              <Text style={s.hintText}>
+                O plano dá acesso a todas as modalidades — Academia, Funcional e Pilates.
+              </Text>
             </View>
           </Card>
 
@@ -165,11 +160,8 @@ const s = StyleSheet.create({
   chipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
   chipText: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
   chipTextSel: { color: LC.primary },
-  modGrid: { flexDirection: 'row', gap: 10 },
-  modCard: { flex: 1, alignItems: 'center', gap: 8, paddingVertical: 16, borderRadius: LC.radius.lg, backgroundColor: LC.bg, borderWidth: 1.5, borderColor: LC.border },
-  modCardSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
-  modNome: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
-  modNomeSel: { color: LC.primary, fontWeight: '700' },
+  hintRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: LC.border },
+  hintText: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 17 },
   submit: { marginTop: 4 },
   modalHint: { fontSize: 13, color: LC.textSecondary, marginBottom: 10 },
   linkBox: { backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, borderRadius: LC.radius.md, padding: 12, marginBottom: 16 },

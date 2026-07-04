@@ -29,7 +29,7 @@ export default function Perfil() {
   const info: { label: string; value: string }[] = [
     { label: 'Nome', value: nome || '—' },
     { label: 'E-mail', value: me.data?.email || '—' },
-    { label: 'Plano', value: saldo.data ? `${saldo.data.plano} • ${saldo.data.modalidade}` : '—' },
+    { label: 'Plano', value: saldo.data ? `${saldo.data.plano} • Todas as modalidades` : '—' },
   ];
 
   return (

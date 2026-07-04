@@ -23,8 +23,9 @@ export class AgendamentosService {
     const diaSemana = DIA_MAP[dow];
     if (diaSemana !== horario.diaSemana) throw new BadRequestException('Data incompatível com o dia do horário');
 
-    const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, modalidadeId: horario.modalidadeId, vigenciaFim: null }, include: { plano: true } });
-    if (!usuarioPlano) throw new ForbiddenException(`Seu plano não inclui ${horario.modalidade.nome}`);
+    // Plano dá N aulas/semana para QUALQUER modalidade (não trava por categoria)
+    const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null }, include: { plano: true } });
+    if (!usuarioPlano) throw new ForbiddenException('Você não possui um plano ativo');
 
     // Reset semanal
     const inicioSemana = dayjs().startOf('isoWeek').toDate();
@@ -57,7 +58,7 @@ export class AgendamentosService {
     const horasRestantes = aulaDatetime.diff(dayjs(), 'hour');
     if (horasRestantes < 8) throw new ForbiddenException('Cancelamento permitido apenas com 8+ horas de antecedência. A aula será contabilizada.');
 
-    const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, modalidadeId: ag.horario.modalidadeId, vigenciaFim: null } });
+    const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null } });
     await this.prisma.$transaction([
       this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),
       ...(usuarioPlano ? [this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { decrement: 1 } } })] : []),
