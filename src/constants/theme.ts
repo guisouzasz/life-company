@@ -124,3 +124,7 @@ export const Spacing = {
 } as const;
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+// ─── Breakpoints ──────────────────────────────────────────────────────────────
+// >= desktop: admin vira painel com sidebar (web); abaixo disso, layout mobile.
+export const Breakpoints = { desktop: 1024 } as const;

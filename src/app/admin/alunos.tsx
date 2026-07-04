@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { LC } from '../../constants/theme';
 import { TabBar } from '../../components/tab-bar';
@@ -18,10 +18,18 @@ import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import { useGerarLink, useAtualizarAluno } from '../../services/usuarios/usuarios.mutations';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { ApiError } from '../../services/http';
+import { useIsDesktop } from '../../hooks/use-is-desktop';
 
 export default function AdminAlunos() {
-  const [busca, setBusca] = useState('');
+  const isDesktop = useIsDesktop();
+  const { busca: buscaParam } = useLocalSearchParams<{ busca?: string }>();
+  const [busca, setBusca] = useState(typeof buscaParam === 'string' ? buscaParam : '');
   const alunos = useAlunos(busca.trim() || undefined);
+
+  // Busca vinda da topbar do painel (a tela pode já estar montada)
+  useEffect(() => {
+    if (typeof buscaParam === 'string' && buscaParam) setBusca(buscaParam);
+  }, [buscaParam]);
   const gerarLink = useGerarLink();
   const atualizar = useAtualizarAluno();
 
@@ -154,9 +162,11 @@ export default function AdminAlunos() {
         </ScrollView>
       )}
 
-      <Pressable style={s.fab} onPress={() => router.push('/admin/novo-aluno')}>
-        <Icon name="add" size={28} color="#fff" />
-      </Pressable>
+      {!isDesktop ? (
+        <Pressable style={s.fab} onPress={() => router.push('/admin/novo-aluno')}>
+          <Icon name="add" size={28} color="#fff" />
+        </Pressable>
+      ) : null}
       <TabBar isAdmin />
 
       {/* Modal: link de primeiro acesso */}

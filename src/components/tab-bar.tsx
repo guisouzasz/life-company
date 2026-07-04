@@ -2,8 +2,9 @@ import { Pressable, View, Text, StyleSheet, Platform } from 'react-native';
 import { router, usePathname } from 'expo-router';
 import { LC } from '../constants/theme';
 import { Icon, type IconName } from './ui/icon';
+import { useIsDesktop } from '../hooks/use-is-desktop';
 
-type Tab = {
+export type Tab = {
   label: string;
   route: string;
   icon: IconName;
@@ -18,7 +19,7 @@ const TABS: Tab[] = [
   { label: 'Perfil', route: '/perfil', icon: 'person-outline', iconActive: 'person', activeRoutes: ['/perfil', '/meu-plano', '/notificacoes'] },
 ];
 
-const ADMIN_TABS: Tab[] = [
+export const ADMIN_TABS: Tab[] = [
   { label: 'Início', route: '/admin/dashboard', icon: 'home-outline', iconActive: 'home', activeRoutes: ['/admin/dashboard'] },
   { label: 'Alunos', route: '/admin/alunos', icon: 'people-outline', iconActive: 'people', activeRoutes: ['/admin/alunos', '/admin/novo-aluno'] },
   { label: 'Horários', route: '/admin/horarios', icon: 'calendar-outline', iconActive: 'calendar', activeRoutes: ['/admin/horarios'] },
@@ -27,7 +28,11 @@ const ADMIN_TABS: Tab[] = [
 
 export function TabBar({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
+  const isDesktop = useIsDesktop();
   const tabs = isAdmin ? ADMIN_TABS : TABS;
+
+  // No painel desktop a navegação do admin mora na sidebar (admin-shell).
+  if (isAdmin && isDesktop) return null;
 
   return (
     <View style={s.bar}>
