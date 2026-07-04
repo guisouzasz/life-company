@@ -76,7 +76,7 @@ async function main() {
       await prisma.horario.upsert({
         where: { id: `aca-${dia}-${hora}` },
         update: {},
-        create: { id: `aca-${dia}-${hora}`, modalidadeId: academia.id, diaSemana: dia, horaInicio: hora, horaFim, capacidadeMaxima: 10 },
+        create: { id: `aca-${dia}-${hora}`, modalidadeId: academia.id, diaSemana: dia, horaInicio: hora, horaFim, capacidadeMaxima: 4 },
       });
     }
   }
