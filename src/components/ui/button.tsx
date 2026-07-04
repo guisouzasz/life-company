@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { LC } from '../../constants/theme';
 
-type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'danger-outline';
+type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'danger-outline' | 'light';
 type Size = 'sm' | 'md' | 'lg';
 
 interface ButtonProps extends Omit<PressableProps, 'style'> {
@@ -91,6 +91,7 @@ const BG: Record<Variant, string> = {
   ghost: 'transparent',
   danger: LC.danger,
   'danger-outline': 'transparent',
+  light: '#FFFFFF',
 };
 
 const TXT: Record<Variant, string> = {
@@ -100,6 +101,7 @@ const TXT: Record<Variant, string> = {
   ghost: LC.primary,
   danger: LC.textWhite,
   'danger-outline': LC.danger,
+  light: LC.primary,
 };
 
 const styles = StyleSheet.create({

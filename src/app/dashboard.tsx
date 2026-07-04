@@ -131,7 +131,7 @@ export default function Dashboard() {
               <Icon name="location-outline" size={15} color="rgba(255,255,255,0.85)" />
               <Text style={s.nextInfo}>{STUDIO_NOME}</Text>
             </View>
-            <Button title="Ver agenda" variant="secondary" size="sm" fullWidth={false} onPress={() => router.push('/agendamento')} style={s.nextBtn} />
+            <Button title="Ver agenda" variant="light" size="sm" fullWidth={false} onPress={() => router.push('/agendamento')} style={s.nextBtn} />
           </LinearGradient>
         ) : (
           <Card style={s.block} padding={20}>
@@ -259,7 +259,7 @@ const s = StyleSheet.create({
   nextModalidade: { fontSize: 22, fontWeight: '800', color: '#fff', marginTop: 6, marginBottom: 10 },
   nextInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   nextInfo: { fontSize: 14, color: 'rgba(255,255,255,0.9)' },
-  nextBtn: { marginTop: 14, alignSelf: 'flex-start', paddingHorizontal: 18, backgroundColor: '#fff' },
+  nextBtn: { marginTop: 14, alignSelf: 'flex-start', paddingHorizontal: 18 },
   noNextTitle: { fontSize: 16, fontWeight: '700', color: LC.textPrimary },
   noNextSub: { fontSize: 13, color: LC.textSecondary, marginTop: 4 },
   sectionTitleRow: { paddingHorizontal: 20, marginTop: 4, marginBottom: 10 },
