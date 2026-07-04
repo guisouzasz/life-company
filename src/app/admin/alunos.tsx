@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { AppModal } from '../../components/ui/modal';
 import { CreditosAlunoModal } from '../../components/admin/creditos-aluno-modal';
+import { HorariosFixosAlunoModal } from '../../components/admin/horarios-fixos-aluno-modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import { useGerarLink, useAtualizarAluno } from '../../services/usuarios/usuarios.mutations';
@@ -31,6 +32,9 @@ export default function AdminAlunos() {
   // Modal de créditos
   const [creditosAluno, setCreditosAluno] = useState<AlunoAdmin | null>(null);
 
+  // Modal de plano e horário fixo
+  const [planoHorarioAluno, setPlanoHorarioAluno] = useState<AlunoAdmin | null>(null);
+
   // Modal de edição
   const [editando, setEditando] = useState<AlunoAdmin | null>(null);
   const [form, setForm] = useState({ nome: '', email: '', telefone: '' });
@@ -39,17 +43,17 @@ export default function AdminAlunos() {
   const abrirEdicao = (aluno: AlunoAdmin) => {
     setEditando(aluno);
     setErroEdicao(null);
-    setForm({ nome: aluno.nome, email: aluno.email, telefone: aluno.telefone ?? '' });
+    setForm({ nome: aluno.nome, email: aluno.email ?? '', telefone: aluno.telefone ?? '' });
   };
 
   const salvarEdicao = () => {
     if (!editando) return;
-    if (!form.nome.trim() || !form.email.trim()) {
-      setErroEdicao('Nome e e-mail são obrigatórios.');
+    if (!form.nome.trim()) {
+      setErroEdicao('Nome é obrigatório.');
       return;
     }
     atualizar.mutate(
-      { id: editando.id, payload: { nome: form.nome.trim(), email: form.email.trim(), telefone: form.telefone.trim() || undefined } },
+      { id: editando.id, payload: { nome: form.nome.trim(), email: form.email.trim() || undefined, telefone: form.telefone.trim() || undefined } },
       {
         onSuccess: () => setEditando(null),
         onError: (e) => setErroEdicao(e instanceof ApiError ? e.message : 'Não foi possível salvar.'),
@@ -109,7 +113,7 @@ export default function AdminAlunos() {
                     <Avatar nome={aluno.nome} size={46} />
                     <View style={s.cardInfo}>
                       <Text style={s.nome}>{aluno.nome}</Text>
-                      <Text style={s.email} numberOfLines={1}>{aluno.email}</Text>
+                      <Text style={s.email} numberOfLines={1}>{aluno.email ?? 'Sem e-mail — aguardando ativação'}</Text>
                       {plano?.plano ? <Text style={s.plano}>{plano.plano.nome}</Text> : null}
                     </View>
                     <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
@@ -135,6 +139,10 @@ export default function AdminAlunos() {
                   <Pressable style={s.credLink} onPress={() => setCreditosAluno(aluno)}>
                     <Icon name="ticket-outline" size={16} color={LC.primary} />
                     <Text style={s.credLinkText}>Gerenciar créditos de reposição</Text>
+                  </Pressable>
+                  <Pressable style={s.credLink} onPress={() => setPlanoHorarioAluno(aluno)}>
+                    <Icon name="calendar-outline" size={16} color={LC.primary} />
+                    <Text style={s.credLinkText}>Editar plano e horário fixo</Text>
                   </Pressable>
                 </Card>
               );
@@ -184,6 +192,9 @@ export default function AdminAlunos() {
 
       {/* Modal: créditos do aluno */}
       <CreditosAlunoModal aluno={creditosAluno} onClose={() => setCreditosAluno(null)} />
+
+      {/* Modal: plano e horário fixo do aluno */}
+      <HorariosFixosAlunoModal aluno={planoHorarioAluno} onClose={() => setPlanoHorarioAluno(null)} />
     </View>
   );
 }

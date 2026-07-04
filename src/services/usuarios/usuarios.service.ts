@@ -3,6 +3,7 @@ import type { SaldoSemanal } from './usuarios.types';
 import type {
   AlunoAdmin,
   AtualizarAlunoPayload,
+  AtualizarPlanoPayload,
   CriarAlunoPayload,
   CriarAlunoResposta,
   GerarLinkResposta,
@@ -27,6 +28,11 @@ export const usuariosService = {
 
   async atualizar(id: string, payload: AtualizarAlunoPayload): Promise<AlunoAdmin> {
     const { data } = await http.put<AlunoAdmin>(`/usuarios/${id}`, payload);
+    return data;
+  },
+
+  async atualizarPlano(id: string, payload: AtualizarPlanoPayload): Promise<AlunoAdmin> {
+    const { data } = await http.put<AlunoAdmin>(`/usuarios/${id}/plano`, payload);
     return data;
   },
 

@@ -4,9 +4,12 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import * as dayjs from "dayjs";
+import * as isoWeek from "dayjs/plugin/isoWeek";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CriarUsuarioDto } from "./dto/criar-usuario.dto";
+
+(dayjs as any).extend((isoWeek as any).default || isoWeek);
 
 @Injectable()
 export class UsuariosService {
@@ -17,8 +20,10 @@ export class UsuariosService {
 
   async criar(dto: CriarUsuarioDto) {
     const cpfNorm = dto.cpf.replace(/\D/g, "");
+    const condicoes: object[] = [{ cpf: cpfNorm }];
+    if (dto.email) condicoes.push({ email: dto.email });
     const existe = await this.prisma.usuario.findFirst({
-      where: { OR: [{ cpf: cpfNorm }, { email: dto.email }] },
+      where: { OR: condicoes },
     });
     if (existe) throw new ConflictException("CPF ou e-mail já cadastrado");
     const usuario = await this.prisma.usuario.create({
@@ -84,6 +89,34 @@ export class UsuariosService {
     return this.prisma.usuario.update({
       where: { id },
       data: { nome: data.nome, email: data.email, telefone: data.telefone },
+    });
+  }
+
+  async atualizarPlano(usuarioId: string, dto: { planoId: string; modalidadeId: string }) {
+    await this.buscarPorId(usuarioId);
+    const atual = await this.prisma.usuarioPlano.findFirst({
+      where: { usuarioId, vigenciaFim: null },
+    });
+    const agora = new Date();
+    const inicioSemana = dayjs().startOf("isoWeek").toDate();
+    return this.prisma.$transaction(async (tx) => {
+      if (atual) {
+        await tx.usuarioPlano.update({
+          where: { id: atual.id },
+          data: { vigenciaFim: agora },
+        });
+      }
+      return tx.usuarioPlano.create({
+        data: {
+          usuarioId,
+          planoId: dto.planoId,
+          modalidadeId: dto.modalidadeId,
+          vigenciaInicio: agora,
+          semanaReferencia: inicioSemana,
+          aulasUsadasSemana: 0,
+        },
+        include: { plano: true, modalidade: true },
+      });
     });
   }
 

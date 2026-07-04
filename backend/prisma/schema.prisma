@@ -31,7 +31,7 @@ model Usuario {
   id          String      @id @default(uuid())
   nome        String
   cpf         String      @unique
-  email       String      @unique
+  email       String?     @unique
   telefone    String?
   senhaHash   String?     @map("senha_hash")
   tipoUsuario TipoUsuario @default(ALUNO) @map("tipo_usuario")
@@ -45,6 +45,7 @@ model Usuario {
   primeiroAcesso    PrimeiroAcesso?
   refreshTokens     RefreshToken[]
   creditosReposicao CreditoReposicao[]
+  horariosFixos     HorarioFixo[]
 
   @@map("usuarios")
 }
@@ -78,10 +79,27 @@ model Horario {
   capacidadeMaxima Int       @default(4) @map("capacidade_maxima")
   ativo            Boolean   @default(true)
 
-  modalidade   Modalidade    @relation(fields: [modalidadeId], references: [id])
-  agendamentos Agendamento[]
+  modalidade    Modalidade    @relation(fields: [modalidadeId], references: [id])
+  agendamentos  Agendamento[]
+  horariosFixos HorarioFixo[]
 
   @@map("horarios")
+}
+
+model HorarioFixo {
+  id         String    @id @default(uuid())
+  usuarioId  String    @map("usuario_id")
+  horarioId  String    @map("horario_id")
+  dataInicio DateTime  @map("data_inicio")
+  dataFim    DateTime? @map("data_fim")
+  ativo      Boolean   @default(true)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+  horario Horario @relation(fields: [horarioId], references: [id])
+
+  @@unique([usuarioId, horarioId])
+  @@map("horarios_fixos")
 }
 
 model UsuarioPlano {

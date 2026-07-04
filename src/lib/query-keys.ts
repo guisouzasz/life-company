@@ -12,4 +12,5 @@ export const queryKeys = {
   creditosMeus: ['creditos', 'meus'] as const,
   creditosSaldo: ['creditos', 'saldo'] as const,
   creditosAdmin: (usuarioId?: string) => ['creditos', 'admin', usuarioId ?? 'all'] as const,
+  horariosFixosAdmin: (usuarioId?: string) => ['horarios-fixos', 'admin', usuarioId ?? 'all'] as const,
 };
