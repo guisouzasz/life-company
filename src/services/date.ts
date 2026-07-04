@@ -29,18 +29,37 @@ export function endOfIsoWeek(date: Date): Date {
   return d;
 }
 
+/**
+ * Interpreta a data pelos componentes escritos (Y-M-D H:M), como hora LOCAL —
+ * evita o deslocamento de fuso quando a string vem em UTC (ex.: "...T00:00:00Z"),
+ * que fazia a aula do dia 03 aparecer como 02.
+ */
+function toLocalDate(date: Date | string): Date {
+  if (date instanceof Date) return date;
+  const m = date.match(/(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+  if (m) {
+    const [, y, mo, d, h, mi] = m;
+    return new Date(+y, +mo - 1, +d, h ? +h : 0, mi ? +mi : 0);
+  }
+  return new Date(date);
+}
+
+const TOKEN_RE = /YYYY|MMMM|MMM|MM|DD|dddd|ddd|HH|mm/g;
+
 export function formatDate(date: Date | string, fmt: string): string {
-  const d = typeof date === 'string' ? new Date(date + (date.includes('T') ? '' : 'T00:00:00')) : date;
-  return fmt
-    .replace('YYYY', String(d.getFullYear()))
-    .replace('MM', String(d.getMonth() + 1).padStart(2, '0'))
-    .replace('DD', String(d.getDate()).padStart(2, '0'))
-    .replace('HH', String(d.getHours()).padStart(2, '0'))
-    .replace('mm', String(d.getMinutes()).padStart(2, '0'))
-    .replace('ddd', DIAS_CURTO[d.getDay()])
-    .replace('dddd', DIAS_LONGO[d.getDay()])
-    .replace('MMM', MESES_CURTO[d.getMonth()])
-    .replace('MMMM', MESES_LONGO[d.getMonth()]);
+  const d = toLocalDate(date);
+  const map: Record<string, string> = {
+    YYYY: String(d.getFullYear()),
+    MMMM: MESES_LONGO[d.getMonth()],
+    MMM: MESES_CURTO[d.getMonth()],
+    MM: String(d.getMonth() + 1).padStart(2, '0'),
+    DD: String(d.getDate()).padStart(2, '0'),
+    dddd: DIAS_LONGO[d.getDay()],
+    ddd: DIAS_CURTO[d.getDay()],
+    HH: String(d.getHours()).padStart(2, '0'),
+    mm: String(d.getMinutes()).padStart(2, '0'),
+  };
+  return fmt.replace(TOKEN_RE, (t) => map[t] ?? t);
 }
 
 export function addDays(date: Date, n: number): Date {
