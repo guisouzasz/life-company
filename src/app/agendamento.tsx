@@ -128,7 +128,7 @@ export default function Agendamento() {
       </View>
 
       {/* Dias */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.daysRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.daysScroll} contentContainerStyle={s.daysRow}>
         {dias.map((d) => {
           const sel = diaSel?.data === d.data;
           return (
@@ -213,8 +213,9 @@ const s = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
-  daysRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 4 },
-  dayBtn: { alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: LC.radius.md, minWidth: 54, backgroundColor: LC.bgCard, borderWidth: 1.5, borderColor: LC.border },
+  daysScroll: { flexGrow: 0 },
+  daysRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 4, alignItems: 'flex-start' },
+  dayBtn: { alignItems: 'center', height: 68, justifyContent: 'center', paddingHorizontal: 12, borderRadius: LC.radius.md, minWidth: 56, backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border },
   dayBtnSel: { backgroundColor: LC.primary, borderColor: LC.primary },
   dayNome: { fontSize: 11, fontWeight: '700', color: LC.textSecondary, textTransform: 'capitalize', marginBottom: 4 },
   dayNum: { fontSize: 17, fontWeight: '800', color: LC.textPrimary },
