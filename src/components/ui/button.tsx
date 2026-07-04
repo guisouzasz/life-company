@@ -41,6 +41,8 @@ export function Button({
   const bg = BG[variant];
   const txtColor = TXT[variant];
   const isOutline = variant === 'outline' || variant === 'danger-outline';
+  const isGhost = variant === 'ghost';
+  const isFilled = !isOutline && !isGhost;
 
   return (
     <Pressable
@@ -49,6 +51,7 @@ export function Button({
       style={({ pressed }) => [
         styles.base,
         { height: HEIGHT[size], backgroundColor: bg },
+        isFilled && !isDisabled && shadowFor(variant),
         isOutline && { borderWidth: 1.5, borderColor: txtColor },
         fullWidth && styles.fullWidth,
         pressed && !isDisabled && styles.pressed,
@@ -67,6 +70,18 @@ export function Button({
       )}
     </Pressable>
   );
+}
+
+/** Sombra colorida suave para dar profundidade aos botões sólidos. */
+function shadowFor(variant: Variant) {
+  const color = variant === 'danger' ? LC.danger : LC.primary;
+  return {
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.26,
+    shadowRadius: 14,
+    elevation: 4,
+  };
 }
 
 const BG: Record<Variant, string> = {

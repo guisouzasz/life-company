@@ -1,4 +1,5 @@
 import { Modal as RNModal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { LC } from '../../constants/theme';
 import { Icon } from './icon';
 import { Button } from './button';
@@ -8,27 +9,37 @@ interface AppModalProps {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
-  /** Fecha ao tocar no fundo escuro (default true). */
+  /** Fecha ao tocar no fundo (default true). */
   dismissable?: boolean;
 }
 
-/** Modal central reutilizável — funciona em web e nativo (ao contrário de Alert). */
+/**
+ * Modal central reutilizável — funciona em web e nativo (ao contrário de Alert).
+ * Backdrop com glassmorphism (desfoque + tint translúcido) e card sólido flutuante.
+ */
 export function AppModal({ visible, onClose, title, children, dismissable = true }: AppModalProps) {
   return (
     <RNModal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <Pressable style={styles.overlay} onPress={dismissable ? onClose : undefined}>
-        <Pressable style={styles.card} onPress={() => {}}>
-          {title ? (
-            <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
-              <Pressable onPress={onClose} hitSlop={8}>
-                <Icon name="close" size={22} color={LC.textSecondary} />
-              </Pressable>
-            </View>
-          ) : null}
-          {children}
-        </Pressable>
-      </Pressable>
+      <View style={styles.root}>
+        {/* Backdrop: desfoque + tint */}
+        <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
+        <Pressable style={[StyleSheet.absoluteFill, styles.tint]} onPress={dismissable ? onClose : undefined} />
+
+        {/* Card */}
+        <View style={styles.card} pointerEvents="box-none">
+          <View style={styles.cardInner}>
+            {title ? (
+              <View style={styles.header}>
+                <Text style={styles.title}>{title}</Text>
+                <Pressable onPress={onClose} hitSlop={8} style={styles.close}>
+                  <Icon name="close" size={20} color={LC.textSecondary} />
+                </Pressable>
+              </View>
+            ) : null}
+            {children}
+          </View>
+        </View>
+      </View>
     </RNModal>
   );
 }
@@ -93,10 +104,20 @@ export function InfoModal({ visible, title, message, buttonLabel = 'OK', onClose
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(15,23,42,0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: { width: '100%', maxWidth: 420, backgroundColor: LC.bgCard, borderRadius: LC.radius.xl, padding: 20, ...LC.shadowStrong },
+  root: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  tint: { backgroundColor: 'rgba(15,23,42,0.32)' },
+  card: { width: '100%', maxWidth: 420 },
+  cardInner: {
+    backgroundColor: LC.bgCard,
+    borderRadius: LC.radius.xxl,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+    ...LC.shadowStrong,
+  },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   title: { fontSize: 18, fontWeight: '800', color: LC.textPrimary, flex: 1 },
+  close: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: LC.bg },
   message: { fontSize: 14, color: LC.textSecondary, lineHeight: 20, marginBottom: 18 },
   actions: { flexDirection: 'row', gap: 10 },
   action: { flex: 1 },
