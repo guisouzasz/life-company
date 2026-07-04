@@ -12,21 +12,23 @@ import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
 import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
 import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mutations';
+import type { Agendamento } from '../services/agendamentos/agendamentos.types';
+import { podeCancelar, prazoLabel } from '../services/cancelamento';
 import { ApiError } from '../services/http';
 import { formatDate } from '../services/date';
 
 export default function MinhasAulas() {
   const meus = useMeusAgendamentos();
   const cancelar = useCancelarAgendamento();
-  const [cancelId, setCancelId] = useState<string | null>(null);
+  const [alvo, setAlvo] = useState<Agendamento | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   const confirmarCancelamento = () => {
-    if (!cancelId) return;
-    cancelar.mutate(cancelId, {
-      onSuccess: () => setCancelId(null),
+    if (!alvo) return;
+    cancelar.mutate(alvo.id, {
+      onSuccess: () => setAlvo(null),
       onError: (e) => {
-        setCancelId(null);
+        setAlvo(null);
         setErro(e instanceof ApiError ? e.message : 'Não foi possível cancelar.');
       },
     });
@@ -51,36 +53,45 @@ export default function MinhasAulas() {
           refreshControl={<RefreshControl refreshing={false} onRefresh={() => meus.refetch()} colors={[LC.primary]} tintColor={LC.primary} />}
         >
           {meus.data && meus.data.length > 0 ? (
-            meus.data.map((ag) => (
-              <Card key={ag.id} style={s.card} padding={16}>
-                <View style={s.dateBubble}>
-                  <Text style={s.dateNum}>{formatDate(ag.dataAula, 'DD')}</Text>
-                  <Text style={s.dateMes}>{formatDate(ag.dataAula, 'MMM')}</Text>
-                </View>
-                <View style={s.info}>
-                  <Text style={s.modalidade}>{ag.horario.modalidade.nome}</Text>
-                  <View style={s.infoLine}>
-                    <Icon name="time-outline" size={13} color={LC.textSecondary} />
-                    <Text style={s.infoText}>
-                      {DIAS_PT[ag.horario.diaSemana]} • {ag.horario.horaInicio} - {ag.horario.horaFim}
-                    </Text>
+            meus.data.map((ag) => {
+              const liberado = podeCancelar(ag.dataAula, ag.horario.horaInicio);
+              return (
+                <Card key={ag.id} style={s.card} padding={16}>
+                  <View style={s.dateBubble}>
+                    <Text style={s.dateNum}>{formatDate(ag.dataAula, 'DD')}</Text>
+                    <Text style={s.dateMes}>{formatDate(ag.dataAula, 'MMM')}</Text>
                   </View>
-                  <View style={s.infoLine}>
-                    <Icon name="location-outline" size={13} color={LC.textMuted} />
-                    <Text style={s.infoStudio}>{STUDIO_NOME}</Text>
+                  <View style={s.info}>
+                    <Text style={s.modalidade}>{ag.horario.modalidade.nome}</Text>
+                    <View style={s.infoLine}>
+                      <Icon name="time-outline" size={13} color={LC.textSecondary} />
+                      <Text style={s.infoText}>
+                        {DIAS_PT[ag.horario.diaSemana]} • {ag.horario.horaInicio} - {ag.horario.horaFim}
+                      </Text>
+                    </View>
+                    <View style={s.infoLine}>
+                      <Icon name="location-outline" size={13} color={LC.textMuted} />
+                      <Text style={s.infoStudio}>{STUDIO_NOME}</Text>
+                    </View>
                   </View>
-                </View>
-                <Button
-                  title="Cancelar"
-                  variant="danger-outline"
-                  size="sm"
-                  fullWidth={false}
-                  onPress={() => setCancelId(ag.id)}
-                  loading={cancelar.isPending && cancelar.variables === ag.id}
-                  style={s.cancelBtn}
-                />
-              </Card>
-            ))
+                  {liberado ? (
+                    <Button
+                      title="Cancelar"
+                      variant="danger-outline"
+                      size="sm"
+                      fullWidth={false}
+                      onPress={() => setAlvo(ag)}
+                      loading={cancelar.isPending && cancelar.variables === ag.id}
+                      style={s.cancelBtn}
+                    />
+                  ) : (
+                    <View style={s.prazoTag}>
+                      <Text style={s.prazoText}>Prazo encerrado</Text>
+                    </View>
+                  )}
+                </Card>
+              );
+            })
           ) : (
             <EmptyState
               icon="calendar-outline"
@@ -96,15 +107,19 @@ export default function MinhasAulas() {
       <TabBar />
 
       <ConfirmModal
-        visible={!!cancelId}
+        visible={!!alvo}
         title="Cancelar aula"
-        message="Tem certeza que deseja cancelar este agendamento?"
+        message={
+          alvo
+            ? `${alvo.horario.modalidade.nome} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.`
+            : ''
+        }
         confirmLabel="Cancelar aula"
         cancelLabel="Voltar"
         destructive
         loading={cancelar.isPending}
         onConfirm={confirmarCancelamento}
-        onCancel={() => setCancelId(null)}
+        onCancel={() => setAlvo(null)}
       />
       <InfoModal visible={!!erro} title="Não foi possível cancelar" message={erro ?? ''} onClose={() => setErro(null)} />
     </View>
@@ -127,4 +142,6 @@ const s = StyleSheet.create({
   infoText: { fontSize: 12, color: LC.textSecondary },
   infoStudio: { fontSize: 12, color: LC.textMuted },
   cancelBtn: { paddingHorizontal: 14 },
+  prazoTag: { backgroundColor: LC.bg, borderRadius: LC.radius.full, paddingHorizontal: 10, paddingVertical: 5 },
+  prazoText: { fontSize: 11, fontWeight: '600', color: LC.textMuted },
 });

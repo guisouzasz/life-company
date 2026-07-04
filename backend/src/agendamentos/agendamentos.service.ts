@@ -54,9 +54,23 @@ export class AgendamentosService {
     if (!ag) throw new NotFoundException('Agendamento não encontrado');
     if (ag.status !== 'CONFIRMADO') throw new BadRequestException('Agendamento não pode ser cancelado');
 
-    const aulaDatetime = dayjs(ag.dataAula).hour(parseInt(ag.horario.horaInicio.split(':')[0])).minute(parseInt(ag.horario.horaInicio.split(':')[1]));
-    const horasRestantes = aulaDatetime.diff(dayjs(), 'hour');
-    if (horasRestantes < 8) throw new ForbiddenException('Cancelamento permitido apenas com 8+ horas de antecedência. A aula será contabilizada.');
+    // Prazo de cancelamento por período da aula:
+    //  - Manhã  (06:30–11:30): até 20:00 do dia anterior
+    //  - Tarde  (13:00–17:00): até 09:00 do próprio dia
+    //  - Noite  (18:00–22:00): até 14:00 do próprio dia
+    const [hIni, mIni] = ag.horario.horaInicio.split(':').map((n) => parseInt(n, 10));
+    const inicioMin = hIni * 60 + mIni;
+    let limite: dayjs.Dayjs;
+    if (inicioMin < 720) {
+      limite = dayjs(ag.dataAula).subtract(1, 'day').hour(20).minute(0).second(0).millisecond(0);
+    } else if (inicioMin < 1080) {
+      limite = dayjs(ag.dataAula).hour(9).minute(0).second(0).millisecond(0);
+    } else {
+      limite = dayjs(ag.dataAula).hour(14).minute(0).second(0).millisecond(0);
+    }
+    if (dayjs().isAfter(limite)) {
+      throw new ForbiddenException('O prazo de cancelamento deste horário já encerrou. A aula será contabilizada.');
+    }
 
     const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null } });
     await this.prisma.$transaction([
@@ -67,8 +81,10 @@ export class AgendamentosService {
   }
 
   async listarMeus(usuarioId: string) {
+    // A partir do INÍCIO do dia de hoje: aulas de hoje continuam aparecendo
+    // (dataAula é armazenada à meia-noite do dia da aula).
     return this.prisma.agendamento.findMany({
-      where: { usuarioId, status: 'CONFIRMADO', dataAula: { gte: new Date() } },
+      where: { usuarioId, status: 'CONFIRMADO', dataAula: { gte: dayjs().startOf('day').toDate() } },
       include: { horario: { include: { modalidade: true } } },
       orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
     });

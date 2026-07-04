@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,10 +10,15 @@ import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
 import { Button } from '../components/ui/button';
+import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { Loading } from '../components/ui/states';
 import { SaldoDots } from '../components/ui/saldo-dots';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
 import { useMeusAgendamentos, useHistorico } from '../services/agendamentos/agendamentos.queries';
+import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mutations';
+import type { Agendamento } from '../services/agendamentos/agendamentos.types';
+import { podeCancelar, prazoLabel } from '../services/cancelamento';
+import { ApiError } from '../services/http';
 import { endOfIsoWeekFormatted, formatDate } from '../services/date';
 
 export default function Dashboard() {
@@ -21,6 +26,20 @@ export default function Dashboard() {
   const saldo = useSaldo();
   const meus = useMeusAgendamentos();
   const historico = useHistorico();
+  const cancelar = useCancelarAgendamento();
+  const [alvo, setAlvo] = useState<Agendamento | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const confirmarCancelamento = () => {
+    if (!alvo) return;
+    cancelar.mutate(alvo.id, {
+      onSuccess: () => setAlvo(null),
+      onError: (e) => {
+        setAlvo(null);
+        setErro(e instanceof ApiError ? e.message : 'Não foi possível cancelar.');
+      },
+    });
+  };
 
   const onRefresh = useCallback(() => {
     saldo.refetch();
@@ -136,33 +155,67 @@ export default function Dashboard() {
           </View>
         </Card>
 
-        {/* Próximas aulas */}
+        {/* Aulas agendadas */}
         {meus.data && meus.data.length > 0 ? (
           <View style={s.listSection}>
             <View style={s.sectionTitleRow}>
-              <Text style={s.sectionTitle}>Próximas aulas</Text>
+              <Text style={s.sectionTitle}>Minhas aulas agendadas</Text>
             </View>
-            {meus.data.slice(0, 4).map((ag) => (
-              <Card key={ag.id} style={s.aulaCard} padding={14}>
-                <View style={s.aulaIcon}>
-                  <Icon name={iconePorModalidade(ag.horario.modalidade.nome)} size={20} color={LC.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.aulaModalidade}>{ag.horario.modalidade.nome}</Text>
-                  <Text style={s.aulaInfo}>
-                    {formatDate(ag.dataAula, 'ddd, DD/MM')} • {ag.horario.horaInicio}
-                  </Text>
-                  <Text style={s.aulaStudio}>{STUDIO_NOME}</Text>
-                </View>
-                <Icon name="chevron-forward" size={18} color={LC.textMuted} />
-              </Card>
-            ))}
+            {meus.data.slice(0, 4).map((ag) => {
+              const liberado = podeCancelar(ag.dataAula, ag.horario.horaInicio);
+              return (
+                <Card key={ag.id} style={s.aulaCard} padding={14}>
+                  <View style={s.aulaIcon}>
+                    <Icon name={iconePorModalidade(ag.horario.modalidade.nome)} size={20} color={LC.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.aulaModalidade}>{ag.horario.modalidade.nome}</Text>
+                    <Text style={s.aulaInfo}>
+                      {formatDate(ag.dataAula, 'ddd, DD/MM')} • {ag.horario.horaInicio} - {ag.horario.horaFim}
+                    </Text>
+                    <Text style={s.aulaStudio}>{STUDIO_NOME}</Text>
+                  </View>
+                  {liberado ? (
+                    <Button
+                      title="Cancelar"
+                      variant="danger-outline"
+                      size="sm"
+                      fullWidth={false}
+                      onPress={() => setAlvo(ag)}
+                      loading={cancelar.isPending && cancelar.variables === ag.id}
+                      style={s.cancelBtn}
+                    />
+                  ) : (
+                    <View style={s.prazoTag}>
+                      <Text style={s.prazoText}>Prazo encerrado</Text>
+                    </View>
+                  )}
+                </Card>
+              );
+            })}
           </View>
         ) : null}
 
         <View style={{ height: 16 }} />
       </ScrollView>
       <TabBar />
+
+      <ConfirmModal
+        visible={!!alvo}
+        title="Cancelar aula"
+        message={
+          alvo
+            ? `${alvo.horario.modalidade.nome} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.`
+            : ''
+        }
+        confirmLabel="Cancelar aula"
+        cancelLabel="Voltar"
+        destructive
+        loading={cancelar.isPending}
+        onConfirm={confirmarCancelamento}
+        onCancel={() => setAlvo(null)}
+      />
+      <InfoModal visible={!!erro} title="Não foi possível cancelar" message={erro ?? ''} onClose={() => setErro(null)} />
     </View>
   );
 }
@@ -222,4 +275,7 @@ const s = StyleSheet.create({
   aulaModalidade: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
   aulaInfo: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   aulaStudio: { fontSize: 11, color: LC.textMuted, marginTop: 1 },
+  cancelBtn: { paddingHorizontal: 14 },
+  prazoTag: { backgroundColor: LC.bg, borderRadius: LC.radius.full, paddingHorizontal: 10, paddingVertical: 5 },
+  prazoText: { fontSize: 11, fontWeight: '600', color: LC.textMuted },
 });
