@@ -39,27 +39,36 @@ export const LC = {
   infoBg: "#DBEAFE",
 
   // ── Border ────────────────────────────────────────────────────────
-  border: "#E5E7EB",
-  borderFocus: "#16B8A7",
+  border: "#EEF1F4", // hairline sutil (premium, quase invisível)
+  borderStrong: "#E2E8F0",
+  borderFocus: "#0E9488",
 
-  // ── Shadows ───────────────────────────────────────────────────────
+  // ── Shadows (tom slate, difusas e "flutuantes") ───────────────────
   shadow: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  // Sombra padrão dos cards flutuantes
+  shadowCard: {
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowRadius: 20,
+    elevation: 3,
   },
   shadowStrong: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 5,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.14,
+    shadowRadius: 32,
+    elevation: 10,
   },
 
   // ── Radius ────────────────────────────────────────────────────────
-  radius: { sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, full: 999 },
+  radius: { sm: 10, md: 14, lg: 18, xl: 22, xxl: 28, full: 999 },
 
   // ── Spacing ───────────────────────────────────────────────────────
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
