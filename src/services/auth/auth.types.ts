@@ -11,6 +11,13 @@ export interface PrimeiroAcessoPayload {
   senha: string;
 }
 
+/** POST /auth/ativar-conta — ativação sem link, com CPF + e-mail. */
+export interface AtivarContaPayload {
+  cpf: string;
+  email: string;
+  senha: string;
+}
+
 /** Resposta de /auth/login e /auth/primeiro-acesso. */
 export interface AuthResponse {
   accessToken: string;

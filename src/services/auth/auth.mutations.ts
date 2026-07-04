@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { authService } from './auth.service';
 import { useAuthStore } from '../../store/auth';
-import type { AuthResponse, LoginPayload, PrimeiroAcessoPayload } from './auth.types';
+import type { AtivarContaPayload, AuthResponse, LoginPayload, PrimeiroAcessoPayload } from './auth.types';
 
 /**
  * Persiste a sessão no store após login/primeiro-acesso bem-sucedido.
@@ -32,6 +32,14 @@ export function usePrimeiroAcesso() {
   const salvarSessao = useSalvarSessao();
   return useMutation({
     mutationFn: (payload: PrimeiroAcessoPayload) => authService.primeiroAcesso(payload),
+    onSuccess: salvarSessao,
+  });
+}
+
+export function useAtivarConta() {
+  const salvarSessao = useSalvarSessao();
+  return useMutation({
+    mutationFn: (payload: AtivarContaPayload) => authService.ativarConta(payload),
     onSuccess: salvarSessao,
   });
 }

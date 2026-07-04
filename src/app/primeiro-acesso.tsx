@@ -14,10 +14,11 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LC } from '../constants/theme';
+import { DOMINIOS_EMAIL_PERMITIDOS } from '../constants/app';
 import { Button } from '../components/ui/button';
 import { Input, PasswordToggle } from '../components/ui/input';
 import { Icon } from '../components/ui/icon';
-import { usePrimeiroAcesso } from '../services/auth/auth.mutations';
+import { useAtivarConta, usePrimeiroAcesso } from '../services/auth/auth.mutations';
 import { ApiError } from '../services/http';
 
 const RULES = [
@@ -27,22 +28,38 @@ const RULES = [
   { label: 'Pelo menos um número', test: (v: string) => /\d/.test(v) },
 ];
 
-const schema = z
-  .object({
-    token: z.string().min(1, 'Token do link é obrigatório'),
-    cpf: z
-      .string()
-      .transform((v) => v.replace(/\D/g, ''))
-      .refine((v) => v.length === 11, 'CPF deve ter 11 dígitos'),
-    senha: z.string().refine((v) => RULES.every((r) => r.test(v)), 'A senha não cumpre os requisitos'),
-    confirmar: z.string(),
-  })
-  .refine((d) => d.senha === d.confirmar, {
-    path: ['confirmar'],
-    message: 'As senhas não conferem',
-  });
+/**
+ * Dois modos de ativação:
+ *  - com token (aluno chegou pelo link enviado pelo admin): CPF + senha;
+ *  - sem token (aluno abriu "Primeiro acesso" no app): o CPF identifica o
+ *    cadastro e o aluno escolhe o próprio e-mail (validado por provedor).
+ */
+function makeSchema(comToken: boolean) {
+  return z
+    .object({
+      email: comToken
+        ? z.string().optional()
+        : z
+            .string()
+            .email('Informe um e-mail válido')
+            .refine(
+              (v) => DOMINIOS_EMAIL_PERMITIDOS.includes(v.trim().toLowerCase().split('@')[1] ?? ''),
+              'Use um e-mail de um provedor conhecido (Gmail, Hotmail, Outlook, iCloud, Yahoo...)',
+            ),
+      cpf: z
+        .string()
+        .transform((v) => v.replace(/\D/g, ''))
+        .refine((v) => v.length === 11, 'CPF deve ter 11 dígitos'),
+      senha: z.string().refine((v) => RULES.every((r) => r.test(v)), 'A senha não cumpre os requisitos'),
+      confirmar: z.string(),
+    })
+    .refine((d) => d.senha === d.confirmar, {
+      path: ['confirmar'],
+      message: 'As senhas não conferem',
+    });
+}
 
-type FormData = z.input<typeof schema>;
+type FormData = z.input<ReturnType<typeof makeSchema>>;
 
 function formatCpf(v: string) {
   return v
@@ -56,8 +73,11 @@ function formatCpf(v: string) {
 export default function PrimeiroAcesso() {
   const params = useLocalSearchParams<{ token?: string }>();
   const tokenFromLink = typeof params.token === 'string' ? params.token : '';
+  const comToken = !!tokenFromLink;
   const [showSenha, setShowSenha] = useState(false);
   const primeiroAcesso = usePrimeiroAcesso();
+  const ativarConta = useAtivarConta();
+  const pendente = comToken ? primeiroAcesso.isPending : ativarConta.isPending;
 
   const {
     control,
@@ -65,20 +85,26 @@ export default function PrimeiroAcesso() {
     watch,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { token: tokenFromLink, cpf: '', senha: '', confirmar: '' },
+    resolver: zodResolver(makeSchema(comToken)),
+    defaultValues: { email: '', cpf: '', senha: '', confirmar: '' },
   });
 
   const senhaAtual = watch('senha') ?? '';
 
+  const irParaApp = (data: { tipoUsuario: string }) =>
+    router.replace(data.tipoUsuario === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
+
   const onSubmit = handleSubmit((values) => {
-    primeiroAcesso.mutate(
-      { token: values.token, cpf: values.cpf.replace(/\D/g, ''), senha: values.senha },
-      { onSuccess: (data) => router.replace(data.tipoUsuario === 'ADMIN' ? '/admin/dashboard' : '/dashboard') },
-    );
+    const cpf = values.cpf.replace(/\D/g, '');
+    if (comToken) {
+      primeiroAcesso.mutate({ token: tokenFromLink, cpf, senha: values.senha }, { onSuccess: irParaApp });
+    } else {
+      ativarConta.mutate({ cpf, email: (values.email ?? '').trim(), senha: values.senha }, { onSuccess: irParaApp });
+    }
   });
 
-  const erroApi = primeiroAcesso.error instanceof ApiError ? primeiroAcesso.error.message : null;
+  const erroMutation = comToken ? primeiroAcesso.error : ativarConta.error;
+  const erroApi = erroMutation instanceof ApiError ? erroMutation.message : null;
 
   return (
     <View style={s.root}>
@@ -94,7 +120,11 @@ export default function PrimeiroAcesso() {
               <Icon name="shield-checkmark" size={36} color="#fff" />
             </View>
             <Text style={s.title}>Primeiro acesso</Text>
-            <Text style={s.subtitle}>Para sua segurança, crie uma nova senha.</Text>
+            <Text style={s.subtitle}>
+              {comToken
+                ? 'Para sua segurança, crie uma nova senha.'
+                : 'Informe seu CPF, cadastre seu e-mail e crie sua senha.'}
+            </Text>
           </View>
 
           {erroApi ? (
@@ -105,26 +135,6 @@ export default function PrimeiroAcesso() {
           ) : null}
 
           <View style={s.form}>
-            {!tokenFromLink ? (
-              <Controller
-                control={control}
-                name="token"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label="Token do link"
-                    placeholder="Cole o token recebido"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.token?.message}
-                    leftIcon={<Icon name="key-outline" size={18} color={LC.textMuted} />}
-                  />
-                )}
-              />
-            ) : null}
-
             <Controller
               control={control}
               name="cpf"
@@ -141,6 +151,27 @@ export default function PrimeiroAcesso() {
                 />
               )}
             />
+
+            {!comToken ? (
+              <Controller
+                control={control}
+                name="email"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <Input
+                    label="Seu e-mail"
+                    placeholder="seuemail@gmail.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={value}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    error={errors.email?.message}
+                    leftIcon={<Icon name="mail-outline" size={18} color={LC.textMuted} />}
+                  />
+                )}
+              />
+            ) : null}
 
             <Controller
               control={control}
@@ -198,7 +229,7 @@ export default function PrimeiroAcesso() {
               })}
             </View>
 
-            <Button title="Criar senha" size="lg" loading={primeiroAcesso.isPending} onPress={onSubmit} />
+            <Button title={comToken ? 'Criar senha' : 'Ativar conta'} size="lg" loading={pendente} onPress={onSubmit} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -39,8 +39,8 @@ export default function NovoAluno() {
   const [copiado, setCopiado] = useState(false);
 
   const submit = () => {
-    if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || !email.trim() || !planoId) {
-      setErro('Preencha nome, CPF (11 dígitos), e-mail e plano.');
+    if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || !planoId) {
+      setErro('Preencha nome, CPF (11 dígitos) e plano.');
       return;
     }
     // O plano dá acesso a todas as modalidades; o backend exige um modalidadeId
@@ -51,7 +51,7 @@ export default function NovoAluno() {
       return;
     }
     criar.mutate(
-      { nome: nome.trim(), cpf: cpf.replace(/\D/g, ''), email: email.trim(), telefone: telefone.trim() || undefined, planoId, modalidadeId },
+      { nome: nome.trim(), cpf: cpf.replace(/\D/g, ''), email: email.trim() || undefined, telefone: telefone.trim() || undefined, planoId, modalidadeId },
       {
         onSuccess: (data) => {
           setCopiado(false);
@@ -80,7 +80,7 @@ export default function NovoAluno() {
             <View style={s.fields}>
               <Input label="Nome completo *" placeholder="Nome do aluno" value={nome} onChangeText={setNome} autoCapitalize="words" />
               <Input label="CPF *" placeholder="000.000.000-00" value={cpf} onChangeText={(t) => setCpf(formatCpf(t))} keyboardType="numeric" />
-              <Input label="E-mail *" placeholder="email@exemplo.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+              <Input label="E-mail (opcional)" placeholder="o aluno cadastra ao ativar a conta" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
               <Input label="Telefone" placeholder="(00) 00000-0000" value={telefone} onChangeText={setTelefone} keyboardType="phone-pad" />
             </View>
           </Card>
@@ -102,7 +102,7 @@ export default function NovoAluno() {
             <View style={s.hintRow}>
               <Icon name="information-circle-outline" size={16} color={LC.primary} />
               <Text style={s.hintText}>
-                O plano dá acesso a todas as modalidades — Academia, Funcional e Pilates.
+                O plano dá acesso a todas as modalidades — Musculação, Funcional e Pilates.
               </Text>
             </View>
           </Card>

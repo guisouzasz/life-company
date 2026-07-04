@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
+import { AtivarContaDto, DOMINIOS_EMAIL_PERMITIDOS } from "./dto/ativar-conta.dto";
 
 @Injectable()
 export class AuthService {
@@ -65,6 +66,51 @@ export class AuthService {
       registro.usuario.tipoUsuario,
       registro.usuario.nome,
     );
+  }
+
+  /**
+   * Ativação sem link: o aluno informa o CPF (cadastrado pelo admin), escolhe
+   * o próprio e-mail e cria a senha direto no app. O CPF é a verificação de
+   * identidade; o e-mail informado fica salvo no cadastro. Só contas ainda
+   * sem senha podem ser ativadas.
+   */
+  async ativarConta(dto: AtivarContaDto) {
+    const cpfNorm = dto.cpf.replace(/\D/g, "");
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { cpf: cpfNorm },
+    });
+    if (!usuario)
+      throw new NotFoundException(
+        "CPF não encontrado. Confirme com o estúdio se o seu cadastro já foi feito.",
+      );
+    if (usuario.senhaHash)
+      throw new ConflictException("Conta já ativada. Faça login com sua senha.");
+
+    const email = dto.email.trim().toLowerCase();
+    const dominio = email.split("@")[1] ?? "";
+    if (!DOMINIOS_EMAIL_PERMITIDOS.includes(dominio))
+      throw new BadRequestException(
+        "Use um e-mail de um provedor conhecido (Gmail, Hotmail, Outlook, iCloud, Yahoo...).",
+      );
+    const emailEmUso = await this.prisma.usuario.findFirst({
+      where: { email: { equals: email, mode: "insensitive" }, id: { not: usuario.id } },
+    });
+    if (emailEmUso)
+      throw new ConflictException("Este e-mail já está em uso por outra conta.");
+
+    const senhaHash = await bcrypt.hash(dto.senha, 12);
+    await this.prisma.$transaction([
+      this.prisma.usuario.update({
+        where: { id: usuario.id },
+        data: { email, senhaHash, ativo: true },
+      }),
+      // Invalida qualquer link de primeiro acesso pendente para esta conta
+      this.prisma.primeiroAcesso.updateMany({
+        where: { usuarioId: usuario.id, usado: false },
+        data: { usado: true },
+      }),
+    ]);
+    return this.gerarTokens(usuario.id, usuario.tipoUsuario, usuario.nome);
   }
 
   async refreshToken(token: string) {

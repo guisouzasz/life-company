@@ -1,5 +1,6 @@
 import { http } from '../http';
 import type {
+  AtivarContaPayload,
   AuthResponse,
   LoginPayload,
   PrimeiroAcessoPayload,
@@ -14,6 +15,11 @@ export const authService = {
 
   async primeiroAcesso(payload: PrimeiroAcessoPayload): Promise<AuthResponse> {
     const { data } = await http.post<AuthResponse>('/auth/primeiro-acesso', payload);
+    return data;
+  },
+
+  async ativarConta(payload: AtivarContaPayload): Promise<AuthResponse> {
+    const { data } = await http.post<AuthResponse>('/auth/ativar-conta', payload);
     return data;
   },
 
