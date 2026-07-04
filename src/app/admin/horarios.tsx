@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
 import { LC } from '../../constants/theme';
 import { DIAS_PT } from '../../constants/app';
-import { iconePorModalidade } from '../../constants/assets';
+import { iconePorModalidade, nomeModalidade } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -67,7 +67,7 @@ export default function AdminHorarios() {
                     <Icon name={iconePorModalidade(h.modalidade.nome)} size={18} color={LC.primary} />
                   </View>
                   <View style={s.info}>
-                    <Text style={s.modalidade}>{h.modalidade.nome}</Text>
+                    <Text style={s.modalidade}>{nomeModalidade(h.modalidade.nome)}</Text>
                     <Text style={s.meta}>
                       {h.horaInicio} - {h.horaFim} • {h.agendados}/{h.capacidadeMaxima} ocupação
                     </Text>
@@ -87,7 +87,7 @@ export default function AdminHorarios() {
       <ConfirmModal
         visible={!!alvo}
         title="Bloquear horário"
-        message={alvo ? `Bloquear ${alvo.modalidade.nome} às ${alvo.horaInicio}? Ele deixará de aceitar agendamentos.` : ''}
+        message={alvo ? `Bloquear ${nomeModalidade(alvo.modalidade.nome)} às ${alvo.horaInicio}? Ele deixará de aceitar agendamentos.` : ''}
         confirmLabel="Bloquear"
         cancelLabel="Voltar"
         destructive

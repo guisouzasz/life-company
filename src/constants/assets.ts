@@ -15,3 +15,12 @@ export function iconePorModalidade(nome?: string): 'body-outline' | 'barbell-out
   if (n.includes('funcional')) return 'fitness-outline';
   return 'barbell-outline';
 }
+
+/**
+ * Nome de exibição da modalidade. O backend (read-only) ainda guarda a
+ * modalidade como "Academia"; renomeada para "Musculação" apenas na UI.
+ */
+export function nomeModalidade(nome?: string): string {
+  const n = (nome ?? '').trim();
+  return n.toLowerCase() === 'academia' ? 'Musculação' : n;
+}

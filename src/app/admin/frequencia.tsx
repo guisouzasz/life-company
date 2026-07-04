@@ -1,5 +1,6 @@
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
+import { nomeModalidade } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Avatar } from '../../components/ui/avatar';
@@ -45,7 +46,7 @@ export default function AdminFrequencia() {
                     <Text style={s.nome}>{aluno.nome}</Text>
                     {plano ? (
                       <Text style={s.plano}>
-                        {plano.modalidade?.nome}{plano.plano ? ` • ${plano.plano.nome}` : ''}
+                        {nomeModalidade(plano.modalidade?.nome)}{plano.plano ? ` • ${plano.plano.nome}` : ''}
                       </Text>
                     ) : null}
                   </View>

@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LC } from '../constants/theme';
 import { STUDIO_NOME } from '../constants/app';
-import { iconePorModalidade } from '../constants/assets';
+import { iconePorModalidade, nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
 import { Icon } from '../components/ui/icon';
 import { Button } from '../components/ui/button';
@@ -48,7 +48,7 @@ export default function Agendamento() {
         onSuccess: () => {
           setDetalhe(null);
           const via = usarCredito ? ' (crédito de reposição)' : '';
-          setSucesso(`${horario.modalidade.nome} • ${diaSel.diaNome} ${diaSel.diaNum} às ${horario.horaInicio}${via}`);
+          setSucesso(`${nomeModalidade(horario.modalidade.nome)} • ${diaSel.diaNome} ${diaSel.diaNum} às ${horario.horaInicio}${via}`);
         },
         onError: (e) => setErroAg(e instanceof ApiError ? e.message : 'Não foi possível agendar.'),
       },
@@ -96,14 +96,14 @@ export default function Agendamento() {
               <Text style={s.detHora}>
                 {detalhe.horaInicio} às {detalhe.horaFim}
               </Text>
-              <Text style={s.detModalidade}>{detalhe.modalidade.nome}</Text>
+              <Text style={s.detModalidade}>{nomeModalidade(detalhe.modalidade.nome)}</Text>
             </View>
             <Badge label={`${detalhe.vagas}/${detalhe.capacidadeMaxima} vaga${detalhe.vagas === 1 ? '' : 's'}`} variant={lotado ? 'danger' : 'primary'} />
           </View>
 
           <ScrollView style={s.detBody} showsVerticalScrollIndicator={false}>
             <DetRow label="Horário" value={`${detalhe.horaInicio} - ${detalhe.horaFim}`} />
-            <DetRow label="Modalidade" value={detalhe.modalidade.nome} />
+            <DetRow label="Modalidade" value={nomeModalidade(detalhe.modalidade.nome)} />
             <DetRow label="Local" value={STUDIO_NOME} />
             <DetRow label="Vagas" value={`${detalhe.vagas} de ${detalhe.capacidadeMaxima} ${detalhe.vagas === 1 ? 'disponível' : 'disponíveis'}`} last />
           </ScrollView>
@@ -162,7 +162,7 @@ export default function Agendamento() {
           return (
             <Pressable key={m.id} style={[s.modChip, sel && s.modChipSel]} onPress={() => setModalSel(m)}>
               <Icon name={iconePorModalidade(m.nome)} size={15} color={sel ? LC.primary : LC.textSecondary} />
-              <Text style={[s.modText, sel && s.modTextSel]}>{m.nome}</Text>
+              <Text style={[s.modText, sel && s.modTextSel]}>{nomeModalidade(m.nome)}</Text>
             </Pressable>
           );
         })}
@@ -188,7 +188,7 @@ export default function Agendamento() {
                   <Text style={s.slotHoraFim}>{h.horaFim}</Text>
                 </View>
                 <View style={s.slotInfo}>
-                  <Text style={[s.slotModalidade, lotado && s.mutedText]}>{h.modalidade.nome}</Text>
+                  <Text style={[s.slotModalidade, lotado && s.mutedText]}>{nomeModalidade(h.modalidade.nome)}</Text>
                   <View style={s.slotMetaRow}>
                     <Icon name="people-outline" size={13} color={lotado ? LC.danger : LC.textMuted} />
                     <Text style={[s.slotMeta, lotado && { color: LC.danger }]}>

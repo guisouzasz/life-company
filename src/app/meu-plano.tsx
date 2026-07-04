@@ -91,7 +91,7 @@ export default function MeuPlano() {
           {/* Detalhes */}
           <Card style={s.detCard} padding={4}>
             <Text style={s.detTitle}>Detalhes do plano</Text>
-            <DetailRow label="Modalidades" value="Todas (Academia, Funcional, Pilates)" />
+            <DetailRow label="Modalidades" value="Todas (Musculação, Funcional, Pilates)" />
             <DetailRow label="Frequência" value={`${saldo.data.total}x por semana`} />
             <DetailRow label="Aulas usadas" value={`${saldo.data.usadas} de ${saldo.data.total}`} />
             <DetailRow label="Status" value="Ativo" status last />

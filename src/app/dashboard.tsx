@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../store/auth';
 import { LC } from '../constants/theme';
 import { STUDIO_NOME, DIAS_PT } from '../constants/app';
-import { iconePorModalidade } from '../constants/assets';
+import { iconePorModalidade, nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
@@ -120,7 +120,7 @@ export default function Dashboard() {
                 <Icon name={iconePorModalidade(proxima.horario.modalidade.nome)} size={20} color="#fff" />
               </View>
             </View>
-            <Text style={s.nextModalidade}>{proxima.horario.modalidade.nome}</Text>
+            <Text style={s.nextModalidade}>{nomeModalidade(proxima.horario.modalidade.nome)}</Text>
             <View style={s.nextInfoRow}>
               <Icon name="time-outline" size={15} color="rgba(255,255,255,0.85)" />
               <Text style={s.nextInfo}>
@@ -169,7 +169,7 @@ export default function Dashboard() {
                     <Icon name={iconePorModalidade(ag.horario.modalidade.nome)} size={20} color={LC.primary} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.aulaModalidade}>{ag.horario.modalidade.nome}</Text>
+                    <Text style={s.aulaModalidade}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
                     <Text style={s.aulaInfo}>
                       {formatDate(ag.dataAula, 'ddd, DD/MM')} • {ag.horario.horaInicio} - {ag.horario.horaFim}
                     </Text>
@@ -205,7 +205,7 @@ export default function Dashboard() {
         title="Cancelar aula"
         message={
           alvo
-            ? `${alvo.horario.modalidade.nome} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.`
+            ? `${nomeModalidade(alvo.horario.modalidade.nome)} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.`
             : ''
         }
         confirmLabel="Cancelar aula"

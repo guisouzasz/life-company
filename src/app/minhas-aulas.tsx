@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'r
 import { router } from 'expo-router';
 import { LC } from '../constants/theme';
 import { STUDIO_NOME, DIAS_PT } from '../constants/app';
-import { iconePorModalidade } from '../constants/assets';
+import { iconePorModalidade, nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
@@ -62,7 +62,7 @@ export default function MinhasAulas() {
                     <Text style={s.dateMes}>{formatDate(ag.dataAula, 'MMM')}</Text>
                   </View>
                   <View style={s.info}>
-                    <Text style={s.modalidade}>{ag.horario.modalidade.nome}</Text>
+                    <Text style={s.modalidade}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
                     <View style={s.infoLine}>
                       <Icon name="time-outline" size={13} color={LC.textSecondary} />
                       <Text style={s.infoText}>
@@ -111,7 +111,7 @@ export default function MinhasAulas() {
         title="Cancelar aula"
         message={
           alvo
-            ? `${alvo.horario.modalidade.nome} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.`
+            ? `${nomeModalidade(alvo.horario.modalidade.nome)} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.`
             : ''
         }
         confirmLabel="Cancelar aula"

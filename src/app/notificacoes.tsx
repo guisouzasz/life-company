@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../constants/theme';
 import { DIAS_PT } from '../constants/app';
+import { nomeModalidade } from '../constants/assets';
 import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
 import { Icon, type IconName } from '../components/ui/icon';
@@ -38,7 +39,7 @@ export default function Notificacoes() {
           restantes > 0
             ? `Você ainda possui ${restantes} ${restantes === 1 ? 'aula disponível' : 'aulas disponíveis'} esta semana`
             : 'Você já utilizou todas as aulas da semana',
-        sub: `${saldo.data.plano} • ${saldo.data.modalidade}`,
+        sub: `${saldo.data.plano} • ${nomeModalidade(saldo.data.modalidade)}`,
         tempo: 'Semana',
       });
     }
@@ -50,7 +51,7 @@ export default function Notificacoes() {
         color: LC.primary,
         bg: LC.primaryLight,
         titulo: 'Aula agendada',
-        sub: `${ag.horario.modalidade.nome} • ${DIAS_PT[ag.horario.diaSemana]} • ${ag.horario.horaInicio}`,
+        sub: `${nomeModalidade(ag.horario.modalidade.nome)} • ${DIAS_PT[ag.horario.diaSemana]} • ${ag.horario.horaInicio}`,
         tempo: formatDate(ag.dataAula, 'DD/MM'),
       });
     });

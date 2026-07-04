@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../constants/theme';
-import { iconePorModalidade } from '../constants/assets';
+import { iconePorModalidade, nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
@@ -79,7 +79,7 @@ export default function Historico() {
                       <Icon name={iconePorModalidade(ag.horario.modalidade.nome)} size={18} color={LC.primary} />
                     </View>
                     <View style={s.info}>
-                      <Text style={s.modalidade}>{ag.horario.modalidade.nome}</Text>
+                      <Text style={s.modalidade}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
                       <Text style={s.meta}>
                         {formatDate(ag.dataAula, 'DD/MM')} • {ag.horario.horaInicio}
                       </Text>
