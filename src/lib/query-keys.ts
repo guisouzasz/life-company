@@ -9,4 +9,7 @@ export const queryKeys = {
   horarios: ['horarios'] as const,
   relatorioDashboard: ['relatorios', 'dashboard'] as const,
   relatorioFrequencia: ['relatorios', 'frequencia'] as const,
+  creditosMeus: ['creditos', 'meus'] as const,
+  creditosSaldo: ['creditos', 'saldo'] as const,
+  creditosAdmin: (usuarioId?: string) => ['creditos', 'admin', usuarioId ?? 'all'] as const,
 };

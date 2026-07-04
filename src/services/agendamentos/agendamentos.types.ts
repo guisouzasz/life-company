@@ -37,4 +37,5 @@ export interface Agendamento {
 export interface CriarAgendamentoPayload {
   horarioId: string;
   dataAula: string; // YYYY-MM-DD
+  usarCredito?: boolean; // agendar consumindo um crédito de reposição
 }

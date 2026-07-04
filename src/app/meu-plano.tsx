@@ -5,13 +5,17 @@ import { TabBar } from '../components/tab-bar';
 import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Icon } from '../components/ui/icon';
 import { SaldoDots } from '../components/ui/saldo-dots';
 import { Loading, ErrorState } from '../components/ui/states';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
-import { endOfIsoWeekFormatted } from '../services/date';
+import { useMeusCreditos } from '../services/creditos/creditos.queries';
+import { endOfIsoWeekFormatted, formatDate } from '../services/date';
 
 export default function MeuPlano() {
   const saldo = useSaldo();
+  const creditos = useMeusCreditos();
+  const validos = (creditos.data ?? []).filter((c) => c.status === 'VALIDO');
 
   return (
     <View style={s.root}>
@@ -51,6 +55,38 @@ export default function MeuPlano() {
               </View>
             </View>
           </LinearGradient>
+
+          {/* Créditos de reposição */}
+          <Card style={s.detCard} padding={16}>
+            <View style={s.credHead}>
+              <View style={s.credIcon}>
+                <Icon name="ticket-outline" size={20} color={LC.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.credTitle}>Créditos de reposição</Text>
+                <Text style={s.credSub}>
+                  {validos.length > 0
+                    ? `${validos.length} disponível${validos.length === 1 ? '' : 'is'} para agendar`
+                    : 'Nenhum crédito disponível'}
+                </Text>
+              </View>
+              {validos.length > 0 ? <Badge label={String(validos.length)} variant="primary" /> : null}
+            </View>
+            {validos.length > 0 ? (
+              <View style={s.credList}>
+                {validos.map((c) => (
+                  <View key={c.id} style={s.credRow}>
+                    <Text style={s.credRowText}>Válido até {formatDate(c.expiraEm, 'DD/MM/YYYY')}</Text>
+                    <Badge label="Disponível" variant="success" />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={s.credHint}>
+                Cancelamentos dentro do prazo viram crédito (válido por 45 dias) para você repor a aula quando quiser.
+              </Text>
+            )}
+          </Card>
 
           {/* Detalhes */}
           <Card style={s.detCard} padding={4}>
@@ -92,7 +128,15 @@ const s = StyleSheet.create({
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 4, backgroundColor: '#fff' },
   restantes: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 8 },
-  detCard: {},
+  detCard: { marginBottom: 12 },
+  credHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  credIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  credTitle: { fontSize: 15, fontWeight: '800', color: LC.textPrimary },
+  credSub: { fontSize: 13, color: LC.textSecondary, marginTop: 2 },
+  credList: { marginTop: 12, gap: 8 },
+  credRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: LC.border },
+  credRowText: { fontSize: 13, color: LC.textPrimary, fontWeight: '600' },
+  credHint: { fontSize: 12, color: LC.textMuted, marginTop: 10, lineHeight: 17 },
   detTitle: { fontSize: 15, fontWeight: '800', color: LC.textPrimary, padding: 14, paddingBottom: 8 },
   detRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14 },
   detRowBorder: { borderBottomWidth: 1, borderBottomColor: LC.border },

@@ -11,6 +11,7 @@ import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { AppModal } from '../../components/ui/modal';
+import { CreditosAlunoModal } from '../../components/admin/creditos-aluno-modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import { useGerarLink, useAtualizarAluno } from '../../services/usuarios/usuarios.mutations';
@@ -26,6 +27,9 @@ export default function AdminAlunos() {
   // Modal de link gerado
   const [link, setLink] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+
+  // Modal de créditos
+  const [creditosAluno, setCreditosAluno] = useState<AlunoAdmin | null>(null);
 
   // Modal de edição
   const [editando, setEditando] = useState<AlunoAdmin | null>(null);
@@ -128,6 +132,10 @@ export default function AdminAlunos() {
                       style={s.actionBtn}
                     />
                   </View>
+                  <Pressable style={s.credLink} onPress={() => setCreditosAluno(aluno)}>
+                    <Icon name="ticket-outline" size={16} color={LC.primary} />
+                    <Text style={s.credLinkText}>Gerenciar créditos de reposição</Text>
+                  </Pressable>
                 </Card>
               );
             })
@@ -173,6 +181,9 @@ export default function AdminAlunos() {
           <Button title="Salvar" loading={atualizar.isPending} onPress={salvarEdicao} style={{ flex: 1 }} />
         </View>
       </AppModal>
+
+      {/* Modal: créditos do aluno */}
+      <CreditosAlunoModal aluno={creditosAluno} onClose={() => setCreditosAluno(null)} />
     </View>
   );
 }
@@ -192,6 +203,8 @@ const s = StyleSheet.create({
   plano: { fontSize: 11, color: LC.textMuted, marginTop: 2 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   actionBtn: { flex: 1 },
+  credLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 6 },
+  credLinkText: { fontSize: 13, fontWeight: '600', color: LC.primary },
   fab: {
     position: 'absolute', right: 20, bottom: 92, width: 56, height: 56, borderRadius: 28,
     backgroundColor: LC.primary, alignItems: 'center', justifyContent: 'center', ...LC.shadowStrong,

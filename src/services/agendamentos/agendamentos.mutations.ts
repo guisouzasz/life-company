@@ -11,6 +11,7 @@ function useInvalidarAgenda() {
     qc.invalidateQueries({ queryKey: queryKeys.historico });
     qc.invalidateQueries({ queryKey: queryKeys.saldo });
     qc.invalidateQueries({ queryKey: ['horarios'] });
+    qc.invalidateQueries({ queryKey: ['creditos'] });
   };
 }
 

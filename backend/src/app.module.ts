@@ -9,6 +9,7 @@ import { HorariosModule } from './horarios/horarios.module';
 import { AgendamentosModule } from './agendamentos/agendamentos.module';
 import { PresencasModule } from './presencas/presencas.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
+import { CreditosModule } from './creditos/creditos.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
     AgendamentosModule,
     PresencasModule,
     RelatoriosModule,
+    CreditosModule,
   ],
 })
 export class AppModule {}

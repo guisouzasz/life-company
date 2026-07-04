@@ -27,20 +27,38 @@ export class AgendamentosService {
     const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null }, include: { plano: true } });
     if (!usuarioPlano) throw new ForbiddenException('Você não possui um plano ativo');
 
-    // Reset semanal
-    const inicioSemana = dayjs().startOf('isoWeek').toDate();
-    if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemana)) {
-      await this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemana } });
-      usuarioPlano.aulasUsadasSemana = 0;
-    }
-
-    if (usuarioPlano.aulasUsadasSemana >= usuarioPlano.plano.aulasSemanais) throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
-
+    // Validações comuns aos dois fluxos (vaga/duplicidade)
     const jaAgendado = await this.prisma.agendamento.findFirst({ where: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
     if (jaAgendado) throw new ConflictException('Você já possui agendamento neste horário');
 
     const ocupacao = await this.prisma.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
     if (ocupacao >= horario.capacidadeMaxima) throw new BadRequestException('Horário lotado');
+
+    // ── Fluxo por CRÉDITO de reposição (não consome vaga semanal) ──────
+    if (dto.usarCredito === true) {
+      const credito = await this.prisma.creditoReposicao.findFirst({
+        where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
+        orderBy: { expiraEm: 'asc' },
+      });
+      if (!credito) throw new ForbiddenException('Você não possui crédito de reposição válido');
+      const agendamento = await this.prisma.agendamento.create({
+        data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO', reposicao: true, creditoId: credito.id },
+        include: { horario: { include: { modalidade: true } } },
+      });
+      await this.prisma.creditoReposicao.update({
+        where: { id: credito.id },
+        data: { usado: true, usadoEm: new Date(), usadoAgendamentoId: agendamento.id },
+      });
+      return agendamento;
+    }
+
+    // ── Fluxo normal: limite semanal do plano ──────────────────────────
+    const inicioSemana = dayjs().startOf('isoWeek').toDate();
+    if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemana)) {
+      await this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemana } });
+      usuarioPlano.aulasUsadasSemana = 0;
+    }
+    if (usuarioPlano.aulasUsadasSemana >= usuarioPlano.plano.aulasSemanais) throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
 
     const [agendamento] = await this.prisma.$transaction([
       this.prisma.agendamento.create({ data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' }, include: { horario: { include: { modalidade: true } } } }),
@@ -72,12 +90,19 @@ export class AgendamentosService {
       throw new ForbiddenException('O prazo de cancelamento deste horário já encerrou. A aula será contabilizada.');
     }
 
-    const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null } });
+    // Aula de reposição: cancelar NÃO gera novo crédito — o crédito é perdido.
+    if (ag.reposicao) {
+      await this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } });
+      return { mensagem: 'Aula de reposição cancelada. O crédito foi perdido e não gera novo crédito.' };
+    }
+
+    // Aula normal cancelada no prazo → convertida em 1 crédito de reposição (45 dias)
+    const expiraEm = dayjs(ag.dataAula).add(45, 'day').endOf('day').toDate();
     await this.prisma.$transaction([
       this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),
-      ...(usuarioPlano ? [this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { decrement: 1 } } })] : []),
+      this.prisma.creditoReposicao.create({ data: { usuarioId, origemAgendamentoId: ag.id, expiraEm } }),
     ]);
-    return { mensagem: 'Agendamento cancelado com sucesso' };
+    return { mensagem: 'Aula cancelada. Você recebeu 1 crédito de reposição (válido por 45 dias).' };
   }
 
   async listarMeus(usuarioId: string) {

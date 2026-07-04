@@ -14,6 +14,7 @@ import { Loading, EmptyState } from '../components/ui/states';
 import { useModalidades } from '../services/modalidades/modalidades.queries';
 import { useVagas } from '../services/horarios/horarios.queries';
 import { useCriarAgendamento } from '../services/agendamentos/agendamentos.mutations';
+import { useSaldoCreditos } from '../services/creditos/creditos.queries';
 import type { Modalidade } from '../services/agendamentos/agendamentos.types';
 import type { HorarioVaga } from '../services/horarios/horarios.types';
 import { getProximosDiasUteis } from '../services/date';
@@ -30,6 +31,8 @@ export default function Agendamento() {
   const [sucesso, setSucesso] = useState<string | null>(null);
   const [erroAg, setErroAg] = useState<string | null>(null);
   const criar = useCriarAgendamento();
+  const saldoCreditos = useSaldoCreditos();
+  const creditosDisponiveis = saldoCreditos.data?.disponiveis ?? 0;
 
   useEffect(() => {
     if (!modalSel && modalidades.data?.length) setModalSel(modalidades.data[0]);
@@ -38,13 +41,14 @@ export default function Agendamento() {
   const vagas = useVagas(modalSel?.id, diaSel?.data);
   const horariosDoDia = (vagas.data ?? []).filter((h) => h.diaSemana === diaSel?.diaSemana);
 
-  const agendar = (horario: HorarioVaga) => {
+  const agendar = (horario: HorarioVaga, usarCredito = false) => {
     criar.mutate(
-      { horarioId: horario.id, dataAula: diaSel.data },
+      { horarioId: horario.id, dataAula: diaSel.data, usarCredito },
       {
         onSuccess: () => {
           setDetalhe(null);
-          setSucesso(`${horario.modalidade.nome} • ${diaSel.diaNome} ${diaSel.diaNum} às ${horario.horaInicio}`);
+          const via = usarCredito ? ' (crédito de reposição)' : '';
+          setSucesso(`${horario.modalidade.nome} • ${diaSel.diaNome} ${diaSel.diaNum} às ${horario.horaInicio}${via}`);
         },
         onError: (e) => setErroAg(e instanceof ApiError ? e.message : 'Não foi possível agendar.'),
       },
@@ -104,14 +108,25 @@ export default function Agendamento() {
             <DetRow label="Vagas" value={`${detalhe.vagas} de ${detalhe.capacidadeMaxima} ${detalhe.vagas === 1 ? 'disponível' : 'disponíveis'}`} last />
           </ScrollView>
 
-          <Button
-            title={lotado ? 'Horário lotado' : 'Agendar aula'}
-            size="lg"
-            disabled={lotado}
-            loading={criar.isPending}
-            onPress={() => agendar(detalhe)}
-            style={s.detBtn}
-          />
+          <View style={s.detBtns}>
+            <Button
+              title={lotado ? 'Horário lotado' : 'Agendar aula'}
+              size="lg"
+              disabled={lotado}
+              loading={criar.isPending && criar.variables?.usarCredito !== true}
+              onPress={() => agendar(detalhe)}
+            />
+            {!lotado && creditosDisponiveis > 0 ? (
+              <Button
+                title={`Usar crédito de reposição (${creditosDisponiveis})`}
+                variant="outline"
+                size="lg"
+                loading={criar.isPending && criar.variables?.usarCredito === true}
+                onPress={() => agendar(detalhe, true)}
+                leftIcon={<Icon name="ticket-outline" size={18} color={LC.primary} />}
+              />
+            ) : null}
+          </View>
         </View>
         {feedbackModais}
       </View>
@@ -254,7 +269,7 @@ const s = StyleSheet.create({
   detRowBorder: { borderBottomWidth: 1, borderBottomColor: LC.border },
   detKey: { fontSize: 14, color: LC.textSecondary },
   detVal: { fontSize: 14, fontWeight: '700', color: LC.textPrimary, flexShrink: 1, textAlign: 'right' },
-  detBtn: { marginVertical: 16 },
+  detBtns: { marginVertical: 16, gap: 10 },
   modalMsg: { fontSize: 15, color: LC.textPrimary, marginBottom: 18, lineHeight: 22 },
   modalActions: { flexDirection: 'row', gap: 10 },
 });
