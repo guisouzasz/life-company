@@ -10,12 +10,16 @@ import { SaldoDots } from '../components/ui/saldo-dots';
 import { Loading, ErrorState } from '../components/ui/states';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
 import { useMeusCreditos } from '../services/creditos/creditos.queries';
+import { useMinhaSituacaoFinanceira } from '../services/financeiro/financeiro.queries';
 import { endOfIsoWeekFormatted, formatDate } from '../services/date';
+import { formatarReal } from '../services/money';
 
 export default function MeuPlano() {
   const saldo = useSaldo();
   const creditos = useMeusCreditos();
+  const financeiro = useMinhaSituacaoFinanceira();
   const validos = (creditos.data ?? []).filter((c) => c.status === 'VALIDO');
+  const fin = financeiro.data;
 
   return (
     <View style={s.root}>
@@ -55,6 +59,39 @@ export default function MeuPlano() {
               </View>
             </View>
           </LinearGradient>
+
+          {/* Mensalidade */}
+          {fin && fin.valor != null ? (
+            <Card style={s.detCard} padding={16}>
+              <View style={s.credHead}>
+                <View style={[s.credIcon, fin.status === 'ATRASADO' && { backgroundColor: LC.dangerBg }]}>
+                  <Icon
+                    name="wallet-outline"
+                    size={20}
+                    color={fin.status === 'ATRASADO' ? LC.danger : LC.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.credTitle}>Mensalidade</Text>
+                  <Text style={s.credSub}>
+                    {formatarReal(fin.valor)} • vence dia {fin.diaVencimento}
+                  </Text>
+                </View>
+                {fin.status === 'EM_DIA' ? (
+                  <Badge label="Em dia" variant="success" />
+                ) : fin.status === 'ATRASADO' ? (
+                  <Badge label={`Atrasada ${fin.dias}d`} variant="danger" />
+                ) : (
+                  <Badge label={fin.dias === 0 ? 'Vence hoje' : `Vence em ${fin.dias}d`} variant={fin.dias <= 5 ? 'primary' : 'neutral'} />
+                )}
+              </View>
+              <Text style={s.credHint}>
+                {fin.status === 'EM_DIA' && fin.pagamento
+                  ? `Pagamento de ${formatDate(fin.pagamento.pagoEm, 'DD/MM')} registrado. Obrigado!`
+                  : 'O pagamento é feito direto com o estúdio (PIX ou dinheiro) — aqui você acompanha a situação.'}
+              </Text>
+            </Card>
+          ) : null}
 
           {/* Créditos de reposição */}
           <Card style={s.detCard} padding={16}>

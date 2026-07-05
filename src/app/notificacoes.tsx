@@ -9,7 +9,9 @@ import { Icon, type IconName } from '../components/ui/icon';
 import { Loading, EmptyState } from '../components/ui/states';
 import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
+import { useMinhaSituacaoFinanceira } from '../services/financeiro/financeiro.queries';
 import { formatDate } from '../services/date';
+import { formatarReal } from '../services/money';
 
 type Notificacao = {
   id: string;
@@ -24,9 +26,36 @@ type Notificacao = {
 export default function Notificacoes() {
   const meus = useMeusAgendamentos();
   const saldo = useSaldo();
+  const financeiro = useMinhaSituacaoFinanceira();
 
   const notificacoes = useMemo<Notificacao[]>(() => {
     const lista: Notificacao[] = [];
+
+    // Lembrete de mensalidade (só quando precisa de atenção)
+    const fin = financeiro.data;
+    if (fin && fin.valor != null) {
+      if (fin.status === 'ATRASADO') {
+        lista.push({
+          id: 'mensalidade',
+          icon: 'alert-circle',
+          color: LC.danger,
+          bg: LC.dangerBg,
+          titulo: `Mensalidade em atraso há ${fin.dias} ${fin.dias === 1 ? 'dia' : 'dias'}`,
+          sub: `${formatarReal(fin.valor)} • combine o pagamento direto com o estúdio`,
+          tempo: `Dia ${fin.diaVencimento}`,
+        });
+      } else if (fin.status === 'A_VENCER' && fin.dias <= 5) {
+        lista.push({
+          id: 'mensalidade',
+          icon: 'wallet',
+          color: LC.warning,
+          bg: LC.warningBg,
+          titulo: fin.dias === 0 ? 'Sua mensalidade vence hoje' : `Sua mensalidade vence em ${fin.dias} ${fin.dias === 1 ? 'dia' : 'dias'}`,
+          sub: `${formatarReal(fin.valor)} • pague direto ao estúdio (PIX ou dinheiro)`,
+          tempo: `Dia ${fin.diaVencimento}`,
+        });
+      }
+    }
 
     if (saldo.data) {
       const restantes = Math.max(saldo.data.total - saldo.data.usadas, 0);
@@ -57,7 +86,7 @@ export default function Notificacoes() {
     });
 
     return lista;
-  }, [meus.data, saldo.data]);
+  }, [meus.data, saldo.data, financeiro.data]);
 
   return (
     <View style={s.root}>

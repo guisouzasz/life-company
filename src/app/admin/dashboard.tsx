@@ -11,9 +11,11 @@ import { Badge } from '../../components/ui/badge';
 import { Icon, type IconName } from '../../components/ui/icon';
 import { Loading, ErrorState } from '../../components/ui/states';
 import { useRelatorioDashboard } from '../../services/relatorios/relatorios.queries';
+import { useResumoFinanceiro } from '../../services/financeiro/financeiro.queries';
 import { useLogout } from '../../services/auth/auth.mutations';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { getDiaSemanaKey } from '../../services/date';
+import { formatarReal } from '../../services/money';
 import type { RelatorioDashboard } from '../../services/relatorios/relatorios.types';
 
 type StatDef = { label: string; value: number | string; icon: IconName; color: string; bg: string };
@@ -22,6 +24,7 @@ type AcaoDef = { label: string; desc: string; icon: IconName; route: string; col
 const ACOES: AcaoDef[] = [
   { label: 'Alunos', desc: 'Gerenciar cadastros', icon: 'people-outline', route: '/admin/alunos', color: '#4F46E5', bg: '#EEF2FF' },
   { label: 'Horários', desc: 'Grade de aulas', icon: 'calendar-outline', route: '/admin/horarios', color: LC.primary, bg: LC.primaryLight },
+  { label: 'Financeiro', desc: 'Mensalidades e recebimentos', icon: 'wallet-outline', route: '/admin/financeiro', color: '#15803D', bg: LC.successBg },
   { label: 'Frequência', desc: 'Presenças e faltas', icon: 'stats-chart-outline', route: '/admin/frequencia', color: '#F59E0B', bg: '#FEF3C7' },
   { label: 'Novo aluno', desc: 'Cadastrar e gerar link', icon: 'person-add-outline', route: '/admin/novo-aluno', color: LC.info, bg: LC.infoBg },
 ];
@@ -99,6 +102,50 @@ function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
   );
 }
 
+function FinanceiroCard() {
+  const resumo = useResumoFinanceiro();
+  const d = resumo.data;
+  return (
+    <Pressable onPress={() => router.push('/admin/financeiro' as any)} style={({ pressed }) => [pressed && s.pressed]}>
+      <Card style={s.finCard} padding={18}>
+        <View style={s.finHead}>
+          <Text style={s.blockTitle}>Financeiro do mês</Text>
+          <Icon name="chevron-forward" size={16} color={LC.textMuted} />
+        </View>
+        {!d ? (
+          <Text style={s.blockEmpty}>Carregando…</Text>
+        ) : (
+          <>
+            <View style={s.finRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.finValor}>{formatarReal(d.recebidoMes)}</Text>
+                <Text style={s.finLabel}>Recebido</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.finValor}>{formatarReal(d.aReceber)}</Text>
+                <Text style={s.finLabel}>A receber</Text>
+              </View>
+            </View>
+            {d.atrasados > 0 ? (
+              <View style={s.finAlerta}>
+                <Icon name="alert-circle" size={14} color={LC.danger} />
+                <Text style={s.finAlertaText}>
+                  {d.atrasados} {d.atrasados === 1 ? 'aluno atrasado' : 'alunos atrasados'}
+                </Text>
+              </View>
+            ) : (
+              <View style={s.finAlerta}>
+                <Icon name="checkmark-circle" size={14} color={LC.success} />
+                <Text style={[s.finAlertaText, { color: LC.success }]}>Nenhum atraso</Text>
+              </View>
+            )}
+          </>
+        )}
+      </Card>
+    </Pressable>
+  );
+}
+
 // ── Tela ─────────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
@@ -168,7 +215,8 @@ export default function AdminDashboard() {
                 <View style={{ flex: 3 }}>
                   <AulasPorDiaChart d={d} />
                 </View>
-                <View style={{ flex: 2 }}>
+                <View style={{ flex: 2, gap: GAP }}>
+                  <FinanceiroCard />
                   <AulasHojeCard d={d} />
                 </View>
               </View>
@@ -241,6 +289,8 @@ export default function AdminDashboard() {
               <AulasPorDiaChart d={d} />
               <View style={{ height: GAP }} />
               <AulasHojeCard d={d} />
+              <View style={{ height: GAP }} />
+              <FinanceiroCard />
 
               <Text style={s.sectionTitle}>Gestão rápida</Text>
               <View style={s.acoes}>
@@ -301,6 +351,15 @@ const s = StyleSheet.create({
   chartBarHoje: { backgroundColor: LC.primary },
   chartDia: { fontSize: 11, fontWeight: '600', color: LC.textMuted, marginTop: 6 },
   chartDiaHoje: { color: LC.primary, fontWeight: '800' },
+
+  // Financeiro
+  finCard: { width: '100%' },
+  finHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  finRow: { flexDirection: 'row', gap: 12 },
+  finValor: { fontSize: 18, fontWeight: '800', color: LC.textPrimary },
+  finLabel: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  finAlerta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: LC.border },
+  finAlertaText: { fontSize: 12, fontWeight: '700', color: LC.danger },
 
   hojeEmpty: { alignItems: 'center', paddingVertical: 20, gap: 4 },
   hojeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: LC.border },
