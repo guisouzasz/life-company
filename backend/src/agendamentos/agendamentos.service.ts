@@ -53,17 +53,36 @@ export class AgendamentosService {
     }
 
     // ── Fluxo normal: limite semanal do plano ──────────────────────────
-    const inicioSemana = dayjs().startOf('isoWeek').toDate();
-    if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemana)) {
-      await this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemana } });
+    // O limite vale para a SEMANA DA AULA sendo agendada (não a semana atual):
+    // cada semana tem sua própria cota, permitindo agendar semanas futuras.
+    const inicioSemanaAula = dayjs(dto.dataAula).startOf('isoWeek').toDate();
+    const fimSemanaAula = dayjs(dto.dataAula).endOf('isoWeek').toDate();
+    const usadasNaSemana = await this.prisma.agendamento.count({
+      where: {
+        usuarioId,
+        dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
+        status: { in: ['CONFIRMADO', 'REALIZADO'] },
+        reposicao: false, // aulas por crédito não consomem a cota semanal
+      },
+    });
+    if (usadasNaSemana >= usuarioPlano.plano.aulasSemanais) throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
+
+    // aulasUsadasSemana/semanaReferencia seguem existindo só para relatórios:
+    // incrementa apenas quando a aula pertence à semana corrente.
+    const inicioSemanaAtual = dayjs().startOf('isoWeek').toDate();
+    const aulaNaSemanaAtual = dayjs(dto.dataAula).startOf('isoWeek').isSame(dayjs(inicioSemanaAtual));
+    if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemanaAtual)) {
+      await this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemanaAtual } });
       usuarioPlano.aulasUsadasSemana = 0;
     }
-    if (usuarioPlano.aulasUsadasSemana >= usuarioPlano.plano.aulasSemanais) throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
 
-    const [agendamento] = await this.prisma.$transaction([
-      this.prisma.agendamento.create({ data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' }, include: { horario: { include: { modalidade: true } } } }),
-      this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { increment: 1 } } }),
-    ]);
+    const agendamento = await this.prisma.agendamento.create({
+      data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' },
+      include: { horario: { include: { modalidade: true } } },
+    });
+    if (aulaNaSemanaAtual) {
+      await this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { increment: 1 } } });
+    }
     return agendamento;
   }
 
