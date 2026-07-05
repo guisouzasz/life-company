@@ -24,3 +24,11 @@ export function nomeModalidade(nome?: string): string {
   const n = (nome ?? '').trim();
   return n.toLowerCase() === 'academia' ? 'Musculação' : n;
 }
+
+/** Cor de destaque por modalidade (ícones/bolhas), com fallback teal. */
+export function corPorModalidade(nome?: string): string {
+  const n = (nome ?? '').toLowerCase();
+  if (n.includes('pilates') || n.includes('yoga')) return '#3B82F6';
+  if (n.includes('funcional')) return '#22C55E';
+  return '#0E9488';
+}

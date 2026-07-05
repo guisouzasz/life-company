@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Patch } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { HorariosService } from './horarios.service';
-import { CriarHorarioDto } from './dto/criar-horario.dto';
+import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 
@@ -15,8 +15,13 @@ export class HorariosController {
   @Get()
   @ApiQuery({ name: 'modalidadeId', required: false })
   @ApiQuery({ name: 'diaSemana', required: false })
-  listar(@Query('modalidadeId') modalidadeId?: string, @Query('diaSemana') diaSemana?: string) {
-    return this.service.listar(modalidadeId, diaSemana);
+  @ApiQuery({ name: 'todos', required: false, description: 'Inclui horários inativos (gestão admin)' })
+  listar(
+    @Query('modalidadeId') modalidadeId?: string,
+    @Query('diaSemana') diaSemana?: string,
+    @Query('todos') todos?: string,
+  ) {
+    return this.service.listar(modalidadeId, diaSemana, todos === '1' || todos === 'true');
   }
 
   @Get('vagas')
@@ -28,5 +33,6 @@ export class HorariosController {
 
   @Post() @UseGuards(AdminGuard) criar(@Body() dto: CriarHorarioDto) { return this.service.criar(dto); }
   @Patch(':id/bloquear') @UseGuards(AdminGuard) bloquear(@Param('id') id: string) { return this.service.bloquear(id); }
+  @Patch(':id') @UseGuards(AdminGuard) atualizar(@Param('id') id: string, @Body() dto: AtualizarHorarioDto) { return this.service.atualizar(id, dto); }
   @Delete(':id') @UseGuards(AdminGuard) excluir(@Param('id') id: string) { return this.service.excluir(id); }
 }

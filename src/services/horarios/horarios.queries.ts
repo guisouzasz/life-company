@@ -11,10 +11,18 @@ export function useVagas(modalidadeId?: string, data?: string) {
   });
 }
 
-/** Grade completa de horários (admin). */
+/** Grade completa de horários ativos (admin e modais). */
 export function useHorarios(modalidadeId?: string) {
   return useQuery({
     queryKey: [...queryKeys.horarios, modalidadeId ?? 'all'],
     queryFn: () => horariosService.listar(modalidadeId),
+  });
+}
+
+/** Todos os horários, inclusive inativos — tela de gestão do admin. */
+export function useHorariosAdmin() {
+  return useQuery({
+    queryKey: [...queryKeys.horarios, 'admin-todos'],
+    queryFn: () => horariosService.listar(undefined, true),
   });
 }

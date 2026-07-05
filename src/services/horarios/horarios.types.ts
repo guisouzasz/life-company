@@ -26,3 +26,14 @@ export interface HorarioAdmin {
   agendados: number;
   vagas: number;
 }
+
+export interface CriarHorarioPayload {
+  modalidadeId: string;
+  diaSemana: DiaSemana;
+  horaInicio: string;
+  horaFim: string;
+  capacidadeMaxima?: number;
+  ativo?: boolean;
+}
+
+export type AtualizarHorarioPayload = Partial<CriarHorarioPayload>;
