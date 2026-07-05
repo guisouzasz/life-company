@@ -33,38 +33,64 @@ export class AutoAgendamentoService {
       include: { horario: true },
     });
 
+    const total = { criados: 0, ignorados: 0, erros: 0 };
+    for (const fixo of fixos) {
+      const r = await this.gerarParaFixo(fixo);
+      total.criados += r.criados;
+      total.ignorados += r.ignorados;
+      total.erros += r.erros;
+    }
+
+    this.logger.log(`Auto-agendamento: ${total.criados} criados, ${total.ignorados} já existentes, ${total.erros} falhas`);
+    return total;
+  }
+
+  /** Gera imediatamente os agendamentos de UM horário fixo (usado ao criar/reativar). */
+  async gerarParaHorarioFixoId(horarioFixoId: string) {
+    const fixo = await this.prisma.horarioFixo.findUnique({
+      where: { id: horarioFixoId },
+      include: { horario: true },
+    });
+    if (!fixo || !fixo.ativo) return { criados: 0, ignorados: 0, erros: 0 };
+    return this.gerarParaFixo(fixo);
+  }
+
+  private async gerarParaFixo(fixo: {
+    usuarioId: string;
+    horarioId: string;
+    dataInicio: Date;
+    dataFim: Date | null;
+    horario: { diaSemana: string };
+  }) {
+    const hoje = dayjs().startOf('day');
     let criados = 0;
     let ignorados = 0;
     let erros = 0;
 
-    for (const fixo of fixos) {
-      for (let d = 0; d <= JANELA_DIAS; d++) {
-        const dia = hoje.add(d, 'day');
-        if (dia.isBefore(dayjs(fixo.dataInicio), 'day')) continue;
-        if (fixo.dataFim && dia.isAfter(dayjs(fixo.dataFim), 'day')) continue;
-        if (dia.isoWeekday() > 5) continue;
-        if (DIA_MAP[dia.isoWeekday()] !== fixo.horario.diaSemana) continue;
+    for (let d = 0; d <= JANELA_DIAS; d++) {
+      const dia = hoje.add(d, 'day');
+      if (dia.isBefore(dayjs(fixo.dataInicio), 'day')) continue;
+      if (fixo.dataFim && dia.isAfter(dayjs(fixo.dataFim), 'day')) continue;
+      if (dia.isoWeekday() > 5) continue;
+      if (DIA_MAP[dia.isoWeekday()] !== fixo.horario.diaSemana) continue;
 
-        try {
-          await this.agendamentosService.criar(fixo.usuarioId, {
-            horarioId: fixo.horarioId,
-            dataAula: dia.format('YYYY-MM-DD'),
-          });
-          criados++;
-        } catch (e) {
-          if (e instanceof ConflictException) {
-            ignorados++;
-            continue;
-          }
-          erros++;
-          this.logger.warn(
-            `Falha ao auto-agendar usuario=${fixo.usuarioId} horario=${fixo.horarioId} data=${dia.format('YYYY-MM-DD')}: ${e.message}`,
-          );
+      try {
+        await this.agendamentosService.criar(fixo.usuarioId, {
+          horarioId: fixo.horarioId,
+          dataAula: dia.format('YYYY-MM-DD'),
+        });
+        criados++;
+      } catch (e) {
+        if (e instanceof ConflictException) {
+          ignorados++;
+          continue;
         }
+        erros++;
+        this.logger.warn(
+          `Falha ao auto-agendar usuario=${fixo.usuarioId} horario=${fixo.horarioId} data=${dia.format('YYYY-MM-DD')}: ${e.message}`,
+        );
       }
     }
-
-    this.logger.log(`Auto-agendamento: ${criados} criados, ${ignorados} já existentes, ${erros} falhas`);
     return { criados, ignorados, erros };
   }
 }

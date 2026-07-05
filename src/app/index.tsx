@@ -72,7 +72,7 @@ export default function Login() {
         >
           {/* Hero */}
           <LinearGradient colors={LC.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
-            <Image source={Assets.logoColor} style={s.logo} resizeMode="contain" />
+            <Image source={Assets.logoColor} style={s.logo} tintColor="#FFFFFF" resizeMode="contain" />
             <Text style={s.welcome}>Bem-vindo de volta!</Text>
             <Text style={s.welcomeSub}>Faça login para continuar</Text>
           </LinearGradient>
@@ -162,7 +162,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logo: { width: 150, height: 92, tintColor: '#FFFFFF' },
+  logo: { width: 150, height: 92 },
   welcome: { color: '#fff', fontSize: 22, fontWeight: '800', marginTop: 12 },
   welcomeSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 4 },
   card: {

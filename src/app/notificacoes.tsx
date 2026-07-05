@@ -39,7 +39,7 @@ export default function Notificacoes() {
           restantes > 0
             ? `Você ainda possui ${restantes} ${restantes === 1 ? 'aula disponível' : 'aulas disponíveis'} esta semana`
             : 'Você já utilizou todas as aulas da semana',
-        sub: `${saldo.data.plano} • ${nomeModalidade(saldo.data.modalidade)}`,
+        sub: `${saldo.data.plano} • Todas as modalidades`,
         tempo: 'Semana',
       });
     }

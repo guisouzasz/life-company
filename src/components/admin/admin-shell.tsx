@@ -38,7 +38,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       {/* ── Sidebar ─────────────────────────────────────────────── */}
       <View style={s.sidebar}>
         <LinearGradient colors={LC.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.logoBox}>
-          <Image source={Assets.logoColor} style={s.logo} resizeMode="contain" />
+          <Image source={Assets.logoColor} style={s.logo} tintColor="#FFFFFF" resizeMode="contain" />
           <Text style={s.studioName}>{STUDIO_NOME}</Text>
         </LinearGradient>
 
@@ -118,7 +118,7 @@ const s = StyleSheet.create({
 
   sidebar: { width: 250, backgroundColor: LC.bgCard, borderRightWidth: 1, borderRightColor: LC.border },
   logoBox: { alignItems: 'center', paddingVertical: 22, gap: 4 },
-  logo: { width: 110, height: 64, tintColor: '#FFFFFF' },
+  logo: { width: 110, height: 64 },
   studioName: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.85)', letterSpacing: 0.6, textTransform: 'uppercase' },
 
   novoAluno: {

@@ -19,7 +19,8 @@ function badgeDoHistorico(ag: Agendamento): { label: string; variant: BadgeVaria
   }
   switch (ag.status) {
     case 'CONFIRMADO':
-      return { label: 'Agendada', variant: 'primary' };
+      // Histórico só traz aulas passadas: confirmada sem registro = aconteceu
+      return { label: 'Realizada', variant: 'info' };
     case 'CANCELADO':
       return { label: 'Cancelada', variant: 'danger' };
     case 'REALIZADO':

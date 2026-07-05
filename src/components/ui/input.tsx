@@ -1,5 +1,6 @@
 import { forwardRef, useState } from 'react';
 import {
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -86,11 +87,16 @@ const styles = StyleSheet.create({
   },
   fieldFocused: {
     borderColor: LC.borderFocus,
-    shadowColor: LC.primary,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.16,
-    shadowRadius: 6,
-    elevation: 2,
+    ...(Platform.select({
+      web: { boxShadow: `0px 0px 6px ${LC.primary}29` }, // 29 hex ≈ 16% alpha
+      default: {
+        shadowColor: LC.primary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.16,
+        shadowRadius: 6,
+        elevation: 2,
+      },
+    }) as object),
   },
   fieldError: { borderColor: LC.danger },
   icon: { opacity: 0.7 },

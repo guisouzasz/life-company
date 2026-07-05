@@ -66,7 +66,7 @@ export default function MeuPlano() {
                 <Text style={s.credTitle}>Créditos de reposição</Text>
                 <Text style={s.credSub}>
                   {validos.length > 0
-                    ? `${validos.length} disponível${validos.length === 1 ? '' : 'is'} para agendar`
+                    ? `${validos.length} ${validos.length === 1 ? 'disponível' : 'disponíveis'} para agendar`
                     : 'Nenhum crédito disponível'}
                 </Text>
               </View>

@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -75,6 +76,7 @@ export function Button({
 /** Sombra colorida suave para dar profundidade aos botões sólidos. */
 function shadowFor(variant: Variant) {
   const color = variant === 'danger' ? LC.danger : LC.primary;
+  if (Platform.OS === 'web') return { boxShadow: `0px 6px 14px ${color}42` }; // 42 hex ≈ 26% alpha
   return {
     shadowColor: color,
     shadowOffset: { width: 0, height: 6 },

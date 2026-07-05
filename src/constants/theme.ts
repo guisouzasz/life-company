@@ -44,28 +44,39 @@ export const LC = {
   borderFocus: "#0E9488",
 
   // ── Shadows (tom slate, difusas e "flutuantes") ───────────────────
-  shadow: {
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
-  },
+  // No web usamos boxShadow (shadow* está deprecado no react-native-web);
+  // no nativo mantemos shadow* (iOS) + elevation (Android).
+  shadow: Platform.select({
+    web: { boxShadow: "0px 2px 8px rgba(15, 23, 42, 0.04)" },
+    default: {
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.04,
+      shadowRadius: 8,
+      elevation: 1,
+    },
+  }) as object,
   // Sombra padrão dos cards flutuantes
-  shadowCard: {
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    elevation: 3,
-  },
-  shadowStrong: {
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.14,
-    shadowRadius: 32,
-    elevation: 10,
-  },
+  shadowCard: Platform.select({
+    web: { boxShadow: "0px 8px 20px rgba(15, 23, 42, 0.06)" },
+    default: {
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.06,
+      shadowRadius: 20,
+      elevation: 3,
+    },
+  }) as object,
+  shadowStrong: Platform.select({
+    web: { boxShadow: "0px 16px 32px rgba(15, 23, 42, 0.14)" },
+    default: {
+      shadowColor: "#0F172A",
+      shadowOffset: { width: 0, height: 16 },
+      shadowOpacity: 0.14,
+      shadowRadius: 32,
+      elevation: 10,
+    },
+  }) as object,
 
   // ── Radius ────────────────────────────────────────────────────────
   radius: { sm: 10, md: 14, lg: 18, xl: 22, xxl: 28, full: 999 },

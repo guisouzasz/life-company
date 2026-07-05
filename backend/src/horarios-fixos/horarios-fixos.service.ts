@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
 import { CriarHorarioFixoDto } from './dto/criar-horario-fixo.dto';
 
 @Injectable()
 export class HorariosFixosService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private autoAgendamento: AutoAgendamentoService,
+  ) {}
 
   async listarDoAluno(usuarioId: string) {
     return this.prisma.horarioFixo.findMany({
@@ -40,17 +44,27 @@ export class HorariosFixosService {
     const dataInicio = dto.dataInicio ? new Date(dto.dataInicio) : new Date();
     const dataFim = dto.dataFim ? new Date(dto.dataFim) : null;
 
-    if (existente) {
-      return this.prisma.horarioFixo.update({
-        where: { id: existente.id },
-        data: { ativo: true, dataInicio, dataFim },
-        include: { horario: { include: { modalidade: true } } },
-      });
+    const fixo = existente
+      ? await this.prisma.horarioFixo.update({
+          where: { id: existente.id },
+          data: { ativo: true, dataInicio, dataFim },
+          include: { horario: { include: { modalidade: true } } },
+        })
+      : await this.prisma.horarioFixo.create({
+          data: { usuarioId, horarioId: dto.horarioId, dataInicio, dataFim },
+          include: { horario: { include: { modalidade: true } } },
+        });
+
+    // Gera as próximas aulas na hora — sem esperar o cron das 3h. Falha na
+    // geração (ex: sem saldo na semana) não desfaz o horário fixo criado.
+    let geracao = { criados: 0, ignorados: 0, erros: 0 };
+    try {
+      geracao = await this.autoAgendamento.gerarParaHorarioFixoId(fixo.id);
+    } catch {
+      // cron diário cobre depois
     }
-    return this.prisma.horarioFixo.create({
-      data: { usuarioId, horarioId: dto.horarioId, dataInicio, dataFim },
-      include: { horario: { include: { modalidade: true } } },
-    });
+
+    return { ...fixo, geracao };
   }
 
   async remover(id: string) {

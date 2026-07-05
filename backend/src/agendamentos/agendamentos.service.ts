@@ -118,8 +118,9 @@ export class AgendamentosService {
   async historico(usuarioId: string, page = 1) {
     const take = 20;
     const skip = (page - 1) * take;
+    // Só aulas de dias anteriores — as de hoje/futuras aparecem em "minhas aulas"
     return this.prisma.agendamento.findMany({
-      where: { usuarioId },
+      where: { usuarioId, dataAula: { lt: dayjs().startOf('day').toDate() } },
       include: { horario: { include: { modalidade: true } }, presenca: true },
       orderBy: { dataAula: 'desc' },
       take, skip,

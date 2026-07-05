@@ -7,5 +7,6 @@ import { AgendamentosModule } from '../agendamentos/agendamentos.module';
   imports: [AgendamentosModule],
   controllers: [AutoAgendamentoController],
   providers: [AutoAgendamentoService],
+  exports: [AutoAgendamentoService],
 })
 export class AutoAgendamentoModule {}
