@@ -80,6 +80,15 @@ export function getDiaSemanaKey(date: Date): string {
   return DIA_MAP[isoWeekday(date)] || '';
 }
 
+/** Próxima ocorrência (YYYY-MM-DD, incluindo hoje) do dia útil informado (ex: 'TERCA'). */
+export function proximaDataDoDia(diaSemana: string): string {
+  const entrada = Object.entries(DIA_MAP).find(([, v]) => v === diaSemana);
+  const alvo = entrada ? Number(entrada[0]) : 1;
+  const hoje = new Date();
+  const delta = (alvo - isoWeekday(hoje) + 7) % 7;
+  return formatDate(addDays(hoje, delta), 'YYYY-MM-DD');
+}
+
 /** Retorna os próximos N dias úteis a partir de hoje */
 export function getProximosDiasUteis(n = 10): Array<{
   data: string; diaNum: string; diaSemana: string; diaNome: string; mesNome: string;

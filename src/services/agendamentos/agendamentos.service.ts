@@ -1,5 +1,5 @@
 import { http } from '../http';
-import type { Agendamento, CriarAgendamentoPayload } from './agendamentos.types';
+import type { Agendamento, AgendamentoDoHorario, CriarAgendamentoPayload } from './agendamentos.types';
 
 export const agendamentosService = {
   async meus(): Promise<Agendamento[]> {
@@ -19,6 +19,19 @@ export const agendamentosService = {
 
   async cancelar(id: string): Promise<{ mensagem: string }> {
     const { data } = await http.patch<{ mensagem: string }>(`/agendamentos/${id}/cancelar`);
+    return data;
+  },
+
+  // ── Admin ──────────────────────────────────────────────────────────
+  /** Alunos agendados num horário em uma data (admin). */
+  async listarPorHorario(horarioId: string, data: string): Promise<AgendamentoDoHorario[]> {
+    const res = await http.get<AgendamentoDoHorario[]>(`/agendamentos/horario/${horarioId}`, { params: { data } });
+    return res.data;
+  },
+
+  /** Cancela pelo admin — o aluno recebe 1 crédito de reposição. */
+  async cancelarAdmin(id: string): Promise<{ mensagem: string }> {
+    const { data } = await http.patch<{ mensagem: string }>(`/agendamentos/${id}/cancelar-admin`);
     return data;
   },
 };

@@ -26,7 +26,7 @@ export function AppModal({ visible, onClose, title, children, dismissable = true
         <Pressable style={[StyleSheet.absoluteFill, styles.tint]} onPress={dismissable ? onClose : undefined} />
 
         {/* Card */}
-        <View style={styles.card} pointerEvents="box-none">
+        <View style={[styles.card, { pointerEvents: 'box-none' }]}>
           <View style={styles.cardInner}>
             {title ? (
               <View style={styles.header}>

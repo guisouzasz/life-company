@@ -39,3 +39,14 @@ export interface CriarAgendamentoPayload {
   dataAula: string; // YYYY-MM-DD
   usarCredito?: boolean; // agendar consumindo um crédito de reposição
 }
+
+/** Item de GET /agendamentos/horario/:horarioId?data= (admin). */
+export interface AgendamentoDoHorario {
+  id: string;
+  usuarioId: string;
+  horarioId: string;
+  dataAula: string;
+  status: StatusAgendamento;
+  reposicao?: boolean;
+  usuario: { id: string; nome: string; cpf: string };
+}

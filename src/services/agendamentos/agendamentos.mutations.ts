@@ -30,3 +30,16 @@ export function useCancelarAgendamento() {
     onSuccess: invalidar,
   });
 }
+
+/** Cancelamento pelo admin — o aluno recebe crédito de reposição. */
+export function useCancelarAgendamentoAdmin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => agendamentosService.cancelarAdmin(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agendamentos'] });
+      qc.invalidateQueries({ queryKey: ['horarios'] });
+      qc.invalidateQueries({ queryKey: ['creditos'] });
+    },
+  });
+}

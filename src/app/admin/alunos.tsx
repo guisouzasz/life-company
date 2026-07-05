@@ -110,6 +110,64 @@ export default function AdminAlunos() {
         <Loading />
       ) : alunos.isError ? (
         <ErrorState onRetry={() => alunos.refetch()} />
+      ) : isDesktop ? (
+        // ── Desktop: tabela ──────────────────────────────────────────
+        <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {alunos.data && alunos.data.length > 0 ? (
+            <Card style={s.tabela} padding={0}>
+              <View style={[s.tRow, s.tHead]}>
+                <Text style={[s.tCol, s.tColNome, s.tHeadText]}>Aluno</Text>
+                <Text style={[s.tCol, s.tColEmail, s.tHeadText]}>E-mail</Text>
+                <Text style={[s.tCol, s.tColPlano, s.tHeadText]}>Plano</Text>
+                <Text style={[s.tCol, s.tColStatus, s.tHeadText]}>Status</Text>
+                <Text style={[s.tCol, s.tColAcoes, s.tHeadText]}>Ações</Text>
+              </View>
+              {alunos.data.map((aluno) => {
+                const plano = aluno.usuarioPlanos?.[0];
+                return (
+                  <View key={aluno.id} style={s.tRow}>
+                    <View style={[s.tCol, s.tColNome, s.tNomeWrap]}>
+                      <Avatar nome={aluno.nome} size={34} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.tNome} numberOfLines={1}>{aluno.nome}</Text>
+                        <Text style={s.tCpf}>CPF {aluno.cpf}</Text>
+                      </View>
+                    </View>
+                    <Text style={[s.tCol, s.tColEmail, s.tTexto]} numberOfLines={1}>
+                      {aluno.email ?? 'Aguardando ativação'}
+                    </Text>
+                    <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>
+                      {plano?.plano?.nome ?? '—'}
+                    </Text>
+                    <View style={[s.tCol, s.tColStatus]}>
+                      <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
+                    </View>
+                    <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
+                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => abrirEdicao(aluno)}>
+                        <Icon name="create-outline" size={17} color={LC.primary} />
+                      </Pressable>
+                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => setPlanoHorarioAluno(aluno)}>
+                        <Icon name="calendar-outline" size={17} color={LC.primary} />
+                      </Pressable>
+                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => setCreditosAluno(aluno)}>
+                        <Icon name="ticket-outline" size={17} color={LC.primary} />
+                      </Pressable>
+                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => gerar(aluno.id)}>
+                        <Icon name="link-outline" size={17} color={LC.primary} />
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+              <View style={s.tLegenda}>
+                <Text style={s.tLegendaText}>Ações: editar dados • plano e horário fixo • créditos • gerar link de acesso</Text>
+              </View>
+            </Card>
+          ) : (
+            <EmptyState icon="people-outline" title="Nenhum aluno encontrado" description={busca ? 'Tente outra busca.' : 'Cadastre o primeiro aluno.'} />
+          )}
+          <View style={{ height: 24 }} />
+        </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {alunos.data && alunos.data.length > 0 ? (
@@ -236,4 +294,24 @@ const s = StyleSheet.create({
   modalActions: { flexDirection: 'row', gap: 10 },
   editForm: { gap: 14, marginBottom: 18 },
   erro: { fontSize: 13, color: LC.danger },
+
+  // ── Tabela desktop ──────────────────────────────────────────────
+  tabela: { overflow: 'hidden' },
+  tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: LC.border },
+  tHead: { backgroundColor: LC.bg, paddingVertical: 12 },
+  tHeadText: { fontSize: 12, fontWeight: '800', color: LC.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  tCol: { paddingHorizontal: 4 },
+  tColNome: { flex: 3 },
+  tColEmail: { flex: 3 },
+  tColPlano: { flex: 2 },
+  tColStatus: { flex: 1.2 },
+  tColAcoes: { flex: 2 },
+  tNomeWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
+  tCpf: { fontSize: 11, color: LC.textMuted, marginTop: 1 },
+  tTexto: { fontSize: 13, color: LC.textSecondary },
+  tAcoes: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
+  tAcao: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  tLegenda: { paddingHorizontal: 16, paddingVertical: 10 },
+  tLegendaText: { fontSize: 11, color: LC.textMuted },
 });
