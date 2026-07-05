@@ -5,23 +5,10 @@ import { AppModal } from '../ui/modal';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Icon } from '../ui/icon';
-import { formatarReal, parseValor } from '../../services/money';
 import { formatDate } from '../../services/date';
-import { usePlanos } from '../../services/planos/planos.queries';
-import {
-  useRegistrarPagamento,
-  useConfigurarFinanceiroAluno,
-  useDefinirPrecoPlano,
-} from '../../services/financeiro/financeiro.mutations';
-import type { AlunoFinanceiro, FormaPagamento } from '../../services/financeiro/financeiro.types';
+import { useRegistrarPagamento, useConfigurarFinanceiroAluno } from '../../services/financeiro/financeiro.mutations';
+import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types';
 import { ApiError } from '../../services/http';
-
-const FORMAS: { key: FormaPagamento; label: string }[] = [
-  { key: 'PIX', label: 'PIX' },
-  { key: 'DINHEIRO', label: 'Dinheiro' },
-  { key: 'CARTAO', label: 'Cartão' },
-  { key: 'OUTRO', label: 'Outro' },
-];
 
 function mesRef(offset: number): { key: string; label: string } {
   const d = new Date();
@@ -32,18 +19,14 @@ function mesRef(offset: number): { key: string; label: string } {
   return { key, label };
 }
 
-/** Registrar recebimento de mensalidade (admin marca como pago). */
+/** Marcar o mês do aluno como pago (sem valores — só o registro). */
 export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanceiro | null; onClose: () => void }) {
   const registrar = useRegistrarPagamento();
-  const [valorTexto, setValorTexto] = useState('');
-  const [forma, setForma] = useState<FormaPagamento>('PIX');
   const [refSel, setRefSel] = useState(0); // offset de mês: -1, 0, +1
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     if (aluno) {
-      setValorTexto(aluno.valor != null ? aluno.valor.toFixed(2).replace('.', ',') : '');
-      setForma('PIX');
       setRefSel(0);
       setErro(null);
     }
@@ -51,13 +34,8 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
 
   const salvar = () => {
     if (!aluno) return;
-    const valor = parseValor(valorTexto);
-    if (valor === null || valor <= 0) {
-      setErro('Informe um valor válido (ex: 250,00)');
-      return;
-    }
     registrar.mutate(
-      { usuarioId: aluno.usuarioId, valor, referencia: mesRef(refSel).key, formaPagamento: forma },
+      { usuarioId: aluno.usuarioId, referencia: mesRef(refSel).key },
       {
         onSuccess: onClose,
         onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível registrar.'),
@@ -68,7 +46,7 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
   const meses = [-1, 0, 1].map((off) => ({ off, ...mesRef(off) }));
 
   return (
-    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Registrar pagamento — ${aluno.nome.split(' ')[0]}` : ''}>
+    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Marcar como pago — ${aluno.nome.split(' ')[0]}` : ''}>
       <Text style={s.label}>Mês de referência</Text>
       <View style={s.chips}>
         {meses.map((m) => (
@@ -78,45 +56,25 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
         ))}
       </View>
 
-      <Text style={s.label}>Valor recebido</Text>
-      <Input
-        value={valorTexto}
-        onChangeText={setValorTexto}
-        keyboardType="decimal-pad"
-        placeholder="250,00"
-        leftIcon={<Icon name="cash-outline" size={18} color={LC.textMuted} />}
-      />
-
-      <Text style={s.label}>Forma de pagamento</Text>
-      <View style={s.chips}>
-        {FORMAS.map((f) => (
-          <Pressable key={f.key} style={[s.chip, forma === f.key && s.chipSel]} onPress={() => setForma(f.key)}>
-            <Text style={[s.chipText, forma === f.key && s.chipTextSel]}>{f.label}</Text>
-          </Pressable>
-        ))}
-      </View>
-
       {erro ? <Text style={s.erro}>{erro}</Text> : null}
 
       <View style={s.actions}>
         <Button title="Cancelar" variant="outline" onPress={onClose} style={{ flex: 1 }} />
-        <Button title="Confirmar" loading={registrar.isPending} onPress={salvar} style={{ flex: 1 }} />
+        <Button title="Confirmar pagamento" loading={registrar.isPending} onPress={salvar} style={{ flex: 1 }} />
       </View>
-      <Text style={s.hint}>O pagamento foi feito direto ao estúdio — aqui é só o registro.</Text>
+      <Text style={s.hint}>O pagamento foi feito direto ao estúdio — aqui é só a marcação de pago.</Text>
     </AppModal>
   );
 }
 
-/** Configurar valor personalizado e dia de vencimento do aluno. */
+/** Configurar o dia de vencimento do aluno. */
 export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinanceiro | null; onClose: () => void }) {
   const configurar = useConfigurarFinanceiroAluno();
-  const [valorTexto, setValorTexto] = useState('');
   const [diaTexto, setDiaTexto] = useState('5');
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     if (aluno) {
-      setValorTexto(aluno.valorPersonalizado && aluno.valor != null ? aluno.valor.toFixed(2).replace('.', ',') : '');
       setDiaTexto(String(aluno.diaVencimento));
       setErro(null);
     }
@@ -129,13 +87,8 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
       setErro('Dia de vencimento deve ser entre 1 e 28');
       return;
     }
-    const valor = valorTexto.trim() ? parseValor(valorTexto) : null;
-    if (valorTexto.trim() && valor === null) {
-      setErro('Valor inválido (deixe vazio para usar o preço do plano)');
-      return;
-    }
     configurar.mutate(
-      { usuarioId: aluno.usuarioId, payload: { valorMensalidade: valor, diaVencimento: dia } },
+      { usuarioId: aluno.usuarioId, diaVencimento: dia },
       {
         onSuccess: onClose,
         onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar.'),
@@ -144,18 +97,16 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
   };
 
   return (
-    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Mensalidade — ${aluno.nome.split(' ')[0]}` : ''}>
-      <Text style={s.label}>Valor personalizado (vazio = preço do plano)</Text>
-      <Input
-        value={valorTexto}
-        onChangeText={setValorTexto}
-        keyboardType="decimal-pad"
-        placeholder={aluno?.plano ? 'Usar preço do plano' : '250,00'}
-        leftIcon={<Icon name="cash-outline" size={18} color={LC.textMuted} />}
-      />
-
+    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Vencimento — ${aluno.nome.split(' ')[0]}` : ''}>
       <Text style={s.label}>Dia do vencimento (1 a 28)</Text>
-      <Input value={diaTexto} onChangeText={setDiaTexto} keyboardType="number-pad" placeholder="5" maxLength={2} />
+      <Input
+        value={diaTexto}
+        onChangeText={setDiaTexto}
+        keyboardType="number-pad"
+        placeholder="5"
+        maxLength={2}
+        leftIcon={<Icon name="calendar-outline" size={18} color={LC.textMuted} />}
+      />
 
       {erro ? <Text style={s.erro}>{erro}</Text> : null}
 
@@ -163,67 +114,7 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
         <Button title="Cancelar" variant="outline" onPress={onClose} style={{ flex: 1 }} />
         <Button title="Salvar" loading={configurar.isPending} onPress={salvar} style={{ flex: 1 }} />
       </View>
-    </AppModal>
-  );
-}
-
-/** Preços padrão por plano (tabela de preços do estúdio). */
-export function PrecosPlanosModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const planos = usePlanos();
-  const definir = useDefinirPrecoPlano();
-  const [valores, setValores] = useState<Record<string, string>>({});
-  const [erro, setErro] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (visible && planos.data) {
-      const iniciais: Record<string, string> = {};
-      planos.data.forEach((p: any) => {
-        iniciais[p.id] = p.precoPadrao != null ? Number(p.precoPadrao).toFixed(2).replace('.', ',') : '';
-      });
-      setValores(iniciais);
-      setErro(null);
-    }
-  }, [visible, planos.data]);
-
-  const salvar = async () => {
-    if (!planos.data) return;
-    setErro(null);
-    for (const p of planos.data) {
-      const texto = (valores[p.id] ?? '').trim();
-      const valor = texto ? parseValor(texto) : null;
-      if (texto && valor === null) {
-        setErro(`Valor inválido em ${p.nome}`);
-        return;
-      }
-      const atual = (p as any).precoPadrao != null ? Number((p as any).precoPadrao) : null;
-      if (valor !== atual) {
-        await definir.mutateAsync({ planoId: p.id, precoPadrao: valor });
-      }
-    }
-    onClose();
-  };
-
-  return (
-    <AppModal visible={visible} onClose={onClose} title="Preços dos planos">
-      {planos.data?.map((p) => (
-        <View key={p.id} style={s.precoRow}>
-          <Text style={s.precoNome}>{p.nome}</Text>
-          <View style={{ width: 130 }}>
-            <Input
-              value={valores[p.id] ?? ''}
-              onChangeText={(t) => setValores((v) => ({ ...v, [p.id]: t }))}
-              keyboardType="decimal-pad"
-              placeholder="0,00"
-            />
-          </View>
-        </View>
-      ))}
-      {erro ? <Text style={s.erro}>{erro}</Text> : null}
-      <View style={s.actions}>
-        <Button title="Fechar" variant="outline" onPress={onClose} style={{ flex: 1 }} />
-        <Button title="Salvar" loading={definir.isPending} onPress={salvar} style={{ flex: 1 }} />
-      </View>
-      <Text style={s.hint}>Alunos sem valor personalizado usam o preço do plano.</Text>
+      <Text style={s.hint}>O aluno recebe um lembrete no app quando o vencimento se aproxima.</Text>
     </AppModal>
   );
 }
@@ -241,6 +132,4 @@ const s = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
   erro: { fontSize: 12, color: LC.danger, marginTop: 10 },
   hint: { fontSize: 11, color: LC.textMuted, marginTop: 10, textAlign: 'center' },
-  precoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 },
-  precoNome: { flex: 1, fontSize: 14, fontWeight: '600', color: LC.textPrimary },
 });

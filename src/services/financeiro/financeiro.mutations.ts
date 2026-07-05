@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { financeiroService } from './financeiro.service';
-import type { ConfigFinanceiroPayload, RegistrarPagamentoPayload } from './financeiro.types';
+import type { RegistrarPagamentoPayload } from './financeiro.types';
 
 function useInvalidarFinanceiro() {
   const qc = useQueryClient();
@@ -26,20 +26,8 @@ export function useDesfazerPagamento() {
 export function useConfigurarFinanceiroAluno() {
   const invalidar = useInvalidarFinanceiro();
   return useMutation({
-    mutationFn: ({ usuarioId, payload }: { usuarioId: string; payload: ConfigFinanceiroPayload }) =>
-      financeiroService.configurarAluno(usuarioId, payload),
+    mutationFn: ({ usuarioId, diaVencimento }: { usuarioId: string; diaVencimento: number }) =>
+      financeiroService.configurarAluno(usuarioId, { diaVencimento }),
     onSuccess: invalidar,
-  });
-}
-
-export function useDefinirPrecoPlano() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ planoId, precoPadrao }: { planoId: string; precoPadrao: number | null }) =>
-      financeiroService.definirPrecoPlano(planoId, precoPadrao),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['financeiro'] });
-      qc.invalidateQueries({ queryKey: ['planos'] });
-    },
   });
 }

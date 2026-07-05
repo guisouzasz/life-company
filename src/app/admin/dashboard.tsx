@@ -15,7 +15,6 @@ import { useResumoFinanceiro } from '../../services/financeiro/financeiro.querie
 import { useLogout } from '../../services/auth/auth.mutations';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { getDiaSemanaKey } from '../../services/date';
-import { formatarReal } from '../../services/money';
 import type { RelatorioDashboard } from '../../services/relatorios/relatorios.types';
 
 type StatDef = { label: string; value: number | string; icon: IconName; color: string; bg: string };
@@ -112,25 +111,34 @@ function FinanceiroCard() {
           <Text style={s.blockTitle}>Financeiro do mês</Text>
           <Icon name="chevron-forward" size={16} color={LC.textMuted} />
         </View>
-        {!d ? (
+        {resumo.isLoading ? (
           <Text style={s.blockEmpty}>Carregando…</Text>
+        ) : !d ? (
+          <View style={s.finAlerta}>
+            <Icon name="cloud-offline-outline" size={14} color={LC.textMuted} />
+            <Text style={[s.finAlertaText, { color: LC.textSecondary }]}>Sem conexão — toque para abrir</Text>
+          </View>
         ) : (
           <>
             <View style={s.finRow}>
               <View style={{ flex: 1 }}>
-                <Text style={s.finValor}>{formatarReal(d.recebidoMes)}</Text>
-                <Text style={s.finLabel}>Recebido</Text>
+                <Text style={[s.finValor, { color: LC.success }]}>{d.pagos}</Text>
+                <Text style={s.finLabel}>{d.pagos === 1 ? 'Pagou' : 'Pagaram'}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.finValor}>{formatarReal(d.aReceber)}</Text>
-                <Text style={s.finLabel}>A receber</Text>
+                <Text style={s.finValor}>{d.aVencer}</Text>
+                <Text style={s.finLabel}>A vencer</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.finValor, d.atrasados > 0 && { color: LC.danger }]}>{d.atrasados}</Text>
+                <Text style={s.finLabel}>{d.atrasados === 1 ? 'Atrasado' : 'Atrasados'}</Text>
               </View>
             </View>
             {d.atrasados > 0 ? (
               <View style={s.finAlerta}>
                 <Icon name="alert-circle" size={14} color={LC.danger} />
                 <Text style={s.finAlertaText}>
-                  {d.atrasados} {d.atrasados === 1 ? 'aluno atrasado' : 'alunos atrasados'}
+                  {d.atrasados} {d.atrasados === 1 ? 'aluno precisa' : 'alunos precisam'} de atenção
                 </Text>
               </View>
             ) : (

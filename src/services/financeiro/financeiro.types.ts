@@ -1,40 +1,28 @@
-export type StatusMensalidade = 'EM_DIA' | 'A_VENCER' | 'ATRASADO' | 'SEM_VALOR';
+export type StatusMensalidade = 'EM_DIA' | 'A_VENCER' | 'ATRASADO';
 export type FormaPagamento = 'PIX' | 'DINHEIRO' | 'CARTAO' | 'OUTRO';
-
-export interface PagamentoRegistro {
-  id: string;
-  valor: number;
-  pagoEm: string;
-  formaPagamento: FormaPagamento;
-}
 
 export interface AlunoFinanceiro {
   usuarioId: string;
   nome: string;
   cpf: string;
   plano: { id: string; nome: string } | null;
-  valor: number | null;
-  valorPersonalizado: boolean;
   diaVencimento: number;
   status: StatusMensalidade;
-  vencimento: string | null;
+  vencimento: string;
   /** Dias de atraso (ATRASADO) ou dias até vencer (A_VENCER). */
   dias: number;
-  pagamento: PagamentoRegistro | null;
+  pagamento: { id: string; pagoEm: string; formaPagamento: FormaPagamento } | null;
 }
 
 export interface ResumoFinanceiro {
-  recebidoMes: number;
-  aReceber: number;
+  pagos: number;
+  aVencer: number;
   atrasados: number;
-  semValor: number;
   alunos: AlunoFinanceiro[];
 }
 
 export interface Pagamento {
   id: string;
-  usuarioId: string;
-  valor: number;
   referencia: string;
   pagoEm: string;
   formaPagamento: FormaPagamento;
@@ -42,25 +30,17 @@ export interface Pagamento {
 }
 
 export interface MinhaSituacao {
-  valor: number | null;
   diaVencimento: number;
   status: StatusMensalidade;
-  vencimento: string | null;
+  vencimento: string;
   dias: number;
-  pagamento: { pagoEm: string; valor: number } | null;
-  historico: { referencia: string; valor: number; pagoEm: string }[];
+  pagamento: { pagoEm: string } | null;
+  historico: { referencia: string; pagoEm: string }[];
 }
 
 export interface RegistrarPagamentoPayload {
   usuarioId: string;
-  valor: number;
   /** YYYY-MM (default: mês atual) */
   referencia?: string;
-  formaPagamento?: FormaPagamento;
   observacao?: string;
-}
-
-export interface ConfigFinanceiroPayload {
-  valorMensalidade?: number | null;
-  diaVencimento?: number;
 }

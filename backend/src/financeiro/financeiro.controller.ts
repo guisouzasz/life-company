@@ -38,13 +38,8 @@ export class FinanceiroController {
     return this.service.desfazer(id);
   }
 
-  @Patch('aluno/:usuarioId/config') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Valor personalizado / dia de vencimento (admin)' })
-  configurar(@Param('usuarioId') usuarioId: string, @Body() body: { valorMensalidade?: number | null; diaVencimento?: number }) {
+  @Patch('aluno/:usuarioId/config') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Dia de vencimento do aluno (admin)' })
+  configurar(@Param('usuarioId') usuarioId: string, @Body() body: { diaVencimento?: number }) {
     return this.service.configurarAluno(usuarioId, body);
-  }
-
-  @Patch('planos/:planoId/preco') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Preço padrão do plano (admin)' })
-  precoPlano(@Param('planoId') planoId: string, @Body() body: { precoPadrao: number | null }) {
-    return this.service.definirPrecoPlano(planoId, body.precoPadrao);
   }
 }

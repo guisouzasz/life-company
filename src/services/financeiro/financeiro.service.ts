@@ -1,6 +1,5 @@
 import { http } from '../http';
 import type {
-  ConfigFinanceiroPayload,
   MinhaSituacao,
   Pagamento,
   RegistrarPagamentoPayload,
@@ -34,13 +33,8 @@ export const financeiroService = {
     return data;
   },
 
-  async configurarAluno(usuarioId: string, payload: ConfigFinanceiroPayload) {
+  async configurarAluno(usuarioId: string, payload: { diaVencimento: number }) {
     const { data } = await http.patch(`/financeiro/aluno/${usuarioId}/config`, payload);
-    return data;
-  },
-
-  async definirPrecoPlano(planoId: string, precoPadrao: number | null) {
-    const { data } = await http.patch(`/financeiro/planos/${planoId}/preco`, { precoPadrao });
     return data;
   },
 };

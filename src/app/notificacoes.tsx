@@ -11,7 +11,6 @@ import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queri
 import { useSaldo } from '../services/usuarios/usuarios.queries';
 import { useMinhaSituacaoFinanceira } from '../services/financeiro/financeiro.queries';
 import { formatDate } from '../services/date';
-import { formatarReal } from '../services/money';
 
 type Notificacao = {
   id: string;
@@ -31,9 +30,9 @@ export default function Notificacoes() {
   const notificacoes = useMemo<Notificacao[]>(() => {
     const lista: Notificacao[] = [];
 
-    // Lembrete de mensalidade (só quando precisa de atenção)
+    // Lembrete de mensalidade (só quando precisa de atenção; nunca bloqueia nada)
     const fin = financeiro.data;
-    if (fin && fin.valor != null) {
+    if (fin) {
       if (fin.status === 'ATRASADO') {
         lista.push({
           id: 'mensalidade',
@@ -41,7 +40,7 @@ export default function Notificacoes() {
           color: LC.danger,
           bg: LC.dangerBg,
           titulo: `Mensalidade em atraso há ${fin.dias} ${fin.dias === 1 ? 'dia' : 'dias'}`,
-          sub: `${formatarReal(fin.valor)} • combine o pagamento direto com o estúdio`,
+          sub: 'Combine o pagamento direto com o estúdio (PIX ou dinheiro)',
           tempo: `Dia ${fin.diaVencimento}`,
         });
       } else if (fin.status === 'A_VENCER' && fin.dias <= 5) {
@@ -51,7 +50,7 @@ export default function Notificacoes() {
           color: LC.warning,
           bg: LC.warningBg,
           titulo: fin.dias === 0 ? 'Sua mensalidade vence hoje' : `Sua mensalidade vence em ${fin.dias} ${fin.dias === 1 ? 'dia' : 'dias'}`,
-          sub: `${formatarReal(fin.valor)} • pague direto ao estúdio (PIX ou dinheiro)`,
+          sub: 'Pague direto ao estúdio (PIX ou dinheiro)',
           tempo: `Dia ${fin.diaVencimento}`,
         });
       }

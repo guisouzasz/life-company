@@ -72,11 +72,11 @@ model Plano {
   @@map("planos")
 }
 
-// Registro manual de mensalidade recebida (sem cobrança no app — aluno paga direto).
+// Registro manual de mensalidade paga (sem valores — só pagou/não pagou no mês).
 model Pagamento {
   id             String         @id @default(uuid())
   usuarioId      String         @map("usuario_id")
-  valor          Decimal        @db.Decimal(10, 2)
+  valor          Decimal        @default(0) @db.Decimal(10, 2) // não usado na UI; mantido por histórico
   referencia     DateTime // competência: 1º dia do mês a que o pagamento se refere
   pagoEm         DateTime       @default(now()) @map("pago_em")
   formaPagamento FormaPagamento @default(PIX) @map("forma_pagamento")

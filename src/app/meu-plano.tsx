@@ -12,7 +12,6 @@ import { useSaldo } from '../services/usuarios/usuarios.queries';
 import { useMeusCreditos } from '../services/creditos/creditos.queries';
 import { useMinhaSituacaoFinanceira } from '../services/financeiro/financeiro.queries';
 import { endOfIsoWeekFormatted, formatDate } from '../services/date';
-import { formatarReal } from '../services/money';
 
 export default function MeuPlano() {
   const saldo = useSaldo();
@@ -61,7 +60,7 @@ export default function MeuPlano() {
           </LinearGradient>
 
           {/* Mensalidade */}
-          {fin && fin.valor != null ? (
+          {fin ? (
             <Card style={s.detCard} padding={16}>
               <View style={s.credHead}>
                 <View style={[s.credIcon, fin.status === 'ATRASADO' && { backgroundColor: LC.dangerBg }]}>
@@ -73,12 +72,10 @@ export default function MeuPlano() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.credTitle}>Mensalidade</Text>
-                  <Text style={s.credSub}>
-                    {formatarReal(fin.valor)} • vence dia {fin.diaVencimento}
-                  </Text>
+                  <Text style={s.credSub}>Vence todo dia {fin.diaVencimento}</Text>
                 </View>
                 {fin.status === 'EM_DIA' ? (
-                  <Badge label="Em dia" variant="success" />
+                  <Badge label="Paga" variant="success" />
                 ) : fin.status === 'ATRASADO' ? (
                   <Badge label={`Atrasada ${fin.dias}d`} variant="danger" />
                 ) : (
@@ -87,7 +84,7 @@ export default function MeuPlano() {
               </View>
               <Text style={s.credHint}>
                 {fin.status === 'EM_DIA' && fin.pagamento
-                  ? `Pagamento de ${formatDate(fin.pagamento.pagoEm, 'DD/MM')} registrado. Obrigado!`
+                  ? `Pagamento deste mês registrado em ${formatDate(fin.pagamento.pagoEm, 'DD/MM')}. Obrigado!`
                   : 'O pagamento é feito direto com o estúdio (PIX ou dinheiro) — aqui você acompanha a situação.'}
               </Text>
             </Card>
