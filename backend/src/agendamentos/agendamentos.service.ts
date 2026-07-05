@@ -136,7 +136,18 @@ export class AgendamentosService {
   }
 
   async adminCancelar(agendamentoId: string) {
-    await this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } });
-    return { mensagem: 'Agendamento cancelado pelo admin' };
+    const ag = await this.prisma.agendamento.findUnique({ where: { id: agendamentoId } });
+    if (!ag) throw new NotFoundException('Agendamento não encontrado');
+    if (ag.status !== 'CONFIRMADO') throw new BadRequestException('Agendamento não pode ser cancelado');
+
+    // Cancelamento pelo admin não é culpa do aluno: sempre compensa com
+    // 1 crédito de reposição (45 dias, mesma regra do cancelamento no prazo) —
+    // inclusive se a aula tinha sido marcada com crédito (devolve um novo).
+    const expiraEm = dayjs(ag.dataAula).add(45, 'day').endOf('day').toDate();
+    await this.prisma.$transaction([
+      this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),
+      this.prisma.creditoReposicao.create({ data: { usuarioId: ag.usuarioId, origemAgendamentoId: ag.id, expiraEm, concedidoAdmin: true } }),
+    ]);
+    return { mensagem: 'Agendamento cancelado. O aluno recebeu 1 crédito de reposição (válido por 45 dias).' };
   }
 }
