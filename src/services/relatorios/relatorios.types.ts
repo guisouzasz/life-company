@@ -19,6 +19,12 @@ export interface RelatorioDashboard {
   // Opcionais: presentes só após o deploy do backend ampliado
   aulasPorDia?: { dia: DiaSemanaRelatorio; total: number }[];
   aulasHoje?: AulaHoje[];
+  /** Resumo de ontem: aulas de ontem que foram canceladas. */
+  canceladosOntem?: { nome: string; horaInicio: string; modalidade: string }[];
+  /** Créditos válidos não usados — quem cancelou e ainda não remarcou. */
+  reposicoesPendentes?: { total: number; alunos: { nome: string; creditos: number }[] };
+  /** Alunos cadastrados que ainda não ativaram a conta. */
+  aguardandoAcesso?: { total: number; nomes: string[] };
 }
 
 export interface AlunoFrequencia {

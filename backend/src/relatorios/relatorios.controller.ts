@@ -26,7 +26,10 @@ export class RelatoriosController {
     const inicioHoje = dayjs().startOf('day').toDate();
     const fimHoje = dayjs().endOf('day').toDate();
 
-    const [totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, agsSemana, horariosHoje] = await Promise.all([
+    const ontemIni = dayjs().subtract(1, 'day').startOf('day').toDate();
+    const ontemFim = dayjs().subtract(1, 'day').endOf('day').toDate();
+
+    const [totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, agsSemana, horariosHoje, canceladosOntemRaw, creditosValidos, aguardandoAcessoRaw] = await Promise.all([
       this.prisma.usuario.count({ where: { tipoUsuario: 'ALUNO' } }),
       this.prisma.usuario.count({ where: { tipoUsuario: 'ALUNO', ativo: true } }),
       this.prisma.agendamento.count({ where: { status: 'CONFIRMADO', dataAula: { gte: inicioSemana, lte: fimSemana } } }),
@@ -47,6 +50,25 @@ export class RelatoriosController {
             orderBy: { horaInicio: 'asc' },
           })
         : Promise.resolve([]),
+      // Resumo de ontem: aulas de ontem que constam como canceladas
+      this.prisma.agendamento.findMany({
+        where: { status: 'CANCELADO', dataAula: { gte: ontemIni, lte: ontemFim } },
+        include: {
+          usuario: { select: { nome: true } },
+          horario: { select: { horaInicio: true, modalidade: { select: { nome: true } } } },
+        },
+        orderBy: { horario: { horaInicio: 'asc' } },
+      }),
+      // Reposições pendentes: créditos válidos ainda não usados (quem falta remarcar)
+      this.prisma.creditoReposicao.findMany({
+        where: { usado: false, revogado: false, expiraEm: { gt: new Date() } },
+        include: { usuario: { select: { nome: true } } },
+      }),
+      // Alunos cadastrados que ainda não ativaram a conta
+      this.prisma.usuario.findMany({
+        where: { tipoUsuario: 'ALUNO', ativo: false, senhaHash: null },
+        select: { nome: true },
+      }),
     ]);
 
     const ocupacao = aulasSemana > 0 ? Math.round((presencas / aulasSemana) * 100) : 0;
@@ -63,7 +85,29 @@ export class RelatoriosController {
       capacidade: h.capacidadeMaxima,
     }));
 
-    return { totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, ocupacao, aulasPorDia, aulasHoje };
+    const canceladosOntem = canceladosOntemRaw.map((a) => ({
+      nome: a.usuario.nome,
+      horaInicio: a.horario.horaInicio,
+      modalidade: a.horario.modalidade.nome,
+    }));
+
+    // Agrupa créditos válidos por aluno (quem cancelou e ainda não remarcou)
+    const porAluno = new Map<string, number>();
+    creditosValidos.forEach((c) => porAluno.set(c.usuario.nome, (porAluno.get(c.usuario.nome) ?? 0) + 1));
+    const reposicoesPendentes = {
+      total: creditosValidos.length,
+      alunos: [...porAluno.entries()].map(([nome, creditos]) => ({ nome, creditos })),
+    };
+
+    const aguardandoAcesso = {
+      total: aguardandoAcessoRaw.length,
+      nomes: aguardandoAcessoRaw.map((u) => u.nome),
+    };
+
+    return {
+      totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, ocupacao, aulasPorDia, aulasHoje,
+      canceladosOntem, reposicoesPendentes, aguardandoAcesso,
+    };
   }
 
   @Get('frequencia')
