@@ -9,11 +9,11 @@ export type BadgeVariant =
   | 'neutral'; // 3x por semana, Livre
 
 const COLORS: Record<BadgeVariant, { bg: string; fg: string }> = {
-  success: { bg: LC.successBg, fg: '#15803D' },
-  primary: { bg: LC.primaryLight, fg: LC.primaryDark },
-  info: { bg: LC.infoBg, fg: '#1D4ED8' },
-  danger: { bg: LC.dangerBg, fg: '#B91C1C' },
-  neutral: { bg: '#F1F5F9', fg: LC.textSecondary },
+  success: { bg: LC.successBg, fg: LC.successFg },
+  primary: { bg: LC.primaryLight, fg: LC.primary },
+  info: { bg: LC.infoBg, fg: LC.infoFg },
+  danger: { bg: LC.dangerBg, fg: LC.dangerFg },
+  neutral: { bg: LC.neutralBg, fg: LC.textSecondary },
 };
 
 interface BadgeProps {

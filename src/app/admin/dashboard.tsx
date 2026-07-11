@@ -3,7 +3,7 @@ import { Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, Vie
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '../../store/auth';
-import { LC } from '../../constants/theme';
+import { LC, alternarTema, temaAtual } from '../../constants/theme';
 import { DIAS_PT } from '../../constants/app';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
@@ -356,9 +356,14 @@ export default function AdminDashboard() {
               <Text style={s.heroTitle}>Painel Admin</Text>
               <Text style={s.heroSub}>Olá, {nome?.split(' ')[0] || 'Admin'}</Text>
             </View>
-            <Pressable style={s.logoutBtn} onPress={() => logout.mutate()} hitSlop={8}>
-              <Icon name="log-out-outline" size={20} color="#fff" />
-            </Pressable>
+            <View style={s.heroBtns}>
+              <Pressable style={s.logoutBtn} onPress={alternarTema} hitSlop={8}>
+                <Icon name={temaAtual === 'escuro' ? 'sunny-outline' : 'moon-outline'} size={20} color="#fff" />
+              </Pressable>
+              <Pressable style={s.logoutBtn} onPress={() => logout.mutate()} hitSlop={8}>
+                <Icon name="log-out-outline" size={20} color="#fff" />
+              </Pressable>
+            </View>
           </View>
 
           {relatorio.isError ? null : <ProximasAulasHero d={d} />}
@@ -474,6 +479,7 @@ const s = StyleSheet.create({
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heroTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
   heroSub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  heroBtns: { flexDirection: 'row', gap: 8 },
   logoutBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   ocupacaoCard: { marginTop: 22, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: LC.radius.lg, padding: 18 },
   ocupacaoHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
