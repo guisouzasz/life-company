@@ -30,9 +30,10 @@ export default function Notificacoes() {
   const notificacoes = useMemo<Notificacao[]>(() => {
     const lista: Notificacao[] = [];
 
-    // Lembrete de mensalidade (só quando precisa de atenção; nunca bloqueia nada)
+    // Lembrete de mensalidade (só quando precisa de atenção; nunca bloqueia nada).
+    // SEM_REGISTRO = estúdio ainda não controla esse aluno → sem alertas.
     const fin = financeiro.data;
-    if (fin) {
+    if (fin && fin.status !== 'SEM_REGISTRO') {
       if (fin.status === 'ATRASADO') {
         lista.push({
           id: 'mensalidade',

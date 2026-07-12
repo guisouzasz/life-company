@@ -2,7 +2,7 @@ import { Injectable, BadRequestException, ConflictException, NotFoundException }
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type StatusMensalidade = 'EM_DIA' | 'A_VENCER' | 'ATRASADO';
+export type StatusMensalidade = 'EM_DIA' | 'A_VENCER' | 'ATRASADO' | 'SEM_REGISTRO';
 
 /**
  * Financeiro manual SEM valores: o aluno paga direto para o estúdio e o
@@ -21,10 +21,16 @@ export class FinanceiroService {
     return base.startOf('month').toDate();
   }
 
-  private statusDe(pagoMes: boolean, diaVencimento: number) {
+  /**
+   * `temHistorico`: o controle é opt-in — aluno que nunca teve pagamento
+   * registrado fica SEM_REGISTRO (sem atraso e sem alerta) até o estúdio
+   * marcar o primeiro mês como pago.
+   */
+  private statusDe(pagoMes: boolean, diaVencimento: number, temHistorico: boolean) {
     const hoje = dayjs().startOf('day');
     const vencimento = hoje.date(Math.min(diaVencimento, hoje.daysInMonth()));
     if (pagoMes) return { status: 'EM_DIA' as StatusMensalidade, vencimento: vencimento.toDate(), dias: 0 };
+    if (!temHistorico) return { status: 'SEM_REGISTRO' as StatusMensalidade, vencimento: vencimento.toDate(), dias: 0 };
     if (hoje.isAfter(vencimento)) {
       return { status: 'ATRASADO' as StatusMensalidade, vencimento: vencimento.toDate(), dias: hoje.diff(vencimento, 'day') };
     }
@@ -33,7 +39,7 @@ export class FinanceiroService {
 
   /** Situação do mês de cada aluno ativo (tela Financeiro do admin). */
   async resumo() {
-    const [alunos, pagamentosMes] = await Promise.all([
+    const [alunos, pagamentosMes, comHistorico] = await Promise.all([
       this.prisma.usuario.findMany({
         where: { tipoUsuario: 'ALUNO', ativo: true },
         select: {
@@ -43,14 +49,16 @@ export class FinanceiroService {
         orderBy: { nome: 'asc' },
       }),
       this.prisma.pagamento.findMany({ where: { referencia: this.mesRef() } }),
+      this.prisma.pagamento.groupBy({ by: ['usuarioId'], _count: true }),
     ]);
 
     const pagosPorAluno = new Map(pagamentosMes.map((p) => [p.usuarioId, p]));
+    const idsComHistorico = new Set(comHistorico.map((g) => g.usuarioId));
 
     const linhas = alunos.map((a) => {
       const plano = a.usuarioPlanos[0]?.plano ?? null;
       const pagamento = pagosPorAluno.get(a.id) ?? null;
-      const { status, vencimento, dias } = this.statusDe(!!pagamento, a.diaVencimento);
+      const { status, vencimento, dias } = this.statusDe(!!pagamento, a.diaVencimento, idsComHistorico.has(a.id));
       return {
         usuarioId: a.id,
         nome: a.nome,
@@ -70,6 +78,7 @@ export class FinanceiroService {
       pagos: linhas.filter((l) => l.status === 'EM_DIA').length,
       aVencer: linhas.filter((l) => l.status === 'A_VENCER').length,
       atrasados: linhas.filter((l) => l.status === 'ATRASADO').length,
+      semRegistro: linhas.filter((l) => l.status === 'SEM_REGISTRO').length,
       alunos: linhas,
     };
   }
@@ -135,14 +144,13 @@ export class FinanceiroService {
     const pagamento = await this.prisma.pagamento.findUnique({
       where: { usuarioId_referencia: { usuarioId, referencia: this.mesRef() } },
     });
-    const { status, vencimento, dias } = this.statusDe(!!pagamento, usuario.diaVencimento);
-
     const historico = await this.prisma.pagamento.findMany({
       where: { usuarioId },
       select: { referencia: true, pagoEm: true },
       orderBy: { referencia: 'desc' },
       take: 6,
     });
+    const { status, vencimento, dias } = this.statusDe(!!pagamento, usuario.diaVencimento, historico.length > 0);
 
     return {
       diaVencimento: usuario.diaVencimento,

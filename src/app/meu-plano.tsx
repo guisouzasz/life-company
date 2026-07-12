@@ -59,8 +59,8 @@ export default function MeuPlano() {
             </View>
           </LinearGradient>
 
-          {/* Mensalidade */}
-          {fin ? (
+          {/* Mensalidade — oculta enquanto o estúdio não iniciou o controle */}
+          {fin && fin.status !== 'SEM_REGISTRO' ? (
             <Card style={s.detCard} padding={16}>
               <View style={s.credHead}>
                 <View style={[s.credIcon, fin.status === 'ATRASADO' && { backgroundColor: LC.dangerBg }]}>

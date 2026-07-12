@@ -24,8 +24,14 @@ import { InfoModal } from '../components/ui/modal';
 import { useLogin } from '../services/auth/auth.mutations';
 import { ApiError } from '../services/http';
 
+const ehEmailOuCpf = (v: string) => {
+  const t = v.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t)) return true; // e-mail
+  return t.replace(/\D/g, '').length === 11 && !t.includes('@'); // CPF (com ou sem máscara)
+};
+
 const schema = z.object({
-  email: z.string().min(1, 'Informe seu e-mail').email('Digite um e-mail válido'),
+  email: z.string().min(1, 'Informe seu e-mail ou CPF').refine(ehEmailOuCpf, 'Digite um e-mail válido ou um CPF com 11 dígitos'),
   senha: z.string().min(6, 'Mínimo de 6 caracteres'),
 });
 
@@ -93,7 +99,7 @@ export default function Login() {
                 render={({ field: { onChange, onBlur, value } }) => (
                   <Input
                     label="E-mail ou CPF"
-                    placeholder="seu@email.com"
+                    placeholder="seu@email.com ou CPF"
                     autoCapitalize="none"
                     autoComplete="email"
                     keyboardType="email-address"

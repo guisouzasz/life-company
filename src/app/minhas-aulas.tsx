@@ -7,6 +7,7 @@ import { iconePorModalidade, nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
+import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
@@ -62,7 +63,10 @@ export default function MinhasAulas() {
                     <Text style={s.dateMes}>{formatDate(ag.dataAula, 'MMM')}</Text>
                   </View>
                   <View style={s.info}>
-                    <Text style={s.modalidade}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
+                    <View style={s.tituloRow}>
+                      <Text style={s.modalidade}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
+                      {ag.reposicao ? <Badge label="Reposição" variant="info" /> : null}
+                    </View>
                     <View style={s.infoLine}>
                       <Icon name="time-outline" size={13} color={LC.textSecondary} />
                       <Text style={s.infoText}>
@@ -111,7 +115,11 @@ export default function MinhasAulas() {
         title="Cancelar aula"
         message={
           alvo
-            ? `${nomeModalidade(alvo.horario.modalidade.nome)} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.`
+            ? `${nomeModalidade(alvo.horario.modalidade.nome)} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.\n\n${
+                alvo.reposicao
+                  ? '⚠️ Esta é uma aula de reposição: ao cancelar, o crédito usado NÃO é devolvido.'
+                  : 'Cancelando dentro do prazo, você recebe 1 crédito de reposição (válido por 45 dias).'
+              }`
             : ''
         }
         confirmLabel="Cancelar aula"
@@ -137,6 +145,7 @@ const s = StyleSheet.create({
   dateNum: { fontSize: 18, fontWeight: '800', color: LC.primary, lineHeight: 20 },
   dateMes: { fontSize: 10, fontWeight: '700', color: LC.primary, textTransform: 'uppercase' },
   info: { flex: 1, gap: 3 },
+  tituloRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   modalidade: { fontSize: 16, fontWeight: '700', color: LC.textPrimary },
   infoLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   infoText: { fontSize: 12, color: LC.textSecondary },

@@ -24,8 +24,12 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto) {
+    // O campo aceita e-mail ou CPF: 11 dígitos (com ou sem máscara) = CPF.
+    const entrada = dto.email.trim();
+    const somenteDigitos = entrada.replace(/\D/g, "");
+    const ehCpf = somenteDigitos.length === 11 && !entrada.includes("@");
     const usuario = await this.prisma.usuario.findUnique({
-      where: { email: dto.email },
+      where: ehCpf ? { cpf: somenteDigitos } : { email: entrada },
     });
     if (!usuario || !usuario.senhaHash)
       throw new UnauthorizedException("Credenciais inválidas");

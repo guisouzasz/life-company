@@ -14,6 +14,7 @@ import { Loading, EmptyState } from '../components/ui/states';
 import { useModalidades } from '../services/modalidades/modalidades.queries';
 import { useVagas } from '../services/horarios/horarios.queries';
 import { useCriarAgendamento } from '../services/agendamentos/agendamentos.mutations';
+import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
 import { useSaldoCreditos } from '../services/creditos/creditos.queries';
 import type { Modalidade } from '../services/agendamentos/agendamentos.types';
 import type { HorarioVaga } from '../services/horarios/horarios.types';
@@ -40,6 +41,11 @@ export default function Agendamento() {
 
   const vagas = useVagas(modalSel?.id, diaSel?.data);
   const horariosDoDia = (vagas.data ?? []).filter((h) => h.diaSemana === diaSel?.diaSemana);
+
+  // Aulas que a aluna já tem agendadas (para marcar "Agendada" nos slots)
+  const meus = useMeusAgendamentos();
+  const jaAgendado = (horarioId: string) =>
+    (meus.data ?? []).some((a) => a.horarioId === horarioId && a.dataAula.startsWith(diaSel?.data ?? '—'));
 
   const agendar = (horario: HorarioVaga, usarCredito = false) => {
     criar.mutate(
@@ -78,6 +84,7 @@ export default function Agendamento() {
   // ── Detalhes da Aula ───────────────────────────────────────────────
   if (detalhe) {
     const lotado = detalhe.vagas <= 0;
+    const minha = jaAgendado(detalhe.id);
     return (
       <View style={s.root}>
         <StatusBar barStyle="light-content" />
@@ -110,13 +117,13 @@ export default function Agendamento() {
 
           <View style={s.detBtns}>
             <Button
-              title={lotado ? 'Horário lotado' : 'Agendar aula'}
+              title={minha ? 'Você já está nesta aula' : lotado ? 'Horário lotado' : 'Agendar aula'}
               size="lg"
-              disabled={lotado}
+              disabled={lotado || minha}
               loading={criar.isPending && criar.variables?.usarCredito !== true}
               onPress={() => agendar(detalhe)}
             />
-            {!lotado && creditosDisponiveis > 0 ? (
+            {!lotado && !minha && creditosDisponiveis > 0 ? (
               <Button
                 title={`Usar crédito de reposição (${creditosDisponiveis})`}
                 variant="outline"
@@ -177,27 +184,30 @@ export default function Agendamento() {
         ) : (
           horariosDoDia.map((h) => {
             const lotado = h.vagas <= 0;
+            const minha = jaAgendado(h.id);
             return (
               <Pressable
                 key={h.id}
-                style={({ pressed }) => [s.slot, lotado && s.slotLotado, pressed && s.pressed]}
+                style={({ pressed }) => [s.slot, lotado && !minha && s.slotLotado, minha && s.slotMinha, pressed && s.pressed]}
                 onPress={() => setDetalhe(h)}
               >
                 <View style={s.slotTime}>
-                  <Text style={[s.slotHora, lotado && s.mutedText]}>{h.horaInicio}</Text>
+                  <Text style={[s.slotHora, lotado && !minha && s.mutedText]}>{h.horaInicio}</Text>
                   <Text style={s.slotHoraFim}>{h.horaFim}</Text>
                 </View>
                 <View style={s.slotInfo}>
-                  <Text style={[s.slotModalidade, lotado && s.mutedText]}>{nomeModalidade(h.modalidade.nome)}</Text>
+                  <Text style={[s.slotModalidade, lotado && !minha && s.mutedText]}>{nomeModalidade(h.modalidade.nome)}</Text>
                   <View style={s.slotMetaRow}>
-                    <Icon name="people-outline" size={13} color={lotado ? LC.danger : LC.textMuted} />
-                    <Text style={[s.slotMeta, lotado && { color: LC.danger }]}>
+                    <Icon name="people-outline" size={13} color={lotado && !minha ? LC.danger : LC.textMuted} />
+                    <Text style={[s.slotMeta, lotado && !minha && { color: LC.danger }]}>
                       {h.agendados}/{h.capacidadeMaxima}
                     </Text>
                     <Text style={s.slotStudio}>{STUDIO_NOME}</Text>
                   </View>
                 </View>
-                {lotado ? (
+                {minha ? (
+                  <Badge label="Agendada" variant="success" />
+                ) : lotado ? (
                   <Badge label="Lotada" variant="danger" />
                 ) : (
                   <Button title="Agendar" size="sm" fullWidth={false} onPress={() => setDetalhe(h)} style={s.slotBtn} />
@@ -244,7 +254,8 @@ const s = StyleSheet.create({
   list: { flex: 1 },
   listContent: { paddingHorizontal: 16, paddingTop: 6 },
   slot: { backgroundColor: LC.bgCard, borderRadius: LC.radius.lg, borderWidth: 1, borderColor: LC.border, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12, ...LC.shadow },
-  slotLotado: { backgroundColor: '#FEF6F6', opacity: 0.85 },
+  slotLotado: { backgroundColor: LC.dangerBg, opacity: 0.75 },
+  slotMinha: { borderColor: LC.success, borderWidth: 1.5 },
   slotTime: { alignItems: 'center', minWidth: 52, borderRightWidth: 1, borderRightColor: LC.border, paddingRight: 12 },
   slotHora: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
   slotHoraFim: { fontSize: 11, color: LC.textMuted, marginTop: 1 },

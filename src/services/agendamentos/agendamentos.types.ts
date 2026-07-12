@@ -29,6 +29,8 @@ export interface Agendamento {
   horarioId: string;
   dataAula: string;
   status: StatusAgendamento;
+  /** Aula marcada com crédito de reposição (cancelar não devolve o crédito). */
+  reposicao?: boolean;
   createdAt: string;
   horario: Horario;
   presenca?: Presenca | null;

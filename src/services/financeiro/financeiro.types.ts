@@ -1,4 +1,4 @@
-export type StatusMensalidade = 'EM_DIA' | 'A_VENCER' | 'ATRASADO';
+export type StatusMensalidade = 'EM_DIA' | 'A_VENCER' | 'ATRASADO' | 'SEM_REGISTRO';
 export type FormaPagamento = 'PIX' | 'DINHEIRO' | 'CARTAO' | 'OUTRO';
 
 export interface AlunoFinanceiro {
@@ -18,6 +18,8 @@ export interface ResumoFinanceiro {
   pagos: number;
   aVencer: number;
   atrasados: number;
+  /** Alunos sem nenhum pagamento registrado (controle ainda não iniciado). */
+  semRegistro?: number;
   alunos: AlunoFinanceiro[];
 }
 

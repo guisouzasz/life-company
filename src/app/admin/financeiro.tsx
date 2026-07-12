@@ -23,6 +23,8 @@ function statusInfo(a: AlunoFinanceiro): { label: string; variant: BadgeVariant 
       return { label: 'Pagou', variant: 'success' };
     case 'ATRASADO':
       return { label: `Atrasado ${a.dias}d`, variant: 'danger' };
+    case 'SEM_REGISTRO':
+      return { label: 'Sem registro', variant: 'neutral' };
     default:
       return { label: a.dias === 0 ? 'Vence hoje' : `Vence em ${a.dias}d`, variant: a.dias <= 3 ? 'primary' : 'neutral' };
   }
@@ -165,7 +167,10 @@ export default function AdminFinanceiro() {
                 );
               })}
               <View style={s.tLegenda}>
-                <Text style={s.tLegendaText}>Ações: ✓ marcar como pago • ↩ desfazer • 📅 dia do vencimento</Text>
+                <Text style={s.tLegendaText}>
+                  Ações: ✓ marcar como pago • ↩ desfazer • 📅 dia do vencimento{'\n'}
+                  "Sem registro": o controle começa quando você marca o primeiro pagamento do aluno — até lá ele não aparece como atrasado nem recebe lembretes.
+                </Text>
               </View>
             </Card>
             <View style={{ height: 24 }} />
