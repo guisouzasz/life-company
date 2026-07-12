@@ -19,6 +19,12 @@ const TABS: Tab[] = [
   { label: 'Perfil', route: '/perfil', icon: 'person-outline', iconActive: 'person', activeRoutes: ['/perfil', '/meu-plano', '/notificacoes'] },
 ];
 
+export const PROF_TABS: Tab[] = [
+  { label: 'Agenda', route: '/professor/agenda', icon: 'calendar-outline', iconActive: 'calendar', activeRoutes: ['/professor/agenda'] },
+  { label: 'Treinos', route: '/professor/treinos', icon: 'barbell-outline', iconActive: 'barbell', activeRoutes: ['/professor/treinos', '/professor/treinos-aluno'] },
+  { label: 'Perfil', route: '/professor/perfil', icon: 'person-outline', iconActive: 'person', activeRoutes: ['/professor/perfil'] },
+];
+
 export const ADMIN_TABS: Tab[] = [
   { label: 'Início', route: '/admin/dashboard', icon: 'home-outline', iconActive: 'home', activeRoutes: ['/admin/dashboard'] },
   { label: 'Alunos', route: '/admin/alunos', icon: 'people-outline', iconActive: 'people', activeRoutes: ['/admin/alunos', '/admin/novo-aluno'] },
@@ -27,10 +33,10 @@ export const ADMIN_TABS: Tab[] = [
   { label: 'Frequência', route: '/admin/frequencia', icon: 'stats-chart-outline', iconActive: 'stats-chart', activeRoutes: ['/admin/frequencia'] },
 ];
 
-export function TabBar({ isAdmin = false }: { isAdmin?: boolean }) {
+export function TabBar({ isAdmin = false, isProfessor = false }: { isAdmin?: boolean; isProfessor?: boolean }) {
   const pathname = usePathname();
   const isDesktop = useIsDesktop();
-  const tabs = isAdmin ? ADMIN_TABS : TABS;
+  const tabs = isAdmin ? ADMIN_TABS : isProfessor ? PROF_TABS : TABS;
 
   // No painel desktop a navegação do admin mora na sidebar (admin-shell).
   if (isAdmin && isDesktop) return null;

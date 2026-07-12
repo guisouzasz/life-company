@@ -21,6 +21,7 @@ function RootNavigator() {
     if (isLoading) return;
     if (!isAuthenticated) router.replace('/');
     else if (tipoUsuario === 'ADMIN') router.replace('/admin/dashboard');
+    else if (tipoUsuario === 'PROFESSOR') router.replace('/professor/agenda');
     else router.replace('/dashboard');
   }, [isLoading, isAuthenticated, tipoUsuario]);
 

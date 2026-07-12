@@ -24,6 +24,7 @@ function formatCpf(v: string) {
 }
 
 export default function NovoAluno() {
+  const [tipo, setTipo] = useState<'ALUNO' | 'PROFESSOR'>('ALUNO');
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
@@ -38,26 +39,35 @@ export default function NovoAluno() {
   const [erro, setErro] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
 
+  const ehProfessor = tipo === 'PROFESSOR';
+
   const submit = () => {
-    if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || !planoId) {
-      setErro('Preencha nome, CPF (11 dígitos) e plano.');
+    if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || (!ehProfessor && !planoId)) {
+      setErro(ehProfessor ? 'Preencha nome e CPF (11 dígitos).' : 'Preencha nome, CPF (11 dígitos) e plano.');
       return;
     }
     // O plano dá acesso a todas as modalidades; o backend exige um modalidadeId
     // por schema, então usamos a primeira disponível (não restringe agendamentos).
     const modalidadeId = modalidades.data?.[0]?.id;
-    if (!modalidadeId) {
+    if (!ehProfessor && !modalidadeId) {
       setErro('Aguarde carregar as modalidades e tente novamente.');
       return;
     }
     criar.mutate(
-      { nome: nome.trim(), cpf: cpf.replace(/\D/g, ''), email: email.trim() || undefined, telefone: telefone.trim() || undefined, planoId, modalidadeId },
+      {
+        nome: nome.trim(),
+        cpf: cpf.replace(/\D/g, ''),
+        email: email.trim() || undefined,
+        telefone: telefone.trim() || undefined,
+        tipoUsuario: tipo,
+        ...(ehProfessor ? {} : { planoId, modalidadeId }),
+      },
       {
         onSuccess: (data) => {
           setCopiado(false);
           setLinkCriado(data.linkAcesso);
         },
-        onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível criar o aluno.'),
+        onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível criar o cadastro.'),
       },
     );
   };
@@ -74,6 +84,30 @@ export default function NovoAluno() {
       <Header title="Novo aluno" showBack />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {/* Tipo de cadastro */}
+          <Card style={s.section} padding={16}>
+            <Text style={s.sectionTitle}>Tipo de cadastro</Text>
+            <View style={s.chips}>
+              {(['ALUNO', 'PROFESSOR'] as const).map((t) => {
+                const sel = tipo === t;
+                return (
+                  <Pressable key={t} style={[s.chip, sel && s.chipSel]} onPress={() => setTipo(t)}>
+                    <Icon name={t === 'ALUNO' ? 'person-outline' : 'school-outline'} size={14} color={sel ? LC.primary : LC.textSecondary} />
+                    <Text style={[s.chipText, sel && s.chipTextSel]}>{t === 'ALUNO' ? 'Aluno' : 'Professor'}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {ehProfessor ? (
+              <View style={s.hintRow}>
+                <Icon name="information-circle-outline" size={16} color={LC.primary} />
+                <Text style={s.hintText}>
+                  Professor acessa somente a agenda (sem alterar horários) e monta os treinos dos alunos.
+                </Text>
+              </View>
+            ) : null}
+          </Card>
+
           {/* Dados pessoais */}
           <Card style={s.section} padding={16}>
             <Text style={s.sectionTitle}>Dados pessoais</Text>
@@ -85,7 +119,8 @@ export default function NovoAluno() {
             </View>
           </Card>
 
-          {/* Plano */}
+          {/* Plano (só aluno) */}
+          {ehProfessor ? null : (
           <Card style={s.section} padding={16}>
             <Text style={s.sectionTitle}>Plano *</Text>
             <View style={s.chips}>
@@ -106,8 +141,15 @@ export default function NovoAluno() {
               </Text>
             </View>
           </Card>
+          )}
 
-          <Button title="Criar aluno e gerar link" size="lg" loading={criar.isPending} onPress={submit} style={s.submit} />
+          <Button
+            title={ehProfessor ? 'Criar professor e gerar link' : 'Criar aluno e gerar link'}
+            size="lg"
+            loading={criar.isPending}
+            onPress={submit}
+            style={s.submit}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -118,9 +160,13 @@ export default function NovoAluno() {
           setLinkCriado(null);
           router.back();
         }}
-        title="Aluno criado!"
+        title={ehProfessor ? 'Professor criado!' : 'Aluno criado!'}
       >
-        <Text style={s.modalHint}>Envie este link ao aluno para ele criar a senha:</Text>
+        <Text style={s.modalHint}>
+          {ehProfessor
+            ? 'Envie este link ao professor para ele criar a senha (ou ele pode ativar pelo CPF no app):'
+            : 'Envie este link ao aluno para ele criar a senha:'}
+        </Text>
         <View style={s.linkBox}>
           <Text style={s.linkText} selectable>{linkCriado}</Text>
         </View>

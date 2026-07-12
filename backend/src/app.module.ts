@@ -14,6 +14,7 @@ import { CreditosModule } from './creditos/creditos.module';
 import { HorariosFixosModule } from './horarios-fixos/horarios-fixos.module';
 import { AutoAgendamentoModule } from './auto-agendamento/auto-agendamento.module';
 import { FinanceiroModule } from './financeiro/financeiro.module';
+import { TreinosModule } from './treinos/treinos.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
     HorariosFixosModule,
     AutoAgendamentoModule,
     FinanceiroModule,
+    TreinosModule,
   ],
 })
 export class AppModule {}

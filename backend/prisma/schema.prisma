@@ -10,6 +10,7 @@ datasource db {
 enum TipoUsuario {
   ADMIN
   ALUNO
+  PROFESSOR
 }
 
 enum DiaSemana {
@@ -57,8 +58,43 @@ model Usuario {
   creditosReposicao CreditoReposicao[]
   horariosFixos     HorarioFixo[]
   pagamentos        Pagamento[]
+  treinosRecebidos  Treino[] @relation("TreinosDoAluno")
+  treinosCriados    Treino[] @relation("TreinosDoProfessor")
 
   @@map("usuarios")
+}
+
+// Treino montado pelo professor para um aluno (área do professor).
+model Treino {
+  id          String   @id @default(uuid())
+  alunoId     String   @map("aluno_id")
+  professorId String   @map("professor_id")
+  titulo      String // ex: "Treino A — Superiores"
+  observacoes String?
+  ativo       Boolean  @default(true) // soft-delete
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  aluno      Usuario           @relation("TreinosDoAluno", fields: [alunoId], references: [id])
+  professor  Usuario           @relation("TreinosDoProfessor", fields: [professorId], references: [id])
+  exercicios ExercicioTreino[]
+
+  @@map("treinos")
+}
+
+model ExercicioTreino {
+  id         String  @id @default(uuid())
+  treinoId   String  @map("treino_id")
+  ordem      Int     @default(0)
+  nome       String
+  series     Int     @default(3)
+  repeticoes String  @default("12") // "12", "10-12", "até a falha"...
+  carga      String? // "20kg", "elástico forte"...
+  observacao String?
+
+  treino Treino @relation(fields: [treinoId], references: [id], onDelete: Cascade)
+
+  @@map("exercicios_treino")
 }
 
 model Plano {

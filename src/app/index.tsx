@@ -54,7 +54,13 @@ export default function Login() {
   const onSubmit = handleSubmit((values) => {
     login.mutate(values, {
       onSuccess: (data) => {
-        router.replace(data.tipoUsuario === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
+        router.replace(
+          data.tipoUsuario === 'ADMIN'
+            ? '/admin/dashboard'
+            : data.tipoUsuario === 'PROFESSOR'
+              ? ('/professor/agenda' as any)
+              : '/dashboard',
+        );
       },
     });
   });

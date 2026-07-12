@@ -11,6 +11,15 @@ export function useVagas(modalidadeId?: string, data?: string) {
   });
 }
 
+/** Todas as aulas de uma data, todas as modalidades (agenda do professor). */
+export function useVagasDia(data?: string) {
+  return useQuery({
+    queryKey: [...queryKeys.horarios, 'vagas-dia', data ?? ''],
+    queryFn: () => horariosService.vagasDia(data!),
+    enabled: !!data,
+  });
+}
+
 /** Grade completa de horários ativos (admin e modais). */
 export function useHorarios(modalidadeId?: string) {
   return useQuery({

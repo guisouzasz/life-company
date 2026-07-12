@@ -25,10 +25,10 @@ export class HorariosController {
   }
 
   @Get('vagas')
-  @ApiQuery({ name: 'modalidadeId', required: true })
+  @ApiQuery({ name: 'modalidadeId', required: false })
   @ApiQuery({ name: 'data', required: true })
-  vagas(@Query('modalidadeId') modalidadeId: string, @Query('data') data: string) {
-    return this.service.listarComVagas(modalidadeId, data);
+  vagas(@Query('modalidadeId') modalidadeId: string | undefined, @Query('data') data: string) {
+    return this.service.listarComVagas(modalidadeId || undefined, data);
   }
 
   @Post() @UseGuards(AdminGuard) criar(@Body() dto: CriarHorarioDto) { return this.service.criar(dto); }

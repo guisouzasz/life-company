@@ -7,6 +7,12 @@ export const horariosService = {
     return res.data;
   },
 
+  /** Todas as modalidades de uma data (agenda do professor). */
+  async vagasDia(data: string): Promise<HorarioVaga[]> {
+    const res = await http.get<HorarioVaga[]>('/horarios/vagas', { params: { data } });
+    return res.data;
+  },
+
   async listar(modalidadeId?: string, todos = false): Promise<HorarioAdmin[]> {
     const res = await http.get<HorarioAdmin[]>('/horarios', {
       params: { ...(modalidadeId ? { modalidadeId } : {}), ...(todos ? { todos: '1' } : {}) },

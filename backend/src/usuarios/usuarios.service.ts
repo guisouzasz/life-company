@@ -19,6 +19,10 @@ export class UsuariosService {
   ) {}
 
   async criar(dto: CriarUsuarioDto) {
+    const tipo = dto.tipoUsuario === "PROFESSOR" ? "PROFESSOR" : "ALUNO";
+    if (tipo === "ALUNO" && (!dto.planoId || !dto.modalidadeId)) {
+      throw new ConflictException("Aluno precisa de plano e modalidade");
+    }
     const cpfNorm = dto.cpf.replace(/\D/g, "");
     const condicoes: object[] = [{ cpf: cpfNorm }];
     if (dto.email) condicoes.push({ email: dto.email });
@@ -32,19 +36,22 @@ export class UsuariosService {
         cpf: cpfNorm,
         email: dto.email,
         telefone: dto.telefone,
+        tipoUsuario: tipo as any,
         ativo: false,
       },
     });
-    const inicioSemana = dayjs().startOf("week").add(1, "day").toDate();
-    await this.prisma.usuarioPlano.create({
-      data: {
-        usuarioId: usuario.id,
-        planoId: dto.planoId,
-        modalidadeId: dto.modalidadeId,
-        vigenciaInicio: new Date(),
-        semanaReferencia: inicioSemana,
-      },
-    });
+    if (tipo === "ALUNO") {
+      const inicioSemana = dayjs().startOf("week").add(1, "day").toDate();
+      await this.prisma.usuarioPlano.create({
+        data: {
+          usuarioId: usuario.id,
+          planoId: dto.planoId!,
+          modalidadeId: dto.modalidadeId!,
+          vigenciaInicio: new Date(),
+          semanaReferencia: inicioSemana,
+        },
+      });
+    }
     const { link } = await this.authService.gerarLinkPrimeiroAcesso(usuario.id);
     return { usuario, linkAcesso: link };
   }

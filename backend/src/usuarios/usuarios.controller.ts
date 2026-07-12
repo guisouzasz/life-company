@@ -5,6 +5,7 @@ import { CriarUsuarioDto } from './dto/criar-usuario.dto';
 import { AtualizarPlanoDto } from './dto/atualizar-plano.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import { StaffGuard } from '../auth/guards/staff.guard';
 
 @ApiTags('usuarios')
 @ApiBearerAuth()
@@ -16,7 +17,8 @@ export class UsuariosController {
   @Post() @UseGuards(AdminGuard) @ApiOperation({ summary: 'Criar aluno (admin)' })
   criar(@Body() dto: CriarUsuarioDto) { return this.service.criar(dto); }
 
-  @Get() @UseGuards(AdminGuard) listar(@Query('busca') busca?: string) { return this.service.listar(busca); }
+  // Professor também lista alunos (para montar treinos) — leitura apenas
+  @Get() @UseGuards(StaffGuard) listar(@Query('busca') busca?: string) { return this.service.listar(busca); }
 
   @Get('me/saldo') @ApiOperation({ summary: 'Saldo semanal do aluno logado' })
   saldo(@Request() req) { return this.service.saldoSemanal(req.user.id); }

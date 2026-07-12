@@ -16,10 +16,11 @@ export class HorariosService {
     return horarios.map(h => ({ ...h, agendados: h._count.agendamentos, vagas: h.capacidadeMaxima - h._count.agendamentos }));
   }
 
-  async listarComVagas(modalidadeId: string, dataAula: string) {
+  /** `modalidadeId` opcional: sem ele, retorna todas as modalidades (agenda do professor). */
+  async listarComVagas(modalidadeId: string | undefined, dataAula: string) {
     const data = new Date(dataAula);
     const horarios = await this.prisma.horario.findMany({
-      where: { ativo: true, modalidadeId },
+      where: { ativo: true, ...(modalidadeId ? { modalidadeId } : {}) },
       include: {
         modalidade: true,
         agendamentos: { where: { dataAula: data, status: 'CONFIRMADO' } },

@@ -18,8 +18,10 @@ export interface CriarAlunoPayload {
   cpf: string;
   email?: string; // opcional: o aluno cadastra o próprio e-mail na ativação
   telefone?: string;
-  planoId: string;
-  modalidadeId: string;
+  /** ALUNO (default) ou PROFESSOR (sem plano). */
+  tipoUsuario?: 'ALUNO' | 'PROFESSOR';
+  planoId?: string; // obrigatório para ALUNO
+  modalidadeId?: string; // obrigatório para ALUNO
 }
 
 export interface CriarAlunoResposta {

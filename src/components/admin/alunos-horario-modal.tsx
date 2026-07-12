@@ -6,6 +6,7 @@ import { nomeModalidade } from '../../constants/assets';
 import { AppModal } from '../ui/modal';
 import { Button } from '../ui/button';
 import { Icon } from '../ui/icon';
+import { Badge } from '../ui/badge';
 import { Avatar } from '../ui/avatar';
 import { Loading } from '../ui/states';
 import { useAgendamentosDoHorario } from '../../services/agendamentos/agendamentos.queries';
@@ -72,7 +73,10 @@ export function AlunosHorarioModal({ horario, onClose }: { horario: HorarioAdmin
             <View key={ag.id} style={s.row}>
               <Avatar nome={ag.usuario.nome} size={34} />
               <View style={{ flex: 1 }}>
-                <Text style={s.rowNome}>{ag.usuario.nome}</Text>
+                <View style={s.rowNomeLinha}>
+                  <Text style={s.rowNome}>{ag.usuario.nome}</Text>
+                  {ag.reposicao ? <Badge label="Reposição" variant="info" /> : null}
+                </View>
                 <Text style={s.rowSub}>CPF {ag.usuario.cpf}</Text>
               </View>
               {confirmandoId === ag.id ? (
@@ -117,6 +121,7 @@ const s = StyleSheet.create({
   empty: { fontSize: 14, color: LC.textSecondary, textAlign: 'center', paddingVertical: 16 },
   list: { maxHeight: 300 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: LC.border },
+  rowNomeLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   rowNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
   rowSub: { fontSize: 12, color: LC.textSecondary, marginTop: 1 },
   confirmRow: { flexDirection: 'row', gap: 6 },

@@ -4,6 +4,7 @@ import { AgendamentosService } from './agendamentos.service';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
+import { StaffGuard } from '../auth/guards/staff.guard';
 
 @ApiTags('agendamentos')
 @ApiBearerAuth()
@@ -21,8 +22,9 @@ export class AgendamentosController {
   @Get('historico')
   historico(@Request() req, @Query('page') page = '1') { return this.service.historico(req.user.id, parseInt(page)); }
 
+  // Professor também vê a lista de alunos da aula (leitura da agenda)
   @Get('horario/:horarioId')
-  @UseGuards(AdminGuard)
+  @UseGuards(StaffGuard)
   porHorario(@Param('horarioId') horarioId: string, @Query('data') data: string) { return this.service.listarPorHorario(horarioId, data); }
 
   @Patch(':id/cancelar')

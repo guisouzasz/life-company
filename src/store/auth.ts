@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { Storage } from '../services/storage';
 
-export type TipoUsuario = 'ADMIN' | 'ALUNO';
+export type TipoUsuario = 'ADMIN' | 'ALUNO' | 'PROFESSOR';
 
 export interface Sessao {
   accessToken: string;

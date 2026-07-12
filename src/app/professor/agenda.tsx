@@ -1,0 +1,127 @@
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { LC } from '../../constants/theme';
+import { corPorModalidade, iconePorModalidade, nomeModalidade } from '../../constants/assets';
+import { useAuthStore } from '../../store/auth';
+import { TabBar } from '../../components/tab-bar';
+import { Card } from '../../components/ui/card';
+import { Icon } from '../../components/ui/icon';
+import { Badge } from '../../components/ui/badge';
+import { AlunosAulaModal } from '../../components/professor/alunos-aula-modal';
+import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
+import { useVagasDia } from '../../services/horarios/horarios.queries';
+import type { HorarioVaga } from '../../services/horarios/horarios.types';
+import { getProximosDiasUteis } from '../../services/date';
+
+type Dia = ReturnType<typeof getProximosDiasUteis>[number];
+
+/** Agenda do professor: somente leitura — vê as aulas do dia e os alunos. */
+export default function ProfessorAgenda() {
+  const nome = useAuthStore((st) => st.nome);
+  const dias = useMemo(() => getProximosDiasUteis(10), []);
+  const [diaSel, setDiaSel] = useState<Dia>(dias[0]);
+  const [aulaSel, setAulaSel] = useState<HorarioVaga | null>(null);
+
+  const vagas = useVagasDia(diaSel?.data);
+  const aulasDoDia = (vagas.data ?? [])
+    .filter((h) => h.diaSemana === diaSel?.diaSemana)
+    .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
+
+  return (
+    <View style={s.root}>
+      <StatusBar barStyle="dark-content" />
+      <View style={s.header}>
+        <Text style={s.title}>Agenda</Text>
+        <Text style={s.subtitle}>Olá, {nome?.split(' ')[0] ?? 'Professor'} — toque numa aula para ver os alunos</Text>
+      </View>
+
+      {/* Dias */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.daysScroll} contentContainerStyle={s.daysRow}>
+        {dias.map((d) => {
+          const sel = diaSel?.data === d.data;
+          return (
+            <Pressable key={d.data} style={[s.dayBtn, sel && s.dayBtnSel]} onPress={() => setDiaSel(d)}>
+              <Text style={[s.dayNome, sel && s.daySelText]}>{d.diaNome}</Text>
+              <Text style={[s.dayNum, sel && s.daySelText]}>{d.diaNum}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* Aulas do dia */}
+      {vagas.isLoading ? (
+        <Loading />
+      ) : vagas.isError ? (
+        <ErrorState onRetry={() => vagas.refetch()} />
+      ) : (
+        <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
+          {aulasDoDia.length === 0 ? (
+            <EmptyState icon="calendar-outline" title="Sem aulas neste dia" description="Escolha outro dia acima." />
+          ) : (
+            aulasDoDia.map((h) => {
+              const cor = corPorModalidade(h.modalidade.nome);
+              const lotado = h.agendados >= h.capacidadeMaxima;
+              const pct = h.capacidadeMaxima > 0 ? Math.min((h.agendados / h.capacidadeMaxima) * 100, 100) : 0;
+              return (
+                <Pressable key={h.id} accessibilityRole="button" onPress={() => setAulaSel(h)} style={({ pressed }) => [pressed && s.pressed]}>
+                  <Card style={s.aulaCard} padding={14}>
+                    <View style={[s.aulaIcon, { backgroundColor: cor + '1A' }]}>
+                      <Icon name={iconePorModalidade(h.modalidade.nome)} size={18} color={cor} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={s.aulaTopo}>
+                        <Text style={s.aulaHora}>{h.horaInicio} – {h.horaFim}</Text>
+                        {lotado ? <Badge label="Lotada" variant="danger" /> : null}
+                      </View>
+                      <Text style={s.aulaModalidade}>{nomeModalidade(h.modalidade.nome)}</Text>
+                      <View style={s.aulaTrack}>
+                        <View style={[s.aulaFill, { width: `${pct}%` }, lotado && { backgroundColor: LC.danger }]} />
+                      </View>
+                    </View>
+                    <View style={s.aulaVagas}>
+                      <Icon name="people-outline" size={14} color={LC.textSecondary} />
+                      <Text style={s.aulaVagasText}>{h.agendados}/{h.capacidadeMaxima}</Text>
+                    </View>
+                  </Card>
+                </Pressable>
+              );
+            })
+          )}
+          <View style={{ height: 8 }} />
+        </ScrollView>
+      )}
+
+      <TabBar isProfessor />
+      <AlunosAulaModal aula={aulaSel} data={diaSel?.data} onClose={() => setAulaSel(null)} />
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: LC.bg },
+  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
+  subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
+  daysScroll: { flexGrow: 0 },
+  daysRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 4, alignItems: 'flex-start' },
+  dayBtn: {
+    alignItems: 'center', height: 68, justifyContent: 'center', paddingHorizontal: 12,
+    borderRadius: LC.radius.md, minWidth: 56, backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border,
+  },
+  dayBtnSel: { backgroundColor: LC.primary, borderColor: LC.primary },
+  dayNome: { fontSize: 11, fontWeight: '700', color: LC.textSecondary, textTransform: 'capitalize', marginBottom: 4 },
+  dayNum: { fontSize: 17, fontWeight: '800', color: LC.textPrimary },
+  daySelText: { color: '#fff' },
+  list: { flex: 1, marginTop: 6 },
+  listContent: { paddingHorizontal: 16, paddingTop: 6 },
+  pressed: { opacity: 0.85 },
+  aulaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  aulaIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  aulaTopo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  aulaHora: { fontSize: 15, fontWeight: '800', color: LC.textPrimary },
+  aulaModalidade: { fontSize: 13, fontWeight: '600', color: LC.textSecondary, marginTop: 1 },
+  aulaTrack: { height: 4, borderRadius: 2, backgroundColor: LC.border, overflow: 'hidden', marginTop: 7 },
+  aulaFill: { height: '100%', borderRadius: 2, backgroundColor: LC.primary },
+  aulaVagas: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  aulaVagasText: { fontSize: 13, fontWeight: '700', color: LC.textSecondary },
+});
