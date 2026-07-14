@@ -20,6 +20,8 @@ export interface Treino {
   exercicios: ExercicioTreino[];
   professor: { id: string; nome: string };
   aluno: { id: string; nome: string };
+  /** Modalidade do professor que montou (null quando criado pelo admin). */
+  modalidade?: { id: string; nome: string } | null;
 }
 
 export interface ExercicioPayload {

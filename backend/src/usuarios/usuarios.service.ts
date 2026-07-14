@@ -23,6 +23,10 @@ export class UsuariosService {
     if (tipo === "ALUNO" && (!dto.planoId || !dto.modalidadeId)) {
       throw new ConflictException("Aluno precisa de plano e modalidade");
     }
+    // Professor pertence a UMA modalidade: só vê a agenda e os treinos dela.
+    if (tipo === "PROFESSOR" && !dto.modalidadeId) {
+      throw new ConflictException("Professor precisa de uma modalidade");
+    }
     const cpfNorm = dto.cpf.replace(/\D/g, "");
     const condicoes: object[] = [{ cpf: cpfNorm }];
     if (dto.email) condicoes.push({ email: dto.email });
@@ -37,6 +41,7 @@ export class UsuariosService {
         email: dto.email,
         telefone: dto.telefone,
         tipoUsuario: tipo as any,
+        ...(tipo === "PROFESSOR" ? { modalidadeProfessorId: dto.modalidadeId } : {}),
         ativo: false,
       },
     });

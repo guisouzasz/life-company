@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, Style
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { LC } from '../../constants/theme';
+import { iconePorModalidade, nomeModalidade } from '../../constants/assets';
 import { Header } from '../../components/ui/header';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -30,6 +31,7 @@ export default function NovoAluno() {
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
   const [planoId, setPlanoId] = useState('');
+  const [modalidadeProfId, setModalidadeProfId] = useState('');
 
   const planos = usePlanos();
   const modalidades = useModalidades();
@@ -46,6 +48,10 @@ export default function NovoAluno() {
       setErro(ehProfessor ? 'Preencha nome e CPF (11 dígitos).' : 'Preencha nome, CPF (11 dígitos) e plano.');
       return;
     }
+    if (ehProfessor && !modalidadeProfId) {
+      setErro('Escolha a modalidade do professor.');
+      return;
+    }
     // O plano dá acesso a todas as modalidades; o backend exige um modalidadeId
     // por schema, então usamos a primeira disponível (não restringe agendamentos).
     const modalidadeId = modalidades.data?.[0]?.id;
@@ -60,7 +66,7 @@ export default function NovoAluno() {
         email: email.trim() || undefined,
         telefone: telefone.trim() || undefined,
         tipoUsuario: tipo,
-        ...(ehProfessor ? {} : { planoId, modalidadeId }),
+        ...(ehProfessor ? { modalidadeId: modalidadeProfId } : { planoId, modalidadeId }),
       },
       {
         onSuccess: (data) => {
@@ -118,6 +124,30 @@ export default function NovoAluno() {
               <Input label="Telefone" placeholder="(00) 00000-0000" value={telefone} onChangeText={setTelefone} keyboardType="phone-pad" />
             </View>
           </Card>
+
+          {/* Modalidade do professor */}
+          {ehProfessor ? (
+            <Card style={s.section} padding={16}>
+              <Text style={s.sectionTitle}>Modalidade do professor *</Text>
+              <View style={s.chips}>
+                {modalidades.data?.map((m) => {
+                  const sel = modalidadeProfId === m.id;
+                  return (
+                    <Pressable key={m.id} style={[s.chip, sel && s.chipSel]} onPress={() => setModalidadeProfId(m.id)}>
+                      <Icon name={iconePorModalidade(m.nome)} size={14} color={sel ? LC.primary : LC.textSecondary} />
+                      <Text style={[s.chipText, sel && s.chipTextSel]}>{nomeModalidade(m.nome)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <View style={s.hintRow}>
+                <Icon name="information-circle-outline" size={16} color={LC.primary} />
+                <Text style={s.hintText}>
+                  O professor vê apenas a agenda desta modalidade e monta treinos só dela.
+                </Text>
+              </View>
+            </Card>
+          ) : null}
 
           {/* Plano (só aluno) */}
           {ehProfessor ? null : (

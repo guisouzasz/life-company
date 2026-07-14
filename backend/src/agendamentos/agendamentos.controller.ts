@@ -22,10 +22,10 @@ export class AgendamentosController {
   @Get('historico')
   historico(@Request() req, @Query('page') page = '1') { return this.service.historico(req.user.id, parseInt(page)); }
 
-  // Professor também vê a lista de alunos da aula (leitura da agenda)
+  // Professor também vê a lista de alunos da aula (só da modalidade dele)
   @Get('horario/:horarioId')
   @UseGuards(StaffGuard)
-  porHorario(@Param('horarioId') horarioId: string, @Query('data') data: string) { return this.service.listarPorHorario(horarioId, data); }
+  porHorario(@Request() req, @Param('horarioId') horarioId: string, @Query('data') data: string) { return this.service.listarPorHorario(horarioId, data, req.user); }
 
   @Patch(':id/cancelar')
   cancelar(@Request() req, @Param('id') id: string) { return this.service.cancelar(id, req.user.id); }

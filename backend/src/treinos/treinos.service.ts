@@ -2,9 +2,13 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
 
+type Solicitante = { id: string; tipo: string };
+
 /**
  * Treinos montados pelo professor para os alunos.
- * Professor e admin criam/editam; o aluno só lê os próprios.
+ * Cada professor pertence a UMA modalidade: cria treinos carimbados com ela
+ * e só vê/edita treinos da própria modalidade. Admin vê e gerencia tudo.
+ * O aluno lê os próprios treinos (todas as modalidades).
  */
 @Injectable()
 export class TreinosService {
@@ -14,9 +18,23 @@ export class TreinosService {
     exercicios: { orderBy: { ordem: 'asc' as const } },
     professor: { select: { id: true, nome: true } },
     aluno: { select: { id: true, nome: true } },
+    modalidade: { select: { id: true, nome: true } },
   };
 
-  /** Treinos ativos do aluno logado. */
+  /** Modalidade do professor (null para admin). Professor sem modalidade é barrado. */
+  private async modalidadeDe(solicitante: Solicitante): Promise<string | null> {
+    if (solicitante.tipo !== 'PROFESSOR') return null;
+    const prof = await this.prisma.usuario.findUnique({
+      where: { id: solicitante.id },
+      select: { modalidadeProfessorId: true },
+    });
+    if (!prof?.modalidadeProfessorId) {
+      throw new ForbiddenException('Seu cadastro de professor não tem modalidade definida — fale com a administração');
+    }
+    return prof.modalidadeProfessorId;
+  }
+
+  /** Treinos ativos do aluno logado (todas as modalidades). */
   async meus(alunoId: string) {
     return this.prisma.treino.findMany({
       where: { alunoId, ativo: true },
@@ -25,22 +43,25 @@ export class TreinosService {
     });
   }
 
-  /** Treinos de um aluno (professor/admin) — inclui inativos recentes não. */
-  async doAluno(alunoId: string) {
+  /** Treinos de um aluno — professor vê só os da própria modalidade. */
+  async doAluno(alunoId: string, solicitante: Solicitante) {
+    const modalidadeId = await this.modalidadeDe(solicitante);
     return this.prisma.treino.findMany({
-      where: { alunoId, ativo: true },
+      where: { alunoId, ativo: true, ...(modalidadeId ? { modalidadeId } : {}) },
       include: this.incluir,
       orderBy: { updatedAt: 'desc' },
     });
   }
 
-  async criar(professorId: string, dto: SalvarTreinoDto) {
+  async criar(solicitante: Solicitante, dto: SalvarTreinoDto) {
+    const modalidadeId = await this.modalidadeDe(solicitante);
     const aluno = await this.prisma.usuario.findUnique({ where: { id: dto.alunoId } });
     if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
     return this.prisma.treino.create({
       data: {
         alunoId: dto.alunoId,
-        professorId,
+        professorId: solicitante.id,
+        modalidadeId, // null quando criado pelo admin
         titulo: dto.titulo,
         observacoes: dto.observacoes,
         exercicios: {
@@ -58,10 +79,22 @@ export class TreinosService {
     });
   }
 
+  /** Garante que o professor só mexe em treinos da própria modalidade. */
+  private async buscarComPermissao(id: string, solicitante: Solicitante) {
+    const treino = await this.prisma.treino.findUnique({ where: { id } });
+    if (!treino || !treino.ativo) throw new NotFoundException('Treino não encontrado');
+    if (solicitante.tipo === 'PROFESSOR') {
+      const modalidadeId = await this.modalidadeDe(solicitante);
+      if (treino.modalidadeId !== modalidadeId) {
+        throw new ForbiddenException('Este treino é de outra modalidade');
+      }
+    }
+    return treino;
+  }
+
   /** Atualiza título/observações e SUBSTITUI a lista de exercícios. */
-  async atualizar(id: string, dto: SalvarTreinoDto) {
-    const existe = await this.prisma.treino.findUnique({ where: { id } });
-    if (!existe || !existe.ativo) throw new NotFoundException('Treino não encontrado');
+  async atualizar(id: string, dto: SalvarTreinoDto, solicitante: Solicitante) {
+    await this.buscarComPermissao(id, solicitante);
     return this.prisma.treino.update({
       where: { id },
       data: {
@@ -83,9 +116,8 @@ export class TreinosService {
     });
   }
 
-  async remover(id: string) {
-    const existe = await this.prisma.treino.findUnique({ where: { id } });
-    if (!existe) throw new NotFoundException('Treino não encontrado');
+  async remover(id: string, solicitante: Solicitante) {
+    await this.buscarComPermissao(id, solicitante);
     await this.prisma.treino.update({ where: { id }, data: { ativo: false } });
     return { mensagem: 'Treino removido' };
   }

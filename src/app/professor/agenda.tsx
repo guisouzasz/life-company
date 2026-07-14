@@ -27,11 +27,14 @@ export default function ProfessorAgenda() {
     .filter((h) => h.diaSemana === diaSel?.diaSemana)
     .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
 
+  // O backend já devolve só a modalidade do professor — usamos para o título
+  const minhaModalidade = vagas.data?.[0]?.modalidade?.nome;
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
       <View style={s.header}>
-        <Text style={s.title}>Agenda</Text>
+        <Text style={s.title}>Agenda{minhaModalidade ? ` — ${nomeModalidade(minhaModalidade)}` : ''}</Text>
         <Text style={s.subtitle}>Olá, {nome?.split(' ')[0] ?? 'Professor'} — toque numa aula para ver os alunos</Text>
       </View>
 

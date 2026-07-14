@@ -16,8 +16,22 @@ export class HorariosService {
     return horarios.map(h => ({ ...h, agendados: h._count.agendamentos, vagas: h.capacidadeMaxima - h._count.agendamentos }));
   }
 
-  /** `modalidadeId` opcional: sem ele, retorna todas as modalidades (agenda do professor). */
-  async listarComVagas(modalidadeId: string | undefined, dataAula: string) {
+  /**
+   * `modalidadeId` opcional: sem ele, retorna todas as modalidades.
+   * PROFESSOR sempre enxerga apenas a própria modalidade (filtro forçado).
+   */
+  async listarComVagas(
+    modalidadeId: string | undefined,
+    dataAula: string,
+    solicitante?: { id: string; tipo: string },
+  ) {
+    if (solicitante?.tipo === 'PROFESSOR') {
+      const prof = await this.prisma.usuario.findUnique({
+        where: { id: solicitante.id },
+        select: { modalidadeProfessorId: true },
+      });
+      modalidadeId = prof?.modalidadeProfessorId ?? '__sem_modalidade__';
+    }
     const data = new Date(dataAula);
     const horarios = await this.prisma.horario.findMany({
       where: { ativo: true, ...(modalidadeId ? { modalidadeId } : {}) },

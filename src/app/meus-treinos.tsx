@@ -1,5 +1,6 @@
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../constants/theme';
+import { nomeModalidade } from '../constants/assets';
 import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
@@ -37,6 +38,7 @@ export default function MeusTreinos() {
                 <View style={{ flex: 1 }}>
                   <Text style={s.titulo}>{t.titulo}</Text>
                   <Text style={s.meta}>
+                    {t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}
                     Prof. {t.professor.nome.split(' ')[0]} • atualizado {formatDate(t.updatedAt, 'DD/MM/YYYY')}
                   </Text>
                 </View>

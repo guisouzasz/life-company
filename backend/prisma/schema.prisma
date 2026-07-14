@@ -48,6 +48,8 @@ model Usuario {
   // Financeiro: valor personalizado (override do preço do plano) e dia do vencimento
   valorMensalidade Decimal? @map("valor_mensalidade") @db.Decimal(10, 2)
   diaVencimento    Int      @default(5) @map("dia_vencimento")
+  // Modalidade do PROFESSOR: limita a agenda e os treinos que ele gerencia
+  modalidadeProfessorId String? @map("modalidade_professor_id")
   createdAt   DateTime    @default(now()) @map("created_at")
   updatedAt   DateTime    @updatedAt @map("updated_at")
 
@@ -60,23 +62,26 @@ model Usuario {
   pagamentos        Pagamento[]
   treinosRecebidos  Treino[] @relation("TreinosDoAluno")
   treinosCriados    Treino[] @relation("TreinosDoProfessor")
+  modalidadeProfessor Modalidade? @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
 
   @@map("usuarios")
 }
 
 // Treino montado pelo professor para um aluno (área do professor).
 model Treino {
-  id          String   @id @default(uuid())
-  alunoId     String   @map("aluno_id")
-  professorId String   @map("professor_id")
-  titulo      String // ex: "Treino A — Superiores"
-  observacoes String?
-  ativo       Boolean  @default(true) // soft-delete
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid())
+  alunoId      String   @map("aluno_id")
+  professorId  String   @map("professor_id")
+  modalidadeId String?  @map("modalidade_id") // modalidade do professor que montou
+  titulo       String // ex: "Treino A — Superiores"
+  observacoes  String?
+  ativo        Boolean  @default(true) // soft-delete
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   aluno      Usuario           @relation("TreinosDoAluno", fields: [alunoId], references: [id])
   professor  Usuario           @relation("TreinosDoProfessor", fields: [professorId], references: [id])
+  modalidade Modalidade?       @relation(fields: [modalidadeId], references: [id])
   exercicios ExercicioTreino[]
 
   @@map("treinos")
@@ -131,6 +136,8 @@ model Modalidade {
 
   horarios      Horario[]
   usuariosPlano UsuarioPlano[]
+  professores   Usuario[] @relation("ProfessorModalidade")
+  treinos       Treino[]
 
   @@map("modalidades")
 }

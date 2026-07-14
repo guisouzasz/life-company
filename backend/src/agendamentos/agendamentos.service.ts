@@ -146,7 +146,17 @@ export class AgendamentosService {
     });
   }
 
-  async listarPorHorario(horarioId: string, data: string) {
+  async listarPorHorario(horarioId: string, data: string, solicitante?: { id: string; tipo: string }) {
+    // Professor só enxerga aulas da própria modalidade
+    if (solicitante?.tipo === 'PROFESSOR') {
+      const [horario, prof] = await Promise.all([
+        this.prisma.horario.findUnique({ where: { id: horarioId }, select: { modalidadeId: true } }),
+        this.prisma.usuario.findUnique({ where: { id: solicitante.id }, select: { modalidadeProfessorId: true } }),
+      ]);
+      if (!horario || !prof?.modalidadeProfessorId || horario.modalidadeId !== prof.modalidadeProfessorId) {
+        throw new ForbiddenException('Esta aula não é da sua modalidade');
+      }
+    }
     const dataAula = dayjs(data).startOf('day').toDate();
     return this.prisma.agendamento.findMany({
       where: { horarioId, dataAula, status: 'CONFIRMADO' },

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Patch } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, UseGuards, Patch, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { HorariosService } from './horarios.service';
 import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
@@ -27,8 +27,8 @@ export class HorariosController {
   @Get('vagas')
   @ApiQuery({ name: 'modalidadeId', required: false })
   @ApiQuery({ name: 'data', required: true })
-  vagas(@Query('modalidadeId') modalidadeId: string | undefined, @Query('data') data: string) {
-    return this.service.listarComVagas(modalidadeId || undefined, data);
+  vagas(@Request() req, @Query('modalidadeId') modalidadeId: string | undefined, @Query('data') data: string) {
+    return this.service.listarComVagas(modalidadeId || undefined, data, req.user);
   }
 
   @Post() @UseGuards(AdminGuard) criar(@Body() dto: CriarHorarioDto) { return this.service.criar(dto); }

@@ -17,24 +17,24 @@ export class TreinosController {
     return this.service.meus(req.user.id);
   }
 
-  // ── Professor/Admin ────────────────────────────────────────────────
+  // ── Professor/Admin (professor limitado à própria modalidade) ─────
   @Get('aluno/:alunoId') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Treinos de um aluno (professor/admin)' })
-  doAluno(@Param('alunoId') alunoId: string) {
-    return this.service.doAluno(alunoId);
+  doAluno(@Request() req, @Param('alunoId') alunoId: string) {
+    return this.service.doAluno(alunoId, req.user);
   }
 
   @Post() @UseGuards(StaffGuard) @ApiOperation({ summary: 'Criar treino para um aluno (professor/admin)' })
   criar(@Request() req, @Body() dto: SalvarTreinoDto) {
-    return this.service.criar(req.user.id, dto);
+    return this.service.criar(req.user, dto);
   }
 
   @Put(':id') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Editar treino (substitui exercícios)' })
-  atualizar(@Param('id') id: string, @Body() dto: SalvarTreinoDto) {
-    return this.service.atualizar(id, dto);
+  atualizar(@Request() req, @Param('id') id: string, @Body() dto: SalvarTreinoDto) {
+    return this.service.atualizar(id, dto, req.user);
   }
 
   @Delete(':id') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Remover treino (professor/admin)' })
-  remover(@Param('id') id: string) {
-    return this.service.remover(id);
+  remover(@Request() req, @Param('id') id: string) {
+    return this.service.remover(id, req.user);
   }
 }

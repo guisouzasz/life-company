@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LC } from '../../constants/theme';
+import { nomeModalidade } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -210,6 +211,7 @@ export default function TreinosAluno() {
                   <View style={{ flex: 1 }}>
                     <Text style={s.treinoTitulo}>{t.titulo}</Text>
                     <Text style={s.treinoMeta}>
+                      {t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}
                       {t.exercicios.length} {t.exercicios.length === 1 ? 'exercício' : 'exercícios'} • atualizado {formatDate(t.updatedAt, 'DD/MM')}
                     </Text>
                   </View>
