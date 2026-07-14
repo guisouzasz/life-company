@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '../../store/auth';
-import { LC, alternarTema, temaAtual } from '../../constants/theme';
+import { LC } from '../../constants/theme';
 import { TabBar } from '../../components/tab-bar';
 import { Avatar } from '../../components/ui/avatar';
 import { Card } from '../../components/ui/card';
@@ -17,13 +17,7 @@ export default function ProfessorPerfil() {
   const logout = useLogout();
   const [confirmarSaida, setConfirmarSaida] = useState(false);
 
-  const menu: { label: string; icon: IconName; onPress: () => void }[] = [
-    {
-      label: temaAtual === 'escuro' ? 'Usar tema claro' : 'Usar tema escuro',
-      icon: temaAtual === 'escuro' ? 'sunny-outline' : 'moon-outline',
-      onPress: alternarTema,
-    },
-  ];
+  const menu: { label: string; icon: IconName; onPress: () => void }[] = [];
 
   return (
     <View style={s.root}>
@@ -43,6 +37,7 @@ export default function ProfessorPerfil() {
           {me.data?.email ? <Text style={s.email}>{me.data.email}</Text> : null}
         </View>
 
+        {menu.length > 0 ? (
         <Card style={s.card} padding={4}>
           {menu.map((item, i) => (
             <Pressable
@@ -58,6 +53,7 @@ export default function ProfessorPerfil() {
             </Pressable>
           ))}
         </Card>
+        ) : null}
 
         <Pressable style={({ pressed }) => [s.logout, pressed && s.pressed]} onPress={() => setConfirmarSaida(true)}>
           <Icon name="log-out-outline" size={20} color={LC.danger} />

@@ -1,59 +1,35 @@
 //import '@/global.css';
-import { Appearance, Platform } from "react-native";
+import { Platform } from "react-native";
 
-// ─── Tema claro/escuro ────────────────────────────────────────────────────────
-// Os StyleSheets capturam as cores do LC na carga dos módulos, então a paleta
-// é escolhida UMA vez na inicialização (preferência salva > tema do sistema) e
-// alternar o tema recarrega o app para repintar tudo.
-export type Tema = 'claro' | 'escuro';
-const TEMA_KEY = 'lc-tema';
+// ─── Life Company Design System ───────────────────────────────────────────────
+// Tema único (claro). O modo escuro foi removido a pedido do estúdio.
+export const LC = {
+  // ── Brand ─────────────────────────────────────────────────────────
+  brand: "#028E94", // teal oficial extraído do logo
+  primary: "#0E9488", // ação primária (botões, ativos)
+  primaryDark: "#0B6F66", // secondary / pressed
+  primaryLight: "#E6F4F1", // fundo suave verde
+  primaryMid: "#16B8A7", // variante clara
+  primarySoft: "#D2ECE7", // chip/avatar bg
 
-function temaSalvo(): Tema | null {
-  try {
-    if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
-      const t = localStorage.getItem(TEMA_KEY);
-      if (t === 'claro' || t === 'escuro') return t;
-    }
-  } catch {}
-  return null;
-}
+  // Gradiente do hero (login / splash)
+  gradientHero: ["#063A3D", "#055F63", "#028E94"] as const,
+  gradientCard: ["#0E9488", "#0B6F66"] as const,
 
-export const temaAtual: Tema =
-  temaSalvo() ?? (Appearance?.getColorScheme?.() === 'dark' ? 'escuro' : 'claro');
-
-/** Alterna claro/escuro, salva a preferência e recarrega o app. */
-export function alternarTema(): void {
-  const novo: Tema = temaAtual === 'escuro' ? 'claro' : 'escuro';
-  if (Platform.OS === 'web') {
-    try { localStorage.setItem(TEMA_KEY, novo); } catch {}
-    try { (globalThis as any).location?.reload?.(); } catch {}
-    return;
-  }
-  // Nativo: aplica na sessão via Appearance e recarrega o bundle (dev).
-  try { (Appearance as any).setColorScheme?.(novo === 'escuro' ? 'dark' : 'light'); } catch {}
-  try { const { DevSettings } = require('react-native'); DevSettings?.reload?.(); } catch {}
-}
-
-// ─── Paletas ──────────────────────────────────────────────────────────────────
-const paletaClara = {
-  brand: "#028E94",
-  primary: "#0E9488",
-  primaryDark: "#0B6F66",
-  primaryLight: "#E6F4F1",
-  primaryMid: "#16B8A7",
-  primarySoft: "#D2ECE7",
-
-  bg: "#F8FAFC",
-  bgCard: "#FFFFFF",
-  bgDark: "#0F172A",
+  // ── Neutrals ──────────────────────────────────────────────────────
+  bg: "#F8FAFC", // background geral (mockup)
+  bgCard: "#FFFFFF", // card
+  bgDark: "#0F172A", // fundo hero login (dark)
   bgDarkCard: "#1E293B",
 
-  textPrimary: "#111827",
-  textSecondary: "#6B7280",
-  textMuted: "#9CA3AF",
+  // ── Text ──────────────────────────────────────────────────────────
+  textPrimary: "#111827", // dark text
+  textSecondary: "#6B7280", // secondary
+  textMuted: "#9CA3AF", // placeholder / muted
   textWhite: "#FFFFFF",
   textOnPrimary: "#FFFFFF",
 
+  // ── Status ────────────────────────────────────────────────────────
   success: "#22C55E",
   successBg: "#DCFCE7",
   successFg: "#15803D",
@@ -67,57 +43,10 @@ const paletaClara = {
   infoFg: "#1D4ED8",
   neutralBg: "#F1F5F9",
 
-  border: "#EEF1F4",
+  // ── Border ────────────────────────────────────────────────────────
+  border: "#EEF1F4", // hairline sutil (premium, quase invisível)
   borderStrong: "#E2E8F0",
   borderFocus: "#0E9488",
-};
-
-const paletaEscura: typeof paletaClara = {
-  brand: "#028E94",
-  primary: "#14B8A6", // teal um tom mais claro p/ contraste no escuro
-  primaryDark: "#0E9488",
-  primaryLight: "#12332F", // tint escuro (fundos de chips/ícones)
-  primaryMid: "#2DD4BF",
-  primarySoft: "#164B45",
-
-  bg: "#0B1220",
-  bgCard: "#161F30",
-  bgDark: "#0F172A",
-  bgDarkCard: "#1E293B",
-
-  textPrimary: "#F1F5F9",
-  textSecondary: "#9CA8BB",
-  textMuted: "#64748B",
-  textWhite: "#FFFFFF",
-  textOnPrimary: "#FFFFFF",
-
-  success: "#34D399",
-  successBg: "#0E2E22",
-  successFg: "#4ADE80",
-  danger: "#F87171",
-  dangerBg: "#391D1F",
-  dangerFg: "#FCA5A5",
-  warning: "#FBBF24",
-  warningBg: "#39300F",
-  info: "#60A5FA",
-  infoBg: "#172A4A",
-  infoFg: "#93C5FD",
-  neutralBg: "#233047",
-
-  border: "#232E42",
-  borderStrong: "#334155",
-  borderFocus: "#14B8A6",
-};
-
-const paleta = temaAtual === 'escuro' ? paletaEscura : paletaClara;
-
-// ─── Life Company Design System ───────────────────────────────────────────────
-export const LC = {
-  ...paleta,
-
-  // Gradientes (hero/cards — escuros por natureza, iguais nos dois temas)
-  gradientHero: ["#063A3D", "#055F63", "#028E94"] as const,
-  gradientCard: ["#0E9488", "#0B6F66"] as const,
 
   // ── Shadows (tom slate, difusas e "flutuantes") ───────────────────
   // No web usamos boxShadow (shadow* está deprecado no react-native-web);

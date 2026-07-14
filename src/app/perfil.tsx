@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/auth';
-import { LC, alternarTema, temaAtual } from '../constants/theme';
+import { LC } from '../constants/theme';
 import { TabBar } from '../components/tab-bar';
 import { Avatar } from '../components/ui/avatar';
 import { Card } from '../components/ui/card';
@@ -25,11 +25,6 @@ export default function Perfil() {
     { label: 'Dados pessoais', icon: 'person-outline', onPress: () => setEmBreve(true) },
     { label: 'Alterar senha', icon: 'lock-closed-outline', onPress: () => setEmBreve(true) },
     { label: 'Notificações', icon: 'notifications-outline', onPress: () => router.push('/notificacoes') },
-    {
-      label: temaAtual === 'escuro' ? 'Usar tema claro' : 'Usar tema escuro',
-      icon: temaAtual === 'escuro' ? 'sunny-outline' : 'moon-outline',
-      onPress: alternarTema,
-    },
   ];
 
   const info: { label: string; value: string }[] = [

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, usePathname } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { LC, alternarTema, temaAtual } from '../../constants/theme';
+import { LC } from '../../constants/theme';
 import { STUDIO_NOME } from '../../constants/app';
 import { Assets } from '../../constants/assets';
 import { Icon } from '../ui/icon';
@@ -71,9 +71,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <Text style={s.footerNome} numberOfLines={1}>{nome ?? 'Admin'}</Text>
             <Text style={s.footerRole}>Administrador</Text>
           </View>
-          <Pressable onPress={alternarTema} hitSlop={8} style={s.temaBtn}>
-            <Icon name={temaAtual === 'escuro' ? 'sunny-outline' : 'moon-outline'} size={17} color={LC.textSecondary} />
-          </Pressable>
           <Pressable onPress={() => setConfirmarSaida(true)} hitSlop={8} style={s.logoutBtn}>
             <Icon name="log-out-outline" size={18} color={LC.danger} />
           </Pressable>
@@ -144,7 +141,6 @@ const s = StyleSheet.create({
   footerNome: { fontSize: 13, fontWeight: '700', color: LC.textPrimary },
   footerRole: { fontSize: 11, color: LC.textMuted },
   logoutBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.dangerBg, alignItems: 'center', justifyContent: 'center' },
-  temaBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, alignItems: 'center', justifyContent: 'center' },
 
   main: { flex: 1 },
   topbar: {
