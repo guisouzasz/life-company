@@ -13,6 +13,8 @@ export interface Treino {
   alunoId: string;
   professorId: string;
   titulo: string;
+  /** Treino em texto livre (Funcional/Pilates); Musculação usa exercicios[]. */
+  conteudo?: string | null;
   observacoes?: string | null;
   ativo: boolean;
   createdAt: string;
@@ -35,6 +37,8 @@ export interface ExercicioPayload {
 export interface SalvarTreinoPayload {
   alunoId: string;
   titulo: string;
+  /** Texto livre (Funcional/Pilates). Exige conteudo OU exercicios. */
+  conteudo?: string;
   observacoes?: string;
-  exercicios: ExercicioPayload[];
+  exercicios?: ExercicioPayload[];
 }

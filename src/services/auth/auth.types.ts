@@ -30,6 +30,11 @@ export interface AuthResponse {
 /** Resposta de GET /auth/me. */
 export interface UsuarioLogado {
   id: string;
+  nome?: string;
   email: string;
+  cpf?: string;
+  telefone?: string | null;
   tipo: TipoUsuario;
+  /** Modalidade do professor (null para admin/aluno). */
+  modalidadeProfessor?: { id: string; nome: string } | null;
 }

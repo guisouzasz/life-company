@@ -23,6 +23,19 @@ export class AuthService {
     private config: ConfigService,
   ) {}
 
+  /** Dados do usuário logado (inclui a modalidade quando é professor). */
+  async me(usuarioId: string) {
+    const u = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: {
+        id: true, nome: true, email: true, cpf: true, telefone: true, tipoUsuario: true,
+        modalidadeProfessor: { select: { id: true, nome: true } },
+      },
+    });
+    if (!u) throw new UnauthorizedException();
+    return { ...u, tipo: u.tipoUsuario };
+  }
+
   async login(dto: LoginDto) {
     // O campo aceita e-mail ou CPF: 11 dígitos (com ou sem máscara) = CPF.
     const entrada = dto.email.trim();

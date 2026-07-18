@@ -33,5 +33,5 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  me(@Request() req) { return req.user; }
+  me(@Request() req) { return this.authService.me(req.user.id); }
 }

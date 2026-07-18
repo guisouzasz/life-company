@@ -35,9 +35,13 @@ export class SalvarTreinoDto {
   @IsString() @MinLength(2)
   titulo: string;
 
+  /** Treino em texto livre (Funcional/Pilates). Exige conteudo OU exercicios. */
+  @IsOptional() @IsString() @MinLength(3)
+  conteudo?: string;
+
   @IsOptional() @IsString()
   observacoes?: string;
 
-  @IsArray() @ArrayMinSize(1) @ValidateNested({ each: true }) @Type(() => ExercicioDto)
-  exercicios: ExercicioDto[];
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ExercicioDto)
+  exercicios?: ExercicioDto[];
 }

@@ -50,6 +50,8 @@ export default function MeusTreinos() {
                 </View>
               </View>
 
+              {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
+
               {t.exercicios.map((e, i) => {
                 const evo = evolucaoDe(e.nome);
                 return (
@@ -102,6 +104,7 @@ const s = StyleSheet.create({
   iconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
   titulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
   meta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  conteudoTexto: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, paddingTop: 6, borderTopWidth: 1, borderTopColor: LC.border },
   exLinha: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: LC.border },
   exOrdem: {
     width: 24, height: 24, borderRadius: 12, backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border,

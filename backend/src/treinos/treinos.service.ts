@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
 
@@ -53,7 +53,17 @@ export class TreinosService {
     });
   }
 
+  /** Treino de Musculação usa exercicios[]; Funcional/Pilates usa texto livre. */
+  private validarFormato(dto: SalvarTreinoDto) {
+    const temExercicios = (dto.exercicios?.length ?? 0) > 0;
+    const temConteudo = !!dto.conteudo?.trim();
+    if (!temExercicios && !temConteudo) {
+      throw new BadRequestException('Informe os exercícios ou o texto do treino');
+    }
+  }
+
   async criar(solicitante: Solicitante, dto: SalvarTreinoDto) {
+    this.validarFormato(dto);
     const modalidadeId = await this.modalidadeDe(solicitante);
     const aluno = await this.prisma.usuario.findUnique({ where: { id: dto.alunoId } });
     if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
@@ -63,9 +73,10 @@ export class TreinosService {
         professorId: solicitante.id,
         modalidadeId, // null quando criado pelo admin
         titulo: dto.titulo,
+        conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
         exercicios: {
-          create: dto.exercicios.map((e, i) => ({
+          create: (dto.exercicios ?? []).map((e, i) => ({
             ordem: i,
             nome: e.nome,
             series: e.series ?? 3,
@@ -92,17 +103,19 @@ export class TreinosService {
     return treino;
   }
 
-  /** Atualiza título/observações e SUBSTITUI a lista de exercícios. */
+  /** Atualiza título/observações/conteúdo e SUBSTITUI a lista de exercícios. */
   async atualizar(id: string, dto: SalvarTreinoDto, solicitante: Solicitante) {
+    this.validarFormato(dto);
     await this.buscarComPermissao(id, solicitante);
     return this.prisma.treino.update({
       where: { id },
       data: {
         titulo: dto.titulo,
+        conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
         exercicios: {
           deleteMany: {},
-          create: dto.exercicios.map((e, i) => ({
+          create: (dto.exercicios ?? []).map((e, i) => ({
             ordem: i,
             nome: e.nome,
             series: e.series ?? 3,

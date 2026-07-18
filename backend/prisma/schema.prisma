@@ -76,6 +76,9 @@ model Treino {
   professorId  String   @map("professor_id")
   modalidadeId String?  @map("modalidade_id") // modalidade do professor que montou
   titulo       String // ex: "Treino A — Superiores"
+  // Treino em texto livre (Funcional/Pilates): blocos de tempo/intervalo
+  // escritos como o professor preferir. Musculação usa exercicios[] + carga.
+  conteudo     String?
   observacoes  String?
   ativo        Boolean  @default(true) // soft-delete
   createdAt    DateTime @default(now()) @map("created_at")
