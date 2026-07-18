@@ -11,8 +11,10 @@ import { Button } from '../../components/ui/button';
 import { Avatar } from '../../components/ui/avatar';
 import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
+import { CargaExercicioModal } from '../../components/professor/carga-exercicio-modal';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCriarTreino, useAtualizarTreino, useRemoverTreino } from '../../services/treinos/treinos.mutations';
+import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import type { ExercicioPayload, Treino } from '../../services/treinos/treinos.types';
 import { ApiError } from '../../services/http';
 import { formatDate } from '../../services/date';
@@ -23,6 +25,9 @@ interface ExercicioForm extends ExercicioPayload {
 
 const exercicioVazio = (): ExercicioForm => ({ nome: '', seriesTexto: '3', repeticoes: '12', carga: '', observacao: '' });
 
+/** 22.5 → "22,5" | 20 → "20" */
+const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
+
 /** Treinos de um aluno: lista + criação/edição (professor e admin). */
 export default function TreinosAluno() {
   const { id, nome } = useLocalSearchParams<{ id: string; nome?: string }>();
@@ -30,9 +35,16 @@ export default function TreinosAluno() {
   const alunoNome = typeof nome === 'string' ? nome : 'Aluno';
 
   const treinos = useTreinosDoAluno(alunoId);
+  const cargas = useCargasDoAluno(alunoId);
   const criar = useCriarTreino();
   const atualizar = useAtualizarTreino();
   const remover = useRemoverTreino();
+
+  /** Evolução registrada para um exercício (por nome). */
+  const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;
+
+  // Exercício aberto no modal de carga/progressão
+  const [cargaDe, setCargaDe] = useState<{ nome: string; reps: string } | null>(null);
 
   // Form (null = lista; senão criação/edição)
   const [editando, setEditando] = useState<Treino | null>(null);
@@ -223,14 +235,38 @@ export default function TreinosAluno() {
                   </Pressable>
                 </View>
 
-                {t.exercicios.map((e) => (
-                  <View key={e.id} style={s.exLinha}>
-                    <Text style={s.exNome} numberOfLines={1}>{e.nome}</Text>
-                    <Text style={s.exDetalhe}>
-                      {e.series}x{e.repeticoes}{e.carga ? ` • ${e.carga}` : ''}
-                    </Text>
-                  </View>
-                ))}
+                {t.exercicios.map((e) => {
+                  const evo = evolucaoDe(e.nome);
+                  return (
+                    <Pressable
+                      key={e.id}
+                      accessibilityRole="button"
+                      onPress={() => setCargaDe({ nome: e.nome, reps: e.repeticoes })}
+                      style={({ pressed }) => [s.exLinha, pressed && s.pressed]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.exNome} numberOfLines={1}>{e.nome}</Text>
+                        {evo ? (
+                          <View style={s.exEvoRow}>
+                            <Icon
+                              name={evo.evolucaoKg > 0 ? 'trending-up' : evo.evolucaoKg < 0 ? 'trending-down' : 'remove'}
+                              size={12}
+                              color={evo.evolucaoKg > 0 ? LC.success : evo.evolucaoKg < 0 ? LC.danger : LC.textMuted}
+                            />
+                            <Text style={s.exEvoText}>
+                              {kgFmt(evo.atual)} kg
+                              {evo.evolucaoKg !== 0 ? ` (${evo.evolucaoKg > 0 ? '+' : ''}${kgFmt(evo.evolucaoKg)})` : ''}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text style={s.exDetalhe}>
+                        {e.series}x{e.repeticoes}{e.carga ? ` • ${e.carga}` : ''}
+                      </Text>
+                      <Icon name="stats-chart-outline" size={15} color={LC.primary} />
+                    </Pressable>
+                  );
+                })}
                 {t.observacoes ? <Text style={s.treinoObs}>{t.observacoes}</Text> : null}
               </Card>
             ))
@@ -247,6 +283,13 @@ export default function TreinosAluno() {
       </Pressable>
 
       <TabBar isProfessor />
+      <CargaExercicioModal
+        exercicio={cargaDe?.nome ?? null}
+        alunoId={alunoId}
+        alunoNome={alunoNome}
+        repeticoesPadrao={cargaDe?.reps}
+        onClose={() => setCargaDe(null)}
+      />
       <ConfirmModal
         visible={!!excluindo}
         title="Remover treino"
@@ -281,9 +324,12 @@ const s = StyleSheet.create({
   treinoTitulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
   treinoMeta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   acao: { width: 34, height: 34, borderRadius: 17, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  exLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: LC.border },
-  exNome: { flex: 1, fontSize: 14, fontWeight: '600', color: LC.textPrimary },
+  exLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: LC.border },
+  exNome: { fontSize: 14, fontWeight: '600', color: LC.textPrimary },
+  exEvoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  exEvoText: { fontSize: 11, fontWeight: '700', color: LC.textSecondary },
   exDetalhe: { fontSize: 13, fontWeight: '700', color: LC.primary },
+  pressed: { opacity: 0.7 },
   treinoObs: { fontSize: 12, color: LC.textMuted, marginTop: 10, fontStyle: 'italic' },
 
   // Form

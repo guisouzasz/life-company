@@ -62,6 +62,8 @@ model Usuario {
   pagamentos        Pagamento[]
   treinosRecebidos  Treino[] @relation("TreinosDoAluno")
   treinosCriados    Treino[] @relation("TreinosDoProfessor")
+  cargasRecebidas   RegistroCarga[] @relation("CargasDoAluno")
+  cargasRegistradas RegistroCarga[] @relation("CargasDoProfessor")
   modalidadeProfessor Modalidade? @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
 
   @@map("usuarios")
@@ -85,6 +87,31 @@ model Treino {
   exercicios ExercicioTreino[]
 
   @@map("treinos")
+}
+
+// Carga levantada pelo aluno num exercício, registrada pelo professor.
+// NÃO aponta para ExercicioTreino: editar um treino recria os exercícios
+// (deleteMany+create), o que apagaria o histórico. A identidade é
+// (aluno + nome do exercício + modalidade), então a evolução sobrevive a
+// qualquer alteração/recriação do treino.
+model RegistroCarga {
+  id           String   @id @default(uuid())
+  alunoId      String   @map("aluno_id")
+  professorId  String   @map("professor_id")
+  modalidadeId String?  @map("modalidade_id")
+  exercicio    String // nome do exercício, como aparece no treino
+  peso         Decimal  @db.Decimal(6, 2) // em kg
+  repeticoes   String? // "12", "10-12", "até a falha"...
+  observacao   String?
+  data         DateTime @default(now()) // dia do treino
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  aluno      Usuario     @relation("CargasDoAluno", fields: [alunoId], references: [id])
+  professor  Usuario     @relation("CargasDoProfessor", fields: [professorId], references: [id])
+  modalidade Modalidade? @relation(fields: [modalidadeId], references: [id])
+
+  @@index([alunoId, exercicio])
+  @@map("registros_carga")
 }
 
 model ExercicioTreino {
@@ -138,6 +165,7 @@ model Modalidade {
   usuariosPlano UsuarioPlano[]
   professores   Usuario[] @relation("ProfessorModalidade")
   treinos       Treino[]
+  cargas        RegistroCarga[]
 
   @@map("modalidades")
 }

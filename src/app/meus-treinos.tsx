@@ -6,11 +6,17 @@ import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
 import { useMeusTreinos } from '../services/treinos/treinos.queries';
+import { useMinhasCargas } from '../services/cargas/cargas.queries';
 import { formatDate } from '../services/date';
+
+/** 22.5 → "22,5" | 20 → "20" */
+const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
 
 /** Treinos montados pelo professor para o aluno logado (somente leitura). */
 export default function MeusTreinos() {
   const treinos = useMeusTreinos();
+  const cargas = useMinhasCargas();
+  const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;
 
   return (
     <View style={s.root}>
@@ -44,18 +50,34 @@ export default function MeusTreinos() {
                 </View>
               </View>
 
-              {t.exercicios.map((e, i) => (
-                <View key={e.id} style={s.exLinha}>
-                  <Text style={s.exOrdem}>{i + 1}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.exNome}>{e.nome}</Text>
-                    {e.observacao ? <Text style={s.exObs}>{e.observacao}</Text> : null}
+              {t.exercicios.map((e, i) => {
+                const evo = evolucaoDe(e.nome);
+                return (
+                  <View key={e.id} style={s.exLinha}>
+                    <Text style={s.exOrdem}>{i + 1}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.exNome}>{e.nome}</Text>
+                      {evo ? (
+                        <View style={s.exEvoRow}>
+                          <Icon
+                            name={evo.evolucaoKg > 0 ? 'trending-up' : evo.evolucaoKg < 0 ? 'trending-down' : 'remove'}
+                            size={12}
+                            color={evo.evolucaoKg > 0 ? LC.success : evo.evolucaoKg < 0 ? LC.danger : LC.textMuted}
+                          />
+                          <Text style={s.exEvoText}>
+                            Sua carga: {kgFmt(evo.atual)} kg
+                            {evo.evolucaoKg > 0 ? ` • +${kgFmt(evo.evolucaoKg)} kg desde o início` : ''}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {e.observacao ? <Text style={s.exObs}>{e.observacao}</Text> : null}
+                    </View>
+                    <Text style={s.exDetalhe}>
+                      {e.series}x{e.repeticoes}{e.carga ? ` • ${e.carga}` : ''}
+                    </Text>
                   </View>
-                  <Text style={s.exDetalhe}>
-                    {e.series}x{e.repeticoes}{e.carga ? ` • ${e.carga}` : ''}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
 
               {t.observacoes ? (
                 <View style={s.obsBox}>
@@ -86,6 +108,8 @@ const s = StyleSheet.create({
     textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '800', color: LC.textSecondary, overflow: 'hidden',
   },
   exNome: { fontSize: 14, fontWeight: '600', color: LC.textPrimary },
+  exEvoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  exEvoText: { flex: 1, fontSize: 11, fontWeight: '700', color: LC.textSecondary },
   exObs: { fontSize: 11, color: LC.textMuted, marginTop: 1 },
   exDetalhe: { fontSize: 13, fontWeight: '800', color: LC.primary },
   obsBox: {
