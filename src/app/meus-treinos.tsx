@@ -5,7 +5,7 @@ import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
-import { useMeusTreinos } from '../services/treinos/treinos.queries';
+import { useMeusTreinos, useMeuTreinoDia } from '../services/treinos/treinos.queries';
 import { useMinhasCargas } from '../services/cargas/cargas.queries';
 import { formatDate } from '../services/date';
 
@@ -15,19 +15,21 @@ const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.',
 /** Treinos montados pelo professor para o aluno logado (somente leitura). */
 export default function MeusTreinos() {
   const treinos = useMeusTreinos();
+  const treinoDia = useMeuTreinoDia();
   const cargas = useMinhasCargas();
   const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;
+  const temAlgo = (treinos.data?.length ?? 0) > 0 || (treinoDia.data?.length ?? 0) > 0;
 
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
       <Header title="Meus treinos" showBack />
 
-      {treinos.isLoading ? (
+      {treinos.isLoading || treinoDia.isLoading ? (
         <Loading />
       ) : treinos.isError ? (
         <ErrorState onRetry={() => treinos.refetch()} />
-      ) : !treinos.data || treinos.data.length === 0 ? (
+      ) : !temAlgo ? (
         <EmptyState
           icon="barbell-outline"
           title="Nenhum treino ainda"
@@ -35,7 +37,23 @@ export default function MeusTreinos() {
         />
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          {treinos.data.map((t) => (
+          {/* Treino do dia (Funcional): igual para todas as aulas de hoje */}
+          {(treinoDia.data ?? []).map((td) => (
+            <Card key={td.id} style={[s.card, s.cardHoje]} padding={16}>
+              <View style={s.head}>
+                <View style={[s.iconWrap, { backgroundColor: LC.primary }]}>
+                  <Icon name="flame-outline" size={20} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.titulo}>Treino de hoje — {nomeModalidade(td.modalidade.nome)}</Text>
+                  <Text style={s.meta}>Prof. {td.professor.nome.split(' ')[0]} • para todas as aulas de hoje</Text>
+                </View>
+              </View>
+              <Text style={s.conteudoTexto}>{td.conteudo}</Text>
+            </Card>
+          ))}
+
+          {(treinos.data ?? []).map((t) => (
             <Card key={t.id} style={s.card} padding={16}>
               <View style={s.head}>
                 <View style={s.iconWrap}>
@@ -100,6 +118,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   scroll: { padding: 16, paddingBottom: 24 },
   card: { marginBottom: 12 },
+  cardHoje: { borderWidth: 1.5, borderColor: LC.primary },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   iconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
   titulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },

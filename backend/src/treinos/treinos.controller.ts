@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { TreinosService } from './treinos.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
+import { SalvarTreinoDiaDto } from './dto/salvar-treino-dia.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { StaffGuard } from '../auth/guards/staff.guard';
 
@@ -15,6 +16,29 @@ export class TreinosController {
   @Get('meus') @ApiOperation({ summary: 'Treinos do aluno logado' })
   meus(@Request() req) {
     return this.service.meus(req.user.id);
+  }
+
+  // ── Treino do DIA (Funcional) — rotas fixas ANTES das rotas :id ────
+  @Get('dia/meu') @ApiOperation({ summary: 'Treino do dia de hoje das aulas do aluno logado' })
+  diaMeu(@Request() req) {
+    return this.service.diaMeu(req.user.id);
+  }
+
+  @Get('dia') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Treino do dia da modalidade (professor/admin)' })
+  @ApiQuery({ name: 'data', required: true })
+  @ApiQuery({ name: 'modalidadeId', required: false })
+  diaVer(@Request() req, @Query('data') data: string, @Query('modalidadeId') modalidadeId?: string) {
+    return this.service.diaVer(req.user, data, modalidadeId);
+  }
+
+  @Put('dia') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Criar/substituir o treino do dia (upsert)' })
+  diaSalvar(@Request() req, @Body() dto: SalvarTreinoDiaDto) {
+    return this.service.diaSalvar(req.user, dto);
+  }
+
+  @Delete('dia/:id') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Remover treino do dia' })
+  diaRemover(@Request() req, @Param('id') id: string) {
+    return this.service.diaRemover(id, req.user);
   }
 
   // ── Professor/Admin (professor limitado à própria modalidade) ─────

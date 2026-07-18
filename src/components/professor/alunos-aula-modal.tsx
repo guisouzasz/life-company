@@ -8,6 +8,7 @@ import { Badge } from '../ui/badge';
 import { Avatar } from '../ui/avatar';
 import { Loading } from '../ui/states';
 import { useAgendamentosDoHorario } from '../../services/agendamentos/agendamentos.queries';
+import { useMe } from '../../services/auth/auth.queries';
 import type { HorarioVaga } from '../../services/horarios/horarios.types';
 import { formatDate } from '../../services/date';
 
@@ -23,6 +24,12 @@ interface Props {
  */
 export function AlunosAulaModal({ aula, data, onClose }: Props) {
   const agendamentos = useAgendamentosDoHorario(aula?.id, data, !!aula && !!data);
+
+  // Funcional usa treino do DIA (não por aluno) → sem botão "Treinos" aqui
+  const me = useMe();
+  const treinoPorAluno = me.data?.modalidadeProfessor
+    ? nomeModalidade(me.data.modalidadeProfessor.nome) !== 'Funcional'
+    : true;
 
   const titulo = aula ? `${aula.horaInicio} — ${nomeModalidade(aula.modalidade.nome)}` : '';
 
@@ -54,10 +61,12 @@ export function AlunosAulaModal({ aula, data, onClose }: Props) {
                   </View>
                 ) : null}
               </View>
-              <Pressable style={s.treinoBtn} hitSlop={6} onPress={() => verTreinos(ag.usuario.id, ag.usuario.nome)}>
-                <Icon name="barbell-outline" size={15} color={LC.primary} />
-                <Text style={s.treinoBtnText}>Treinos</Text>
-              </Pressable>
+              {treinoPorAluno ? (
+                <Pressable style={s.treinoBtn} hitSlop={6} onPress={() => verTreinos(ag.usuario.id, ag.usuario.nome)}>
+                  <Icon name="barbell-outline" size={15} color={LC.primary} />
+                  <Text style={s.treinoBtnText}>Treinos</Text>
+                </Pressable>
+              ) : null}
             </View>
           ))}
         </ScrollView>

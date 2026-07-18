@@ -34,6 +34,24 @@ export interface ExercicioPayload {
   observacao?: string;
 }
 
+/** Treino do DIA (Funcional): um por modalidade+data, para todas as aulas. */
+export interface TreinoDia {
+  id: string;
+  data: string;
+  conteudo: string;
+  updatedAt: string;
+  modalidade: { id: string; nome: string };
+  professor: { id: string; nome: string };
+}
+
+export interface SalvarTreinoDiaPayload {
+  /** YYYY-MM-DD */
+  data: string;
+  conteudo: string;
+  /** Só para admin (professor usa a própria modalidade). */
+  modalidadeId?: string;
+}
+
 export interface SalvarTreinoPayload {
   alunoId: string;
   titulo: string;

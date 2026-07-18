@@ -1,10 +1,32 @@
 import { http } from '../http';
-import type { SalvarTreinoPayload, Treino } from './treinos.types';
+import type { SalvarTreinoDiaPayload, SalvarTreinoPayload, Treino, TreinoDia } from './treinos.types';
 
 export const treinosService = {
   /** Treinos do aluno logado. */
   async meus(): Promise<Treino[]> {
     const { data } = await http.get<Treino[]>('/treinos/meus');
+    return data;
+  },
+
+  // ── Treino do dia (Funcional) ──────────────────────────────────────
+  /** Treinos do dia de hoje das aulas do aluno logado. */
+  async diaMeu(): Promise<TreinoDia[]> {
+    const { data } = await http.get<TreinoDia[]>('/treinos/dia/meu');
+    return data;
+  },
+
+  async diaVer(dataDia: string): Promise<TreinoDia | null> {
+    const { data } = await http.get<TreinoDia | null>('/treinos/dia', { params: { data: dataDia } });
+    return data;
+  },
+
+  async diaSalvar(payload: SalvarTreinoDiaPayload): Promise<TreinoDia> {
+    const { data } = await http.put<TreinoDia>('/treinos/dia', payload);
+    return data;
+  },
+
+  async diaRemover(id: string): Promise<{ mensagem: string }> {
+    const { data } = await http.delete<{ mensagem: string }>(`/treinos/dia/${id}`);
     return data;
   },
 

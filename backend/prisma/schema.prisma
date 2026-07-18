@@ -64,6 +64,7 @@ model Usuario {
   treinosCriados    Treino[] @relation("TreinosDoProfessor")
   cargasRecebidas   RegistroCarga[] @relation("CargasDoAluno")
   cargasRegistradas RegistroCarga[] @relation("CargasDoProfessor")
+  treinosDia        TreinoDia[] @relation("TreinosDiaDoProfessor")
   modalidadeProfessor Modalidade? @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
 
   @@map("usuarios")
@@ -90,6 +91,24 @@ model Treino {
   exercicios ExercicioTreino[]
 
   @@map("treinos")
+}
+
+// Treino do DIA (Funcional): um treino por modalidade+data, igual para
+// todas as aulas do dia — não é por aluno.
+model TreinoDia {
+  id           String   @id @default(uuid())
+  professorId  String   @map("professor_id")
+  modalidadeId String   @map("modalidade_id")
+  data         DateTime // dia do treino (00:00)
+  conteudo     String // texto livre, como o professor escreve
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  professor  Usuario    @relation("TreinosDiaDoProfessor", fields: [professorId], references: [id])
+  modalidade Modalidade @relation(fields: [modalidadeId], references: [id])
+
+  @@unique([modalidadeId, data])
+  @@map("treinos_dia")
 }
 
 // Carga levantada pelo aluno num exercício, registrada pelo professor.
@@ -169,6 +188,7 @@ model Modalidade {
   professores   Usuario[] @relation("ProfessorModalidade")
   treinos       Treino[]
   cargas        RegistroCarga[]
+  treinosDia    TreinoDia[]
 
   @@map("modalidades")
 }

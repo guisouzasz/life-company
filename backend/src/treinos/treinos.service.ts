@@ -1,6 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
+import { SalvarTreinoDiaDto } from './dto/salvar-treino-dia.dto';
 
 type Solicitante = { id: string; tipo: string };
 
@@ -133,5 +135,60 @@ export class TreinosService {
     await this.buscarComPermissao(id, solicitante);
     await this.prisma.treino.update({ where: { id }, data: { ativo: false } });
     return { mensagem: 'Treino removido' };
+  }
+
+  // ── Treino do DIA (Funcional): um por modalidade+data ──────────────
+
+  private normalizarData(data: string): Date {
+    return dayjs(data).startOf('day').toDate();
+  }
+
+  /** Treino do dia da modalidade (professor usa a própria; admin passa modalidadeId). */
+  async diaVer(solicitante: Solicitante, data: string, modalidadeIdParam?: string) {
+    const modalidadeId = (await this.modalidadeDe(solicitante)) ?? modalidadeIdParam;
+    if (!modalidadeId) throw new BadRequestException('Informe a modalidade');
+    return this.prisma.treinoDia.findUnique({
+      where: { modalidadeId_data: { modalidadeId, data: this.normalizarData(data) } },
+      include: { modalidade: { select: { id: true, nome: true } }, professor: { select: { id: true, nome: true } } },
+    });
+  }
+
+  /** Cria ou substitui o treino do dia (upsert por modalidade+data). */
+  async diaSalvar(solicitante: Solicitante, dto: SalvarTreinoDiaDto) {
+    const modalidadeId = (await this.modalidadeDe(solicitante)) ?? dto.modalidadeId;
+    if (!modalidadeId) throw new BadRequestException('Informe a modalidade');
+    const data = this.normalizarData(dto.data);
+    return this.prisma.treinoDia.upsert({
+      where: { modalidadeId_data: { modalidadeId, data } },
+      create: { professorId: solicitante.id, modalidadeId, data, conteudo: dto.conteudo.trim() },
+      update: { professorId: solicitante.id, conteudo: dto.conteudo.trim() },
+      include: { modalidade: { select: { id: true, nome: true } }, professor: { select: { id: true, nome: true } } },
+    });
+  }
+
+  async diaRemover(id: string, solicitante: Solicitante) {
+    const treino = await this.prisma.treinoDia.findUnique({ where: { id } });
+    if (!treino) throw new NotFoundException('Treino do dia não encontrado');
+    if (solicitante.tipo === 'PROFESSOR') {
+      const modalidadeId = await this.modalidadeDe(solicitante);
+      if (treino.modalidadeId !== modalidadeId) throw new ForbiddenException('Este treino é de outra modalidade');
+    }
+    await this.prisma.treinoDia.delete({ where: { id } });
+    return { mensagem: 'Treino do dia removido' };
+  }
+
+  /** Treinos do dia de HOJE das modalidades em que o aluno tem aula hoje. */
+  async diaMeu(alunoId: string) {
+    const hoje = dayjs().startOf('day').toDate();
+    const aulas = await this.prisma.agendamento.findMany({
+      where: { usuarioId: alunoId, status: 'CONFIRMADO', dataAula: hoje },
+      select: { horario: { select: { modalidadeId: true } } },
+    });
+    const modalidades = [...new Set(aulas.map((a) => a.horario.modalidadeId))];
+    if (modalidades.length === 0) return [];
+    return this.prisma.treinoDia.findMany({
+      where: { data: hoje, modalidadeId: { in: modalidades } },
+      include: { modalidade: { select: { id: true, nome: true } }, professor: { select: { id: true, nome: true } } },
+    });
   }
 }
