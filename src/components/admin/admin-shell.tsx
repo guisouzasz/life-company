@@ -30,7 +30,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     const q = busca.trim();
     if (!q) return;
     setBusca('');
-    router.push({ pathname: '/admin/alunos', params: { busca: q } });
+    // replace (não push): buscar já estando em Alunos não empilha outra tela
+    router.replace({ pathname: '/admin/alunos', params: { busca: q } });
   };
 
   return (

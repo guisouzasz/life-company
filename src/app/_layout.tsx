@@ -1,6 +1,6 @@
 import '../global.css';
 import { useEffect } from 'react';
-import { Stack, router } from 'expo-router';
+import { Stack, router, usePathname } from 'expo-router';
 import { View, ActivityIndicator, StatusBar } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { LC } from '../constants/theme';
@@ -12,18 +12,36 @@ function RootNavigator() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const tipoUsuario = useAuthStore((s) => s.tipoUsuario);
   const hydrate = useAuthStore((s) => s.hydrate);
+  const pathname = usePathname();
 
   useEffect(() => {
     hydrate();
   }, [hydrate]);
 
+  // Só redireciona quando NECESSÁRIO — assim o F5/deep-link preserva a rota:
+  //  - deslogado em rota protegida → login;
+  //  - logado em rota pública (login/primeiro acesso) → home do papel;
+  //  - logado em área de OUTRO papel (ex: aluno em /admin) → home do papel.
   useEffect(() => {
     if (isLoading) return;
-    if (!isAuthenticated) router.replace('/');
-    else if (tipoUsuario === 'ADMIN') router.replace('/admin/dashboard');
-    else if (tipoUsuario === 'PROFESSOR') router.replace('/professor/agenda');
-    else router.replace('/dashboard');
-  }, [isLoading, isAuthenticated, tipoUsuario]);
+    const rotaPublica = pathname === '/' || pathname.startsWith('/primeiro-acesso');
+
+    if (!isAuthenticated) {
+      if (!rotaPublica) router.replace('/');
+      return;
+    }
+
+    const home =
+      tipoUsuario === 'ADMIN' ? '/admin/dashboard'
+      : tipoUsuario === 'PROFESSOR' ? '/professor/agenda'
+      : '/dashboard';
+    const areaCorreta =
+      tipoUsuario === 'ADMIN' ? pathname.startsWith('/admin')
+      : tipoUsuario === 'PROFESSOR' ? pathname.startsWith('/professor')
+      : !pathname.startsWith('/admin') && !pathname.startsWith('/professor');
+
+    if (rotaPublica || !areaCorreta) router.replace(home as any);
+  }, [isLoading, isAuthenticated, tipoUsuario, pathname]);
 
   if (isLoading) {
     return (
