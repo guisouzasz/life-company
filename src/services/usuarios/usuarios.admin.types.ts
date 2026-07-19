@@ -32,8 +32,12 @@ export interface CriarAlunoResposta {
 /** PUT /usuarios/:id — backend atualiza nome, email e telefone. */
 export interface AtualizarAlunoPayload {
   nome?: string;
+  cpf?: string;
+  /** String vazia limpa o e-mail (o aluno cadastra o dele na ativação). */
   email?: string;
   telefone?: string;
+  /** Reativar/desativar o cadastro. */
+  ativo?: boolean;
 }
 
 /** PUT /usuarios/:id/plano — encerra o plano ativo e cria um novo. */

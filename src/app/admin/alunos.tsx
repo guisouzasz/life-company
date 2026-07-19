@@ -43,15 +43,27 @@ export default function AdminAlunos() {
   // Modal de plano e horário fixo
   const [planoHorarioAluno, setPlanoHorarioAluno] = useState<AlunoAdmin | null>(null);
 
-  // Modal de edição
+  // Modal de edição (cadastro completo)
   const [editando, setEditando] = useState<AlunoAdmin | null>(null);
-  const [form, setForm] = useState({ nome: '', email: '', telefone: '' });
+  const [form, setForm] = useState({ nome: '', cpf: '', email: '', telefone: '', ativo: true });
   const [erroEdicao, setErroEdicao] = useState<string | null>(null);
+
+  const formatCpf = (v: string) =>
+    v.replace(/\D/g, '').slice(0, 11)
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 
   const abrirEdicao = (aluno: AlunoAdmin) => {
     setEditando(aluno);
     setErroEdicao(null);
-    setForm({ nome: aluno.nome, email: aluno.email ?? '', telefone: aluno.telefone ?? '' });
+    setForm({
+      nome: aluno.nome,
+      cpf: formatCpf(aluno.cpf ?? ''),
+      email: aluno.email ?? '',
+      telefone: aluno.telefone ?? '',
+      ativo: aluno.ativo,
+    });
   };
 
   const salvarEdicao = () => {
@@ -60,8 +72,21 @@ export default function AdminAlunos() {
       setErroEdicao('Nome é obrigatório.');
       return;
     }
+    if (form.cpf.replace(/\D/g, '').length !== 11) {
+      setErroEdicao('CPF deve ter 11 dígitos.');
+      return;
+    }
     atualizar.mutate(
-      { id: editando.id, payload: { nome: form.nome.trim(), email: form.email.trim() || undefined, telefone: form.telefone.trim() || undefined } },
+      {
+        id: editando.id,
+        payload: {
+          nome: form.nome.trim(),
+          cpf: form.cpf.replace(/\D/g, ''),
+          email: form.email.trim(), // vazio limpa o e-mail
+          telefone: form.telefone.trim(),
+          ativo: form.ativo,
+        },
+      },
       {
         onSuccess: () => setEditando(null),
         onError: (e) => setErroEdicao(e instanceof ApiError ? e.message : 'Não foi possível salvar.'),
@@ -246,12 +271,31 @@ export default function AdminAlunos() {
 
       {/* Modal: editar aluno */}
       <AppModal visible={!!editando} onClose={() => setEditando(null)} title="Editar aluno">
-        <View style={s.editForm}>
-          <Input label="Nome" value={form.nome} onChangeText={(t) => setForm((f) => ({ ...f, nome: t }))} autoCapitalize="words" />
-          <Input label="E-mail" value={form.email} onChangeText={(t) => setForm((f) => ({ ...f, email: t }))} keyboardType="email-address" autoCapitalize="none" />
-          <Input label="Telefone" value={form.telefone} onChangeText={(t) => setForm((f) => ({ ...f, telefone: t }))} keyboardType="phone-pad" />
-          {erroEdicao ? <Text style={s.erro}>{erroEdicao}</Text> : null}
-        </View>
+        <ScrollView style={s.editScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={s.editForm}>
+            <Input label="Nome" value={form.nome} onChangeText={(t) => setForm((f) => ({ ...f, nome: t }))} autoCapitalize="words" />
+            <Input label="CPF" value={form.cpf} onChangeText={(t) => setForm((f) => ({ ...f, cpf: formatCpf(t) }))} keyboardType="numeric" placeholder="000.000.000-00" />
+            <Input label="E-mail" value={form.email} onChangeText={(t) => setForm((f) => ({ ...f, email: t }))} keyboardType="email-address" autoCapitalize="none" placeholder="vazio = aluno cadastra na ativação" />
+            <Input label="Telefone" value={form.telefone} onChangeText={(t) => setForm((f) => ({ ...f, telefone: t }))} keyboardType="phone-pad" />
+
+            <Text style={s.editLabel}>Status</Text>
+            <View style={s.editChips}>
+              <Pressable style={[s.editChip, form.ativo && s.editChipAtivo]} onPress={() => setForm((f) => ({ ...f, ativo: true }))}>
+                <View style={[s.editDot, { backgroundColor: form.ativo ? LC.success : LC.textMuted }]} />
+                <Text style={[s.editChipText, form.ativo && { color: LC.successFg, fontWeight: '700' }]}>Ativo</Text>
+              </Pressable>
+              <Pressable style={[s.editChip, !form.ativo && s.editChipInativo]} onPress={() => setForm((f) => ({ ...f, ativo: false }))}>
+                <View style={[s.editDot, { backgroundColor: !form.ativo ? LC.danger : LC.textMuted }]} />
+                <Text style={[s.editChipText, !form.ativo && { color: LC.dangerFg, fontWeight: '700' }]}>Inativo</Text>
+              </Pressable>
+            </View>
+            {!form.ativo ? (
+              <Text style={s.editAviso}>Inativo não consegue entrar no app nem agendar aulas.</Text>
+            ) : null}
+
+            {erroEdicao ? <Text style={s.erro}>{erroEdicao}</Text> : null}
+          </View>
+        </ScrollView>
         <View style={s.modalActions}>
           <Button title="Cancelar" variant="outline" onPress={() => setEditando(null)} style={{ flex: 1 }} />
           <Button title="Salvar" loading={atualizar.isPending} onPress={salvarEdicao} style={{ flex: 1 }} />
@@ -292,7 +336,20 @@ const s = StyleSheet.create({
   linkBox: { backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, borderRadius: LC.radius.md, padding: 12, marginBottom: 16 },
   linkText: { fontSize: 13, color: LC.textPrimary },
   modalActions: { flexDirection: 'row', gap: 10 },
-  editForm: { gap: 14, marginBottom: 18 },
+  editScroll: { maxHeight: 440, marginBottom: 18 },
+  editForm: { gap: 14 },
+  editLabel: { fontSize: 12, fontWeight: '700', color: LC.textSecondary, marginBottom: -6 },
+  editChips: { flexDirection: 'row', gap: 8 },
+  editChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: LC.radius.full,
+    backgroundColor: LC.bg, borderWidth: 1.5, borderColor: LC.border,
+  },
+  editChipAtivo: { backgroundColor: LC.successBg, borderColor: LC.success },
+  editChipInativo: { backgroundColor: LC.dangerBg, borderColor: LC.danger },
+  editDot: { width: 8, height: 8, borderRadius: 4 },
+  editChipText: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
+  editAviso: { fontSize: 12, color: LC.textMuted, marginTop: -4 },
   erro: { fontSize: 13, color: LC.danger },
 
   // ── Tabela desktop ──────────────────────────────────────────────

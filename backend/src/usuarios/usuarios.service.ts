@@ -96,11 +96,40 @@ export class UsuariosService {
     return u;
   }
 
-  async atualizar(id: string, data: Partial<CriarUsuarioDto>) {
+  /**
+   * Edição completa do cadastro: nome, CPF, e-mail, telefone e status
+   * ativo/inativo — com checagem de unicidade (CPF/e-mail) excluindo o próprio.
+   */
+  async atualizar(id: string, data: Partial<CriarUsuarioDto> & { ativo?: boolean }) {
     await this.buscarPorId(id);
+
+    const cpfNorm = data.cpf !== undefined ? data.cpf.replace(/\D/g, "") : undefined;
+    if (cpfNorm !== undefined && cpfNorm.length !== 11) {
+      throw new ConflictException("CPF deve ter 11 dígitos");
+    }
+    if (cpfNorm) {
+      const outro = await this.prisma.usuario.findFirst({
+        where: { cpf: cpfNorm, id: { not: id } },
+      });
+      if (outro) throw new ConflictException("Já existe um cadastro com este CPF");
+    }
+    if (data.email) {
+      const outro = await this.prisma.usuario.findFirst({
+        where: { email: data.email, id: { not: id } },
+      });
+      if (outro) throw new ConflictException("Já existe um cadastro com este e-mail");
+    }
+
     return this.prisma.usuario.update({
       where: { id },
-      data: { nome: data.nome, email: data.email, telefone: data.telefone },
+      data: {
+        nome: data.nome,
+        cpf: cpfNorm,
+        // e-mail vazio limpa o campo (o aluno cadastra o dele na ativação)
+        email: data.email !== undefined ? data.email || null : undefined,
+        telefone: data.telefone !== undefined ? data.telefone || null : undefined,
+        ativo: data.ativo,
+      },
     });
   }
 
