@@ -65,6 +65,8 @@ export class UsuariosService {
     return this.prisma.usuario.findMany({
       where: {
         tipoUsuario: "ALUNO",
+        // Esconde contas excluídas (anonimizadas) da gestão
+        NOT: { cpf: { startsWith: "REMOVIDO-" } },
         ...(busca
           ? {
               OR: [

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -22,6 +23,48 @@ export class AuthService {
     private jwtService: JwtService,
     private config: ConfigService,
   ) {}
+
+  /**
+   * Exclusão da própria conta (exigência da App Store / Google Play + LGPD).
+   * Anonimiza todos os dados pessoais e bloqueia o acesso, preservando os
+   * registros históricos do estúdio (financeiro/frequência) de forma anônima.
+   * Administradores não podem se autoexcluir (evita travar o estúdio).
+   */
+  async excluirMinhaConta(usuarioId: string) {
+    const u = await this.prisma.usuario.findUnique({ where: { id: usuarioId } });
+    if (!u) throw new NotFoundException('Conta não encontrada');
+    if (u.tipoUsuario === 'ADMIN') {
+      throw new ForbiddenException('Contas de administrador são gerenciadas pela equipe do estúdio');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Remove dados pessoais / acessos e conteúdos do usuário
+      await tx.refreshToken.deleteMany({ where: { usuarioId } });
+      await tx.primeiroAcesso.deleteMany({ where: { usuarioId } });
+      await tx.horarioFixo.deleteMany({ where: { usuarioId } });
+      await tx.creditoReposicao.deleteMany({ where: { usuarioId } });
+      await tx.registroCarga.deleteMany({ where: { OR: [{ alunoId: usuarioId }, { professorId: usuarioId }] } });
+      await tx.treino.deleteMany({ where: { OR: [{ alunoId: usuarioId }, { professorId: usuarioId }] } });
+      await tx.treinoDia.deleteMany({ where: { professorId: usuarioId } });
+
+      // Anonimiza o cadastro (mantém agendamentos/pagamentos como histórico anônimo)
+      await tx.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          nome: 'Conta removida',
+          cpf: `REMOVIDO-${usuarioId}`,
+          email: null,
+          telefone: null,
+          senhaHash: null,
+          fcmToken: null,
+          ativo: false,
+          modalidadeProfessorId: null,
+        },
+      });
+    });
+
+    return { mensagem: 'Sua conta foi excluída. Seus dados pessoais foram removidos.' };
+  }
 
   /** Dados do usuário logado (inclui a modalidade quando é professor). */
   async me(usuarioId: string) {

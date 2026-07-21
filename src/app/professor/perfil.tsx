@@ -6,16 +6,29 @@ import { TabBar } from '../../components/tab-bar';
 import { Avatar } from '../../components/ui/avatar';
 import { Card } from '../../components/ui/card';
 import { Icon, type IconName } from '../../components/ui/icon';
-import { ConfirmModal } from '../../components/ui/modal';
+import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { useMe } from '../../services/auth/auth.queries';
-import { useLogout } from '../../services/auth/auth.mutations';
+import { useLogout, useExcluirConta } from '../../services/auth/auth.mutations';
+import { ApiError } from '../../services/http';
 
-/** Perfil do professor: dados básicos, tema e sair. */
+/** Perfil do professor: dados básicos e sair. */
 export default function ProfessorPerfil() {
   const nome = useAuthStore((s) => s.nome);
   const me = useMe();
   const logout = useLogout();
+  const excluir = useExcluirConta();
   const [confirmarSaida, setConfirmarSaida] = useState(false);
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
+  const [erroExcluir, setErroExcluir] = useState<string | null>(null);
+
+  const excluirConta = () => {
+    excluir.mutate(undefined, {
+      onError: (e) => {
+        setConfirmarExclusao(false);
+        setErroExcluir(e instanceof ApiError ? e.message : 'Não foi possível excluir a conta.');
+      },
+    });
+  };
 
   const menu: { label: string; icon: IconName; onPress: () => void }[] = [];
 
@@ -59,6 +72,10 @@ export default function ProfessorPerfil() {
           <Icon name="log-out-outline" size={20} color={LC.danger} />
           <Text style={s.logoutText}>Sair da conta</Text>
         </Pressable>
+
+        <Pressable style={({ pressed }) => [s.excluir, pressed && s.pressed]} onPress={() => setConfirmarExclusao(true)}>
+          <Text style={s.excluirText}>Excluir minha conta</Text>
+        </Pressable>
       </ScrollView>
       <TabBar isProfessor />
 
@@ -71,6 +88,23 @@ export default function ProfessorPerfil() {
         loading={logout.isPending}
         onConfirm={() => logout.mutate()}
         onCancel={() => setConfirmarSaida(false)}
+      />
+      <ConfirmModal
+        visible={confirmarExclusao}
+        title="Excluir minha conta"
+        message="Esta ação é permanente. Seus dados pessoais (nome, CPF, e-mail, telefone) serão removidos e você perderá o acesso ao app. Deseja continuar?"
+        confirmLabel="Excluir conta"
+        cancelLabel="Cancelar"
+        destructive
+        loading={excluir.isPending}
+        onConfirm={excluirConta}
+        onCancel={() => setConfirmarExclusao(false)}
+      />
+      <InfoModal
+        visible={!!erroExcluir}
+        title="Não foi possível excluir"
+        message={erroExcluir ?? ''}
+        onClose={() => setErroExcluir(null)}
       />
     </View>
   );
@@ -99,5 +133,7 @@ const s = StyleSheet.create({
     paddingVertical: 15, borderRadius: LC.radius.lg, backgroundColor: LC.dangerBg,
   },
   logoutText: { fontSize: 15, fontWeight: '700', color: LC.danger },
+  excluir: { marginHorizontal: 16, marginTop: 14, alignItems: 'center', paddingVertical: 8 },
+  excluirText: { fontSize: 13, fontWeight: '600', color: LC.textMuted, textDecorationLine: 'underline' },
   pressed: { opacity: 0.7 },
 });

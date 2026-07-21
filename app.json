@@ -8,9 +8,12 @@
     "scheme": "studioapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.lifecompany.studio",
+      "supportsTablet": true
     },
     "android": {
+      "package": "com.lifecompany.studio",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

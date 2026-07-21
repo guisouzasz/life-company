@@ -44,6 +44,15 @@ export function useAtivarConta() {
   });
 }
 
+/** Exclui a conta no servidor e encerra a sessão local. */
+export function useExcluirConta() {
+  const logout = useAuthStore((s) => s.logout);
+  return useMutation({
+    mutationFn: () => authService.excluirConta(),
+    onSuccess: () => logout(),
+  });
+}
+
 export function useLogout() {
   const logout = useAuthStore((s) => s.logout);
   const refreshToken = useAuthStore((s) => s.refreshToken);

@@ -31,4 +31,10 @@ export const authService = {
   async logout(refreshToken: string): Promise<void> {
     await http.post('/auth/logout', { refreshToken });
   },
+
+  /** Exclui a própria conta (anonimiza os dados pessoais). */
+  async excluirConta(): Promise<{ mensagem: string }> {
+    const { data } = await http.delete<{ mensagem: string }>('/auth/me');
+    return data;
+  },
 };
