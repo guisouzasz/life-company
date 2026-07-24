@@ -72,8 +72,12 @@ export default function MeusTreinos() {
 
               {t.exercicios.map((e, i) => {
                 const evo = evolucaoDe(e.nome);
+                const grupoAnterior = i > 0 ? t.exercicios[i - 1].grupo : undefined;
+                const mostraGrupo = !!e.grupo && e.grupo !== grupoAnterior;
                 return (
-                  <View key={e.id} style={s.exLinha}>
+                  <View key={e.id}>
+                    {mostraGrupo ? <Text style={s.grupoHeader}>{e.grupo}</Text> : null}
+                  <View style={s.exLinha}>
                     <Text style={s.exOrdem}>{i + 1}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={s.exNome}>{e.nome}</Text>
@@ -95,6 +99,7 @@ export default function MeusTreinos() {
                     <Text style={s.exDetalhe}>
                       {e.series}x{e.repeticoes}{e.carga ? ` • ${e.carga}` : ''}
                     </Text>
+                  </View>
                   </View>
                 );
               })}
@@ -128,6 +133,10 @@ const s = StyleSheet.create({
   exOrdem: {
     width: 24, height: 24, borderRadius: 12, backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border,
     textAlign: 'center', lineHeight: 22, fontSize: 12, fontWeight: '800', color: LC.textSecondary, overflow: 'hidden',
+  },
+  grupoHeader: {
+    fontSize: 12, fontWeight: '800', color: LC.primary, textTransform: 'uppercase', letterSpacing: 0.5,
+    marginTop: 12, marginBottom: 2, paddingTop: 8, borderTopWidth: 1, borderTopColor: LC.border,
   },
   exNome: { fontSize: 14, fontWeight: '600', color: LC.textPrimary },
   exEvoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },

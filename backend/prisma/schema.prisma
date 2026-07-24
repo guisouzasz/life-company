@@ -140,6 +140,7 @@ model ExercicioTreino {
   id         String  @id @default(uuid())
   treinoId   String  @map("treino_id")
   ordem      Int     @default(0)
+  grupo      String? // grupo muscular: "Pernas", "Peitoral", "Costas"...
   nome       String
   series     Int     @default(3)
   repeticoes String  @default("12") // "12", "10-12", "até a falha"...

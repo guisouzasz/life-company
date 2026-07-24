@@ -1,6 +1,8 @@
 export interface ExercicioTreino {
   id: string;
   ordem: number;
+  /** Grupo muscular: "Pernas", "Peitoral"... (opcional). */
+  grupo?: string | null;
   nome: string;
   series: number;
   repeticoes: string;
@@ -27,6 +29,7 @@ export interface Treino {
 }
 
 export interface ExercicioPayload {
+  grupo?: string;
   nome: string;
   series?: number;
   repeticoes?: string;

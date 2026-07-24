@@ -80,6 +80,7 @@ export class TreinosService {
         exercicios: {
           create: (dto.exercicios ?? []).map((e, i) => ({
             ordem: i,
+            grupo: e.grupo?.trim() || null,
             nome: e.nome,
             series: e.series ?? 3,
             repeticoes: e.repeticoes ?? '12',
@@ -119,6 +120,7 @@ export class TreinosService {
           deleteMany: {},
           create: (dto.exercicios ?? []).map((e, i) => ({
             ordem: i,
+            grupo: e.grupo?.trim() || null,
             nome: e.nome,
             series: e.series ?? 3,
             repeticoes: e.repeticoes ?? '12',

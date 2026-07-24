@@ -12,6 +12,10 @@ import {
 } from 'class-validator';
 
 export class ExercicioDto {
+  /** Grupo muscular: "Pernas", "Peitoral"... (opcional). */
+  @IsOptional() @IsString()
+  grupo?: string;
+
   @IsString() @MinLength(2)
   nome: string;
 

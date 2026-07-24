@@ -24,7 +24,10 @@ interface ExercicioForm extends ExercicioPayload {
   seriesTexto: string;
 }
 
-const exercicioVazio = (): ExercicioForm => ({ nome: '', seriesTexto: '3', repeticoes: '12', carga: '', observacao: '' });
+/** Grupos musculares mais usados (chips de atalho no form). */
+const GRUPOS = ['Pernas', 'Peitoral', 'Costas', 'Ombro', 'Bíceps', 'Tríceps', 'Abdômen', 'Glúteos', 'Aeróbico'];
+
+const exercicioVazio = (grupo = ''): ExercicioForm => ({ grupo, nome: '', seriesTexto: '3', repeticoes: '12', carga: '', observacao: '' });
 
 /** 22.5 → "22,5" | 20 → "20" */
 const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
@@ -81,6 +84,7 @@ export default function TreinosAluno() {
     setExercicios(
       t.exercicios.length > 0
         ? t.exercicios.map((e) => ({
+            grupo: e.grupo ?? '',
             nome: e.nome,
             seriesTexto: String(e.series),
             repeticoes: e.repeticoes,
@@ -114,6 +118,7 @@ export default function TreinosAluno() {
         titulo: titulo.trim(),
         observacoes: observacoes.trim() || undefined,
         exercicios: validos.map((e) => ({
+          grupo: e.grupo?.trim() || undefined,
           nome: e.nome.trim(),
           series: Math.min(Math.max(parseInt(e.seriesTexto, 10) || 3, 1), 20),
           repeticoes: e.repeticoes?.trim() || '12',
@@ -216,6 +221,21 @@ export default function TreinosAluno() {
                   </Pressable>
                 ) : null}
               </View>
+              {/* Grupo muscular */}
+              <View style={s.grupoChips}>
+                {GRUPOS.map((g) => {
+                  const sel = (e.grupo ?? '') === g;
+                  return (
+                    <Pressable
+                      key={g}
+                      style={[s.grupoChip, sel && s.grupoChipSel]}
+                      onPress={() => setExercicio(i, 'grupo', sel ? '' : g)}
+                    >
+                      <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{g}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <Input placeholder="Nome (ex: Supino reto)" value={e.nome} onChangeText={(v) => setExercicio(i, 'nome', v)} />
               <View style={s.exRow}>
                 <View style={{ flex: 1 }}>
@@ -232,7 +252,10 @@ export default function TreinosAluno() {
             </Card>
           ))}
 
-          <Pressable style={s.addExBtn} onPress={() => setExercicios((atual) => [...atual, exercicioVazio()])}>
+          <Pressable
+            style={s.addExBtn}
+            onPress={() => setExercicios((atual) => [...atual, exercicioVazio(atual[atual.length - 1]?.grupo)])}
+          >
             <Icon name="add-circle-outline" size={18} color={LC.primary} />
             <Text style={s.addExText}>Adicionar exercício</Text>
           </Pressable>
@@ -295,11 +318,15 @@ export default function TreinosAluno() {
 
                 {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
 
-                {t.exercicios.map((e) => {
+                {t.exercicios.map((e, idx) => {
                   const evo = evolucaoDe(e.nome);
+                  // Cabeçalho do grupo muscular quando muda em relação ao anterior
+                  const grupoAnterior = idx > 0 ? t.exercicios[idx - 1].grupo : undefined;
+                  const mostraGrupo = !!e.grupo && e.grupo !== grupoAnterior;
                   return (
+                    <View key={e.id}>
+                      {mostraGrupo ? <Text style={s.grupoHeader}>{e.grupo}</Text> : null}
                     <Pressable
-                      key={e.id}
                       accessibilityRole="button"
                       onPress={() => setCargaDe({ nome: e.nome, reps: e.repeticoes })}
                       style={({ pressed }) => [s.exLinha, pressed && s.pressed]}
@@ -325,6 +352,7 @@ export default function TreinosAluno() {
                       </Text>
                       <Icon name="stats-chart-outline" size={15} color={LC.primary} />
                     </Pressable>
+                    </View>
                   );
                 })}
                 {t.observacoes ? <Text style={s.treinoObs}>{t.observacoes}</Text> : null}
@@ -386,6 +414,10 @@ const s = StyleSheet.create({
   acao: { width: 34, height: 34, borderRadius: 17, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
   exLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: LC.border },
   exNome: { fontSize: 14, fontWeight: '600', color: LC.textPrimary },
+  grupoHeader: {
+    fontSize: 12, fontWeight: '800', color: LC.primary, textTransform: 'uppercase', letterSpacing: 0.5,
+    marginTop: 12, marginBottom: 2, paddingTop: 8, borderTopWidth: 1, borderTopColor: LC.border,
+  },
   exEvoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   exEvoText: { fontSize: 11, fontWeight: '700', color: LC.textSecondary },
   exDetalhe: { fontSize: 13, fontWeight: '700', color: LC.primary },
@@ -397,6 +429,11 @@ const s = StyleSheet.create({
   conteudoInput: { minHeight: 220, textAlignVertical: 'top' },
   conteudoHint: { fontSize: 11, color: LC.textMuted, marginTop: 6, lineHeight: 16 },
   sectionTitle: { fontSize: 13, fontWeight: '800', color: LC.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 18, marginBottom: 10 },
+  grupoChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  grupoChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: LC.radius.full, backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border },
+  grupoChipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
+  grupoChipText: { fontSize: 12, fontWeight: '600', color: LC.textSecondary },
+  grupoChipTextSel: { color: LC.primary, fontWeight: '700' },
   exCard: { marginBottom: 12, gap: 10 },
   exHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   exNum: { fontSize: 12, fontWeight: '800', color: LC.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
