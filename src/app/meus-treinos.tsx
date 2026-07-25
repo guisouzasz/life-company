@@ -4,6 +4,7 @@ import { nomeModalidade } from '../constants/assets';
 import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
+import { Badge } from '../components/ui/badge';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
 import { useMeusTreinos, useMeuTreinoDia } from '../services/treinos/treinos.queries';
 import { useMinhasCargas } from '../services/cargas/cargas.queries';
@@ -11,6 +12,16 @@ import { formatDate } from '../services/date';
 
 /** 22.5 → "22,5" | 20 → "20" */
 const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
+
+/** Item da grade de metadados da ficha (ícone + texto). */
+function MetaItem({ icon, texto }: { icon: React.ComponentProps<typeof Icon>['name']; texto: string }) {
+  return (
+    <View style={s.metaItem}>
+      <Icon name={icon} size={14} color={LC.primary} />
+      <Text style={s.metaItemText}>{texto}</Text>
+    </View>
+  );
+}
 
 /** Treinos montados pelo professor para o aluno logado (somente leitura). */
 export default function MeusTreinos() {
@@ -60,13 +71,25 @@ export default function MeusTreinos() {
                   <Icon name="barbell-outline" size={20} color={LC.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.titulo}>{t.titulo}</Text>
+                  <View style={s.tituloRow}>
+                    <Text style={s.titulo}>{t.titulo}</Text>
+                    {t.concluido ? <Badge label="Concluída" variant="neutral" /> : null}
+                  </View>
                   <Text style={s.meta}>
                     {t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}
                     Prof. {t.professor.nome.split(' ')[0]} • atualizado {formatDate(t.updatedAt, 'DD/MM/YYYY')}
                   </Text>
                 </View>
               </View>
+
+              {(t.frequencia || t.pausaSeries || t.velocidade || t.vencimento) ? (
+                <View style={s.metaGrid}>
+                  {t.frequencia ? <MetaItem icon="repeat-outline" texto={t.frequencia} /> : null}
+                  {t.pausaSeries ? <MetaItem icon="timer-outline" texto={`Pausa ${t.pausaSeries}`} /> : null}
+                  {t.velocidade ? <MetaItem icon="speedometer-outline" texto={t.velocidade} /> : null}
+                  {t.vencimento ? <MetaItem icon="calendar-outline" texto={`Vence ${formatDate(t.vencimento, 'DD/MM/YYYY')}`} /> : null}
+                </View>
+              ) : null}
 
               {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
 
@@ -126,8 +149,16 @@ const s = StyleSheet.create({
   cardHoje: { borderWidth: 1.5, borderColor: LC.primary },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   iconWrap: { width: 42, height: 42, borderRadius: 21, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  tituloRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   titulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
   meta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  metaItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: LC.bg, borderRadius: LC.radius.full, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: LC.border,
+  },
+  metaItemText: { fontSize: 12, fontWeight: '600', color: LC.textSecondary },
   conteudoTexto: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, paddingTop: 6, borderTopWidth: 1, borderTopColor: LC.border },
   exLinha: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: LC.border },
   exOrdem: {

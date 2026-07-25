@@ -81,6 +81,12 @@ model Treino {
   // escritos como o professor preferir. Musculação usa exercicios[] + carga.
   conteudo     String?
   observacoes  String?
+  // Metadados da ficha (todos opcionais)
+  vencimento   DateTime? // até quando a ficha vale (renovar depois)
+  frequencia   String? // "2x por semana"
+  pausaSeries  String? // "45 segundos"
+  velocidade   String? // "Moderada"
+  concluido    Boolean  @default(false) // ficha arquivada (Concluída)
   ativo        Boolean  @default(true) // soft-delete
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")

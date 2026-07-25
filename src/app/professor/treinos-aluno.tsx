@@ -12,8 +12,9 @@ import { Avatar } from '../../components/ui/avatar';
 import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { CargaExercicioModal } from '../../components/professor/carga-exercicio-modal';
+import { Badge } from '../../components/ui/badge';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
-import { useCriarTreino, useAtualizarTreino, useRemoverTreino } from '../../services/treinos/treinos.mutations';
+import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino } from '../../services/treinos/treinos.mutations';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useMe } from '../../services/auth/auth.queries';
 import type { ExercicioPayload, Treino } from '../../services/treinos/treinos.types';
@@ -32,6 +33,25 @@ const exercicioVazio = (grupo = ''): ExercicioForm => ({ grupo, nome: '', series
 /** 22.5 → "22,5" | 20 → "20" */
 const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
 
+// ── Metadados da ficha (chips de atalho) ──────────────────────────────
+const FREQUENCIAS = ['1x', '2x', '3x', '4x', '5x', '6x']; // → "3x por semana"
+const DURACOES: { label: string; meses: number }[] = [
+  { label: 'Sem prazo', meses: 0 },
+  { label: '1 mês', meses: 1 },
+  { label: '2 meses', meses: 2 },
+  { label: '3 meses', meses: 3 },
+];
+const PAUSAS = ['30s', '45s', '60s', '90s'];
+const VELOCIDADES = ['Lenta', 'Moderada', 'Rápida'];
+
+/** Data de hoje + N meses no formato YYYY-MM-DD. */
+const emMeses = (n: number): string => {
+  const d = new Date();
+  d.setMonth(d.getMonth() + n);
+  const p = (x: number) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 /** Treinos de um aluno: lista + criação/edição (professor e admin). */
 export default function TreinosAluno() {
   const { id, nome } = useLocalSearchParams<{ id: string; nome?: string }>();
@@ -43,6 +63,7 @@ export default function TreinosAluno() {
   const criar = useCriarTreino();
   const atualizar = useAtualizarTreino();
   const remover = useRemoverTreino();
+  const definirStatus = useDefinirStatusTreino();
 
   // Musculação monta treino estruturado (séries/reps/carga + evolução);
   // Funcional e Pilates escrevem o treino em texto livre (blocos de tempo).
@@ -66,6 +87,11 @@ export default function TreinosAluno() {
   const [exercicios, setExercicios] = useState<ExercicioForm[]>([exercicioVazio()]);
   const [excluindo, setExcluindo] = useState<Treino | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // Metadados da ficha (opcionais)
+  const [frequencia, setFrequencia] = useState('');
+  const [vencimento, setVencimento] = useState(''); // YYYY-MM-DD
+  const [pausaSeries, setPausaSeries] = useState('');
+  const [velocidade, setVelocidade] = useState('');
 
   const abrirNovo = () => {
     setEditando(null);
@@ -73,6 +99,10 @@ export default function TreinosAluno() {
     setConteudo('');
     setObservacoes('');
     setExercicios([exercicioVazio()]);
+    setFrequencia('');
+    setVencimento('');
+    setPausaSeries('');
+    setVelocidade('');
     setFormAberto(true);
   };
 
@@ -81,6 +111,10 @@ export default function TreinosAluno() {
     setTitulo(t.titulo);
     setConteudo(t.conteudo ?? '');
     setObservacoes(t.observacoes ?? '');
+    setFrequencia(t.frequencia ?? '');
+    setVencimento(t.vencimento ? t.vencimento.slice(0, 10) : '');
+    setPausaSeries(t.pausaSeries ?? '');
+    setVelocidade(t.velocidade ?? '');
     setExercicios(
       t.exercicios.length > 0
         ? t.exercicios.map((e) => ({
@@ -106,6 +140,12 @@ export default function TreinosAluno() {
       setErro(formatoCarga ? 'Dê um nome ao treino (ex: Treino A — Superiores)' : 'Dê um nome ao treino (ex: Treino de terça)');
       return;
     }
+    const meta = {
+      frequencia: frequencia || undefined,
+      vencimento: vencimento || undefined,
+      pausaSeries: pausaSeries || undefined,
+      velocidade: velocidade || undefined,
+    };
     let payload;
     if (formatoCarga) {
       const validos = exercicios.filter((e) => e.nome.trim().length >= 2);
@@ -117,6 +157,7 @@ export default function TreinosAluno() {
         alunoId,
         titulo: titulo.trim(),
         observacoes: observacoes.trim() || undefined,
+        ...meta,
         exercicios: validos.map((e) => ({
           grupo: e.grupo?.trim() || undefined,
           nome: e.nome.trim(),
@@ -136,6 +177,7 @@ export default function TreinosAluno() {
         titulo: titulo.trim(),
         conteudo: conteudo.trim(),
         observacoes: observacoes.trim() || undefined,
+        ...meta,
         exercicios: [],
       };
     }
@@ -143,6 +185,22 @@ export default function TreinosAluno() {
     const onError = (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar.');
     if (editando) atualizar.mutate({ id: editando.id, payload }, { onSuccess, onError });
     else criar.mutate(payload, { onSuccess, onError });
+  };
+
+  const alternarStatus = (t: Treino) => {
+    definirStatus.mutate(
+      { id: t.id, concluido: !t.concluido },
+      { onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível atualizar o status.') },
+    );
+  };
+
+  /** Linha compacta com os metadados preenchidos da ficha. */
+  const metaResumo = (t: Treino): string => {
+    const partes: string[] = [];
+    if (t.frequencia) partes.push(t.frequencia);
+    if (t.pausaSeries) partes.push(`pausa ${t.pausaSeries}`);
+    if (t.velocidade) partes.push(t.velocidade);
+    return partes.join(' • ');
   };
 
   const confirmarExclusao = () => {
@@ -207,6 +265,60 @@ export default function TreinosAluno() {
             onChangeText={setObservacoes}
             multiline
           />
+
+          {/* Detalhes da ficha (opcionais) — frequência, validade, pausa, execução */}
+          <Text style={s.sectionTitle}>Detalhes da ficha (opcional)</Text>
+
+          <Text style={s.metaLabel}>Frequência</Text>
+          <View style={s.grupoChips}>
+            {FREQUENCIAS.map((f) => {
+              const val = `${f} por semana`;
+              const sel = frequencia === val;
+              return (
+                <Pressable key={f} style={[s.grupoChip, sel && s.grupoChipSel]} onPress={() => setFrequencia(sel ? '' : val)}>
+                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{f}/sem</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={s.metaLabel}>Validade da ficha</Text>
+          <View style={s.grupoChips}>
+            {DURACOES.map((d) => {
+              const alvo = d.meses === 0 ? '' : emMeses(d.meses);
+              const sel = vencimento === alvo;
+              return (
+                <Pressable key={d.label} style={[s.grupoChip, sel && s.grupoChipSel]} onPress={() => setVencimento(alvo)}>
+                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{d.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {vencimento ? <Text style={s.metaHint}>Vence em {formatDate(vencimento, 'DD/MM/YYYY')}</Text> : null}
+
+          <Text style={s.metaLabel}>Pausa entre séries</Text>
+          <View style={s.grupoChips}>
+            {PAUSAS.map((p) => {
+              const sel = pausaSeries === p;
+              return (
+                <Pressable key={p} style={[s.grupoChip, sel && s.grupoChipSel]} onPress={() => setPausaSeries(sel ? '' : p)}>
+                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{p}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={s.metaLabel}>Velocidade de execução</Text>
+          <View style={s.grupoChips}>
+            {VELOCIDADES.map((v) => {
+              const sel = velocidade === v;
+              return (
+                <Pressable key={v} style={[s.grupoChip, sel && s.grupoChipSel]} onPress={() => setVelocidade(sel ? '' : v)}>
+                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{v}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
           {formatoCarga ? (
             <>
@@ -297,10 +409,13 @@ export default function TreinosAluno() {
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
           {treinos.data && treinos.data.length > 0 ? (
             treinos.data.map((t) => (
-              <Card key={t.id} style={s.treinoCard} padding={16}>
+              <Card key={t.id} style={[s.treinoCard, t.concluido && s.treinoCardConcluido]} padding={16}>
                 <View style={s.treinoHead}>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.treinoTitulo}>{t.titulo}</Text>
+                    <View style={s.tituloRow}>
+                      <Text style={s.treinoTitulo}>{t.titulo}</Text>
+                      <Badge label={t.concluido ? 'Concluída' : 'Ativa'} variant={t.concluido ? 'neutral' : 'success'} />
+                    </View>
                     <Text style={s.treinoMeta}>
                       {t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}
                       {t.conteudo
@@ -308,6 +423,13 @@ export default function TreinosAluno() {
                         : `${t.exercicios.length} ${t.exercicios.length === 1 ? 'exercício' : 'exercícios'} • atualizado ${formatDate(t.updatedAt, 'DD/MM')}`}
                     </Text>
                   </View>
+                  <Pressable
+                    style={[s.acao, { backgroundColor: t.concluido ? LC.primaryLight : LC.successBg }]}
+                    hitSlop={4}
+                    onPress={() => alternarStatus(t)}
+                  >
+                    <Icon name={t.concluido ? 'refresh-outline' : 'checkmark-done-outline'} size={17} color={t.concluido ? LC.primary : LC.success} />
+                  </Pressable>
                   <Pressable style={s.acao} hitSlop={4} onPress={() => abrirEdicao(t)}>
                     <Icon name="create-outline" size={17} color={LC.primary} />
                   </Pressable>
@@ -315,6 +437,17 @@ export default function TreinosAluno() {
                     <Icon name="trash-outline" size={17} color={LC.danger} />
                   </Pressable>
                 </View>
+
+                {(metaResumo(t) || t.vencimento) ? (
+                  <View style={s.metaChips}>
+                    {metaResumo(t) ? <Text style={s.metaChipText}>{metaResumo(t)}</Text> : null}
+                    {t.vencimento ? (
+                      <Text style={s.metaChipText}>
+                        {metaResumo(t) ? '• ' : ''}vence {formatDate(t.vencimento, 'DD/MM/YYYY')}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
 
                 {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
 
@@ -408,9 +541,13 @@ const s = StyleSheet.create({
 
   // Lista
   treinoCard: { marginBottom: 12 },
-  treinoHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  treinoCardConcluido: { opacity: 0.7 },
+  treinoHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
+  tituloRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   treinoTitulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
   treinoMeta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  metaChipText: { fontSize: 12, fontWeight: '600', color: LC.textSecondary },
   acao: { width: 34, height: 34, borderRadius: 17, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
   exLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: LC.border },
   exNome: { fontSize: 14, fontWeight: '600', color: LC.textPrimary },
@@ -429,6 +566,8 @@ const s = StyleSheet.create({
   conteudoInput: { minHeight: 220, textAlignVertical: 'top' },
   conteudoHint: { fontSize: 11, color: LC.textMuted, marginTop: 6, lineHeight: 16 },
   sectionTitle: { fontSize: 13, fontWeight: '800', color: LC.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 18, marginBottom: 10 },
+  metaLabel: { fontSize: 13, fontWeight: '700', color: LC.textSecondary, marginTop: 12, marginBottom: 8 },
+  metaHint: { fontSize: 12, color: LC.textMuted, marginTop: 6 },
   grupoChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   grupoChip: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: LC.radius.full, backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border },
   grupoChipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { TreinosService } from './treinos.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
@@ -55,6 +55,11 @@ export class TreinosController {
   @Put(':id') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Editar treino (substitui exercícios)' })
   atualizar(@Request() req, @Param('id') id: string, @Body() dto: SalvarTreinoDto) {
     return this.service.atualizar(id, dto, req.user);
+  }
+
+  @Patch(':id/status') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Concluir/reativar a ficha (professor/admin)' })
+  definirStatus(@Request() req, @Param('id') id: string, @Body('concluido') concluido: boolean) {
+    return this.service.definirStatus(id, !!concluido, req.user);
   }
 
   @Delete(':id') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Remover treino (professor/admin)' })

@@ -32,6 +32,15 @@ export function useRemoverTreino() {
   });
 }
 
+export function useDefinirStatusTreino() {
+  const invalidar = useInvalidarTreinos();
+  return useMutation({
+    mutationFn: ({ id, concluido }: { id: string; concluido: boolean }) =>
+      treinosService.definirStatus(id, concluido),
+    onSuccess: invalidar,
+  });
+}
+
 /** Salva (upsert) o treino do dia da modalidade do professor. */
 export function useSalvarTreinoDia() {
   const invalidar = useInvalidarTreinos();

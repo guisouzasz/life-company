@@ -41,7 +41,7 @@ export class TreinosService {
     return this.prisma.treino.findMany({
       where: { alunoId, ativo: true },
       include: this.incluir,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ concluido: 'asc' }, { updatedAt: 'desc' }],
     });
   }
 
@@ -51,8 +51,18 @@ export class TreinosService {
     return this.prisma.treino.findMany({
       where: { alunoId, ativo: true, ...(modalidadeId ? { modalidadeId } : {}) },
       include: this.incluir,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ concluido: 'asc' }, { updatedAt: 'desc' }],
     });
+  }
+
+  /** Metadados opcionais da ficha (vencimento, frequência, pausa, velocidade). */
+  private metaDados(dto: SalvarTreinoDto) {
+    return {
+      vencimento: dto.vencimento ? new Date(dto.vencimento + 'T00:00:00') : null,
+      frequencia: dto.frequencia?.trim() || null,
+      pausaSeries: dto.pausaSeries?.trim() || null,
+      velocidade: dto.velocidade?.trim() || null,
+    };
   }
 
   /** Treino de Musculação usa exercicios[]; Funcional/Pilates usa texto livre. */
@@ -77,6 +87,7 @@ export class TreinosService {
         titulo: dto.titulo,
         conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
+        ...this.metaDados(dto),
         exercicios: {
           create: (dto.exercicios ?? []).map((e, i) => ({
             ordem: i,
@@ -116,6 +127,7 @@ export class TreinosService {
         titulo: dto.titulo,
         conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
+        ...this.metaDados(dto),
         exercicios: {
           deleteMany: {},
           create: (dto.exercicios ?? []).map((e, i) => ({
@@ -131,6 +143,12 @@ export class TreinosService {
       },
       include: this.incluir,
     });
+  }
+
+  /** Marca a ficha como concluída (arquivada) ou reativa. */
+  async definirStatus(id: string, concluido: boolean, solicitante: Solicitante) {
+    await this.buscarComPermissao(id, solicitante);
+    return this.prisma.treino.update({ where: { id }, data: { concluido }, include: this.incluir });
   }
 
   async remover(id: string, solicitante: Solicitante) {

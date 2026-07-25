@@ -50,4 +50,10 @@ export const treinosService = {
     const { data } = await http.delete<{ mensagem: string }>(`/treinos/${id}`);
     return data;
   },
+
+  /** Concluir (arquivar) ou reativar a ficha. */
+  async definirStatus(id: string, concluido: boolean): Promise<Treino> {
+    const { data } = await http.patch<Treino>(`/treinos/${id}/status`, { concluido });
+    return data;
+  },
 };

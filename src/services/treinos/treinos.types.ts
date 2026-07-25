@@ -18,6 +18,12 @@ export interface Treino {
   /** Treino em texto livre (Funcional/Pilates); Musculação usa exercicios[]. */
   conteudo?: string | null;
   observacoes?: string | null;
+  // Metadados da ficha (opcionais)
+  vencimento?: string | null;
+  frequencia?: string | null;
+  pausaSeries?: string | null;
+  velocidade?: string | null;
+  concluido: boolean;
   ativo: boolean;
   createdAt: string;
   updatedAt: string;
@@ -61,5 +67,10 @@ export interface SalvarTreinoPayload {
   /** Texto livre (Funcional/Pilates). Exige conteudo OU exercicios. */
   conteudo?: string;
   observacoes?: string;
+  /** Metadados da ficha (opcionais). */
+  vencimento?: string; // YYYY-MM-DD
+  frequencia?: string;
+  pausaSeries?: string;
+  velocidade?: string;
   exercicios?: ExercicioPayload[];
 }

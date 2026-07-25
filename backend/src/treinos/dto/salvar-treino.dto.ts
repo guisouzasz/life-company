@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MinLength,
@@ -45,6 +46,20 @@ export class SalvarTreinoDto {
 
   @IsOptional() @IsString()
   observacoes?: string;
+
+  // ── Metadados da ficha (opcionais) ─────────────────────────────────
+  /** Vencimento em YYYY-MM-DD (ou vazio para sem prazo). */
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'vencimento deve ser YYYY-MM-DD' })
+  vencimento?: string;
+
+  @IsOptional() @IsString()
+  frequencia?: string;
+
+  @IsOptional() @IsString()
+  pausaSeries?: string;
+
+  @IsOptional() @IsString()
+  velocidade?: string;
 
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => ExercicioDto)
   exercicios?: ExercicioDto[];
