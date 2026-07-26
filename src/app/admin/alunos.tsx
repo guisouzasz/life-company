@@ -168,25 +168,26 @@ export default function AdminAlunos() {
                       <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
                     </View>
                     <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
-                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => abrirEdicao(aluno)}>
-                        <Icon name="create-outline" size={17} color={LC.primary} />
+                      <Pressable style={s.tAcao} onPress={() => abrirEdicao(aluno)} accessibilityLabel="Editar dados do aluno">
+                        <Icon name="create-outline" size={15} color={LC.primary} />
+                        <Text style={s.tAcaoText}>Editar</Text>
                       </Pressable>
-                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => setPlanoHorarioAluno(aluno)}>
-                        <Icon name="calendar-outline" size={17} color={LC.primary} />
+                      <Pressable style={s.tAcao} onPress={() => setPlanoHorarioAluno(aluno)} accessibilityLabel="Plano e horário fixo">
+                        <Icon name="calendar-outline" size={15} color={LC.primary} />
+                        <Text style={s.tAcaoText}>Plano</Text>
                       </Pressable>
-                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => setCreditosAluno(aluno)}>
-                        <Icon name="ticket-outline" size={17} color={LC.primary} />
+                      <Pressable style={s.tAcao} onPress={() => setCreditosAluno(aluno)} accessibilityLabel="Créditos de reposição">
+                        <Icon name="ticket-outline" size={15} color={LC.primary} />
+                        <Text style={s.tAcaoText}>Créditos</Text>
                       </Pressable>
-                      <Pressable style={s.tAcao} hitSlop={4} onPress={() => gerar(aluno.id)}>
-                        <Icon name="link-outline" size={17} color={LC.primary} />
+                      <Pressable style={s.tAcao} onPress={() => gerar(aluno.id)} accessibilityLabel="Gerar link de acesso">
+                        <Icon name="link-outline" size={15} color={LC.primary} />
+                        <Text style={s.tAcaoText}>Link</Text>
                       </Pressable>
                     </View>
                   </View>
                 );
               })}
-              <View style={s.tLegenda}>
-                <Text style={s.tLegendaText}>Ações: editar dados • plano e horário fixo • créditos • gerar link de acesso</Text>
-              </View>
             </Card>
           ) : (
             <EmptyState icon="people-outline" title="Nenhum aluno encontrado" description={busca ? 'Tente outra busca.' : 'Cadastre o primeiro aluno.'} />
@@ -362,13 +363,15 @@ const s = StyleSheet.create({
   tColEmail: { flex: 3 },
   tColPlano: { flex: 2 },
   tColStatus: { flex: 1.2 },
-  tColAcoes: { flex: 2 },
+  tColAcoes: { flex: 2.8 },
   tNomeWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   tNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
   tCpf: { fontSize: 11, color: LC.textMuted, marginTop: 1 },
   tTexto: { fontSize: 13, color: LC.textSecondary },
-  tAcoes: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
-  tAcao: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  tLegenda: { paddingHorizontal: 16, paddingVertical: 10 },
-  tLegendaText: { fontSize: 11, color: LC.textMuted },
+  tAcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
+  tAcao: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: LC.radius.full, backgroundColor: LC.primaryLight,
+  },
+  tAcaoText: { fontSize: 12, fontWeight: '700', color: LC.primary },
 });
