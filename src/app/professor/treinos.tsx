@@ -234,18 +234,18 @@ export default function ProfessorTreinos() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
   buscaWrap: { paddingHorizontal: 16, paddingBottom: 6 },
-  scroll: { padding: 16, paddingTop: 8 },
+  scroll: { ...LC.coluna, padding: 16, paddingTop: 8 },
   pressed: { opacity: 0.85 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   nome: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
   plano: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
 
   // ── Treino do dia ───────────────────────────────────────────────
-  daysScroll: { flexGrow: 0 },
+  daysScroll: { flexGrow: 0, ...LC.coluna },
   daysRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 4, alignItems: 'flex-start' },
   dayBtn: {
     alignItems: 'center', height: 68, justifyContent: 'center', paddingHorizontal: 12,

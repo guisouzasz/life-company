@@ -102,10 +102,10 @@ export default function ProfessorAgenda() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
-  daysScroll: { flexGrow: 0 },
+  daysScroll: { flexGrow: 0, ...LC.coluna },
   daysRow: { paddingHorizontal: 16, gap: 8, paddingVertical: 4, alignItems: 'flex-start' },
   dayBtn: {
     alignItems: 'center', height: 68, justifyContent: 'center', paddingHorizontal: 12,
@@ -116,7 +116,7 @@ const s = StyleSheet.create({
   dayNum: { fontSize: 17, fontWeight: '800', color: LC.textPrimary },
   daySelText: { color: '#fff' },
   list: { flex: 1, marginTop: 6 },
-  listContent: { paddingHorizontal: 16, paddingTop: 6 },
+  listContent: { ...LC.coluna, paddingHorizontal: 16, paddingTop: 6 },
   pressed: { opacity: 0.85 },
   aulaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   aulaIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },

@@ -145,8 +145,8 @@ export default function Perfil() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  scroll: { paddingBottom: 20 },
-  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 4 },
+  scroll: { ...LC.coluna, paddingBottom: 20 },
+  header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 4 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   avatarSection: { alignItems: 'center', paddingVertical: 20 },
   editBadge: {

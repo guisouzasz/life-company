@@ -148,7 +148,7 @@ function DetailRow({ label, value, status, last }: { label: string; value: strin
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  scroll: { padding: 16, paddingBottom: 24 },
+  scroll: { ...LC.coluna, padding: 16, paddingBottom: 24 },
   planCard: { borderRadius: LC.radius.xl, padding: 20, marginBottom: 14 },
   planTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 18 },
   planNome: { fontSize: 22, fontWeight: '800', color: '#fff' },

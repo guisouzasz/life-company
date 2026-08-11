@@ -101,10 +101,10 @@ export default function Historico() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
-  scroll: { padding: 16, paddingBottom: 16 },
+  scroll: { ...LC.coluna, padding: 16, paddingBottom: 16 },
   group: { marginBottom: 8 },
   groupTitle: { fontSize: 13, fontWeight: '700', color: LC.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, marginLeft: 4 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },

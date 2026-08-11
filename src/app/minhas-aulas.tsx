@@ -136,10 +136,10 @@ export default function MinhasAulas() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
-  scroll: { padding: 16, paddingBottom: 16 },
+  scroll: { ...LC.coluna, padding: 16, paddingBottom: 16 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10 },
   dateBubble: { width: 52, height: 52, borderRadius: 14, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
   dateNum: { fontSize: 18, fontWeight: '800', color: LC.primary, lineHeight: 20 },

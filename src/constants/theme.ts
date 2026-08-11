@@ -88,6 +88,14 @@ export const LC = {
 
   // ── Spacing ───────────────────────────────────────────────────────
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
+
+  // ── Coluna central ────────────────────────────────────────────────
+  /**
+   * Limita a largura do conteúdo e centraliza. No celular ocupa a tela toda
+   * (width 100%); no navegador evita que cards e botões estiquem demais.
+   * Espalhe no `header` e no `scroll` de cada tela: `...LC.coluna`.
+   */
+  coluna: { alignSelf: 'center', width: '100%', maxWidth: 560 },
 } as const;
 
 // ─── Legacy compat ────────────────────────────────────────────────────────────

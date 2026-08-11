@@ -39,6 +39,7 @@ export function Header({ title, subtitle, showBack, rightIcon, onRightPress, rig
 
 const styles = StyleSheet.create({
   row: {
+    ...LC.coluna,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

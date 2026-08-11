@@ -231,8 +231,8 @@ function Stat({ value, label }: { value: string; label: string }) {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  scroll: { paddingBottom: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
+  scroll: { ...LC.coluna, paddingBottom: 16 },
+  header: { ...LC.coluna, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
   greeting: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   greetingSub: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
   bell: {

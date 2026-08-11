@@ -120,7 +120,7 @@ export default function Notificacoes() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  scroll: { padding: 16, paddingBottom: 24 },
+  scroll: { ...LC.coluna, padding: 16, paddingBottom: 24 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   iconWrap: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   info: { flex: 1 },

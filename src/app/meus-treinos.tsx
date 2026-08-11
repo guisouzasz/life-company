@@ -144,7 +144,7 @@ export default function MeusTreinos() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  scroll: { padding: 16, paddingBottom: 24 },
+  scroll: { ...LC.coluna, padding: 16, paddingBottom: 24 },
   card: { marginBottom: 12 },
   cardHoje: { borderWidth: 1.5, borderColor: LC.primary },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },

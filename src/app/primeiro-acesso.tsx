@@ -240,7 +240,11 @@ export default function PrimeiroAcesso() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 56, paddingBottom: 32 },
+  // maxWidth centraliza a coluna no desktop em vez de esticar a tela toda.
+  scroll: {
+    flexGrow: 1, alignSelf: 'center', width: '100%', maxWidth: 480,
+    paddingHorizontal: 24, paddingTop: 56, paddingBottom: 32,
+  },
   back: { width: 40, height: 40, justifyContent: 'center' },
   header: { alignItems: 'center', marginTop: 8, marginBottom: 24 },
   shield: {

@@ -43,6 +43,7 @@ export function TabBar({ isAdmin = false, isProfessor = false }: { isAdmin?: boo
 
   return (
     <View style={s.bar}>
+      <View style={s.barInner}>
       {tabs.map((tab) => {
         const active = tab.activeRoutes.some((r) => pathname === r || pathname.startsWith(r + '/'));
         return (
@@ -62,13 +63,15 @@ export function TabBar({ isAdmin = false, isProfessor = false }: { isAdmin?: boo
           </Pressable>
         );
       })}
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
+  // A barra branca ocupa a largura toda; só os itens ficam na coluna central.
+  barInner: { flexDirection: 'row', ...LC.coluna },
   bar: {
-    flexDirection: 'row',
     backgroundColor: LC.bgCard,
     borderTopWidth: 1,
     borderTopColor: LC.border,

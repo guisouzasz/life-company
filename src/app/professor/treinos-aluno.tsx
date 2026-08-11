@@ -529,7 +529,7 @@ export default function TreinosAluno() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
-  header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backBtn: {
     width: 38, height: 38, borderRadius: 19, backgroundColor: LC.bgCard,
@@ -537,7 +537,7 @@ const s = StyleSheet.create({
   },
   title: { fontSize: 20, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 13, color: LC.textSecondary, marginTop: 2 },
-  scroll: { padding: 16, paddingTop: 8 },
+  scroll: { ...LC.coluna, padding: 16, paddingTop: 8 },
 
   // Lista
   treinoCard: { marginBottom: 12 },
