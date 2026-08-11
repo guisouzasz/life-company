@@ -19,12 +19,13 @@ function RootNavigator() {
   }, [hydrate]);
 
   // Só redireciona quando NECESSÁRIO — assim o F5/deep-link preserva a rota:
-  //  - deslogado em rota protegida → login;
-  //  - logado em rota pública (login/primeiro acesso) → home do papel;
+  //  - deslogado em rota protegida → boas-vindas;
+  //  - logado em rota pública (boas-vindas/login/primeiro acesso) → home do papel;
   //  - logado em área de OUTRO papel (ex: aluno em /admin) → home do papel.
   useEffect(() => {
     if (isLoading) return;
-    const rotaPublica = pathname === '/' || pathname.startsWith('/primeiro-acesso');
+    const rotaPublica =
+      pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/primeiro-acesso');
 
     if (!isAuthenticated) {
       if (!rotaPublica) router.replace('/');
