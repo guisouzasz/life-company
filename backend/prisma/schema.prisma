@@ -65,9 +65,36 @@ model Usuario {
   cargasRecebidas   RegistroCarga[] @relation("CargasDoAluno")
   cargasRegistradas RegistroCarga[] @relation("CargasDoProfessor")
   treinosDia        TreinoDia[] @relation("TreinosDiaDoProfessor")
+  anamnese          Anamnese?
   modalidadeProfessor Modalidade? @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
 
   @@map("usuarios")
+}
+
+/// Ficha de anamnese do aluno: uma por pessoa, preenchida por ela mesma no
+/// primeiro acesso (ou depois, pelo perfil) e lida por professor e admin.
+model Anamnese {
+  id        String @id @default(uuid())
+  usuarioId String @unique @map("usuario_id")
+
+  objetivo         String? // Emagrecimento, Hipertrofia, Condicionamento...
+  nivelAtividade   String? // Sedentário, Já treinei, Treino regularmente
+  problemasSaude   String? // hipertensão, diabetes, cardíaco... (texto livre)
+  lesoes           String? // lesões e cirurgias
+  dores            String? // dores articulares / coluna
+  medicamentos     String?
+  alergias         String?
+  gestante         Boolean @default(false)
+  fumante          Boolean @default(false)
+  liberacaoMedica  Boolean @default(false) // tem atestado/liberação médica
+  observacoes      String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@map("anamneses")
 }
 
 // Treino montado pelo professor para um aluno (área do professor).

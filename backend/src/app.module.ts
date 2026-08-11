@@ -16,6 +16,7 @@ import { AutoAgendamentoModule } from './auto-agendamento/auto-agendamento.modul
 import { FinanceiroModule } from './financeiro/financeiro.module';
 import { TreinosModule } from './treinos/treinos.module';
 import { CargasModule } from './cargas/cargas.module';
+import { AnamneseModule } from './anamnese/anamnese.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { CargasModule } from './cargas/cargas.module';
     FinanceiroModule,
     TreinosModule,
     CargasModule,
+    AnamneseModule,
   ],
 })
 export class AppModule {}
