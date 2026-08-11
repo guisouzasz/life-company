@@ -25,10 +25,38 @@ interface ExercicioForm extends ExercicioPayload {
   seriesTexto: string;
 }
 
+/** Bloco de exercícios de um mesmo grupo muscular, como na ficha impressa. */
+interface Secao {
+  grupo: string;
+  itens: ExercicioForm[];
+}
+
 /** Grupos musculares mais usados (chips de atalho no form). */
 const GRUPOS = ['Pernas', 'Peitoral', 'Costas', 'Ombro', 'Bíceps', 'Tríceps', 'Abdômen', 'Glúteos', 'Aeróbico'];
 
-const exercicioVazio = (grupo = ''): ExercicioForm => ({ grupo, nome: '', seriesTexto: '3', repeticoes: '12', carga: '', observacao: '' });
+const exercicioVazio = (): ExercicioForm => ({ nome: '', seriesTexto: '3', repeticoes: '12', carga: '', observacao: '' });
+const secaoVazia = (grupo = ''): Secao => ({ grupo, itens: [exercicioVazio()] });
+
+/** Monta as seções a partir dos exercícios salvos, na ordem em que cada grupo aparece. */
+function agrupar(exercicios: Treino['exercicios']): Secao[] {
+  const secoes: Secao[] = [];
+  for (const e of exercicios) {
+    const grupo = e.grupo ?? '';
+    let secao = secoes.find((s) => s.grupo === grupo);
+    if (!secao) {
+      secao = { grupo, itens: [] };
+      secoes.push(secao);
+    }
+    secao.itens.push({
+      nome: e.nome,
+      seriesTexto: String(e.series),
+      repeticoes: e.repeticoes,
+      carga: e.carga ?? '',
+      observacao: e.observacao ?? '',
+    });
+  }
+  return secoes.length > 0 ? secoes : [secaoVazia()];
+}
 
 /** 22.5 → "22,5" | 20 → "20" */
 const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
@@ -84,7 +112,7 @@ export default function TreinosAluno() {
   const [titulo, setTitulo] = useState('');
   const [conteudo, setConteudo] = useState('');
   const [observacoes, setObservacoes] = useState('');
-  const [exercicios, setExercicios] = useState<ExercicioForm[]>([exercicioVazio()]);
+  const [secoes, setSecoes] = useState<Secao[]>([secaoVazia()]);
   const [excluindo, setExcluindo] = useState<Treino | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   // Metadados da ficha (opcionais)
@@ -98,7 +126,7 @@ export default function TreinosAluno() {
     setTitulo('');
     setConteudo('');
     setObservacoes('');
-    setExercicios([exercicioVazio()]);
+    setSecoes([secaoVazia()]);
     setFrequencia('');
     setVencimento('');
     setPausaSeries('');
@@ -115,24 +143,29 @@ export default function TreinosAluno() {
     setVencimento(t.vencimento ? t.vencimento.slice(0, 10) : '');
     setPausaSeries(t.pausaSeries ?? '');
     setVelocidade(t.velocidade ?? '');
-    setExercicios(
-      t.exercicios.length > 0
-        ? t.exercicios.map((e) => ({
-            grupo: e.grupo ?? '',
-            nome: e.nome,
-            seriesTexto: String(e.series),
-            repeticoes: e.repeticoes,
-            carga: e.carga ?? '',
-            observacao: e.observacao ?? '',
-          }))
-        : [exercicioVazio()],
-    );
+    setSecoes(agrupar(t.exercicios));
     setFormAberto(true);
   };
 
-  const setExercicio = (i: number, campo: keyof ExercicioForm, valor: string) => {
-    setExercicios((atual) => atual.map((e, idx) => (idx === i ? { ...e, [campo]: valor } : e)));
-  };
+  // ── Edição das seções (grupo muscular → exercícios) ─────────────────
+  const setItem = (si: number, ii: number, campo: keyof ExercicioForm, valor: string) =>
+    setSecoes((atual) =>
+      atual.map((s, i) =>
+        i !== si ? s : { ...s, itens: s.itens.map((e, j) => (j === ii ? { ...e, [campo]: valor } : e)) },
+      ),
+    );
+
+  const addItem = (si: number) =>
+    setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, itens: [...s.itens, exercicioVazio()] } : s)));
+
+  const removeItem = (si: number, ii: number) =>
+    setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, itens: s.itens.filter((_, j) => j !== ii) } : s)));
+
+  const setGrupo = (si: number, grupo: string) =>
+    setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, grupo } : s)));
+
+  const addSecao = () => setSecoes((atual) => [...atual, secaoVazia()]);
+  const removeSecao = (si: number) => setSecoes((atual) => atual.filter((_, i) => i !== si));
 
   const salvar = () => {
     if (!alunoId) return;
@@ -148,7 +181,19 @@ export default function TreinosAluno() {
     };
     let payload;
     if (formatoCarga) {
-      const validos = exercicios.filter((e) => e.nome.trim().length >= 2);
+      // Achata as seções na ordem da tela: a ficha sai agrupada por músculo.
+      const validos = secoes.flatMap((s) =>
+        s.itens
+          .filter((e) => e.nome.trim().length >= 2)
+          .map((e) => ({
+            grupo: s.grupo || undefined,
+            nome: e.nome.trim(),
+            series: Math.min(Math.max(parseInt(e.seriesTexto, 10) || 3, 1), 20),
+            repeticoes: e.repeticoes?.trim() || '12',
+            carga: e.carga?.trim() || undefined,
+            observacao: e.observacao?.trim() || undefined,
+          })),
+      );
       if (validos.length === 0) {
         setErro('Adicione pelo menos um exercício com nome');
         return;
@@ -158,14 +203,7 @@ export default function TreinosAluno() {
         titulo: titulo.trim(),
         observacoes: observacoes.trim() || undefined,
         ...meta,
-        exercicios: validos.map((e) => ({
-          grupo: e.grupo?.trim() || undefined,
-          nome: e.nome.trim(),
-          series: Math.min(Math.max(parseInt(e.seriesTexto, 10) || 3, 1), 20),
-          repeticoes: e.repeticoes?.trim() || '12',
-          carga: e.carga?.trim() || undefined,
-          observacao: e.observacao?.trim() || undefined,
-        })),
+        exercicios: validos,
       };
     } else {
       if (conteudo.trim().length < 3) {
@@ -322,54 +360,78 @@ export default function TreinosAluno() {
 
           {formatoCarga ? (
             <>
-          <Text style={s.sectionTitle}>Exercícios</Text>
-          {exercicios.map((e, i) => (
-            <Card key={i} style={s.exCard} padding={14} bordered>
-              <View style={s.exHead}>
-                <Text style={s.exNum}>{i + 1}º exercício</Text>
-                {exercicios.length > 1 ? (
-                  <Pressable hitSlop={6} onPress={() => setExercicios((atual) => atual.filter((_, idx) => idx !== i))}>
+          <Text style={s.sectionTitle}>Exercícios por grupo muscular</Text>
+
+          {secoes.map((secao, si) => (
+            <View key={si} style={s.secao}>
+              {/* Cabeçalho do grupo: nome escolhido ou os chips para escolher */}
+              <View style={s.secaoHead}>
+                {secao.grupo ? (
+                  <>
+                    <Text style={s.secaoTitulo}>{secao.grupo}</Text>
+                    <Pressable hitSlop={6} onPress={() => setGrupo(si, '')}>
+                      <Text style={s.secaoTrocar}>trocar</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Text style={s.secaoTituloVazio}>Escolha o grupo muscular</Text>
+                )}
+                <View style={{ flex: 1 }} />
+                {secoes.length > 1 ? (
+                  <Pressable hitSlop={6} onPress={() => removeSecao(si)}>
                     <Icon name="trash-outline" size={16} color={LC.danger} />
                   </Pressable>
                 ) : null}
               </View>
-              {/* Grupo muscular */}
-              <View style={s.grupoChips}>
-                {GRUPOS.map((g) => {
-                  const sel = (e.grupo ?? '') === g;
-                  return (
-                    <Pressable
-                      key={g}
-                      style={[s.grupoChip, sel && s.grupoChipSel]}
-                      onPress={() => setExercicio(i, 'grupo', sel ? '' : g)}
-                    >
-                      <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{g}</Text>
+
+              {!secao.grupo ? (
+                <View style={s.grupoChips}>
+                  {GRUPOS.map((g) => (
+                    <Pressable key={g} style={s.grupoChip} onPress={() => setGrupo(si, g)}>
+                      <Text style={s.grupoChipText}>{g}</Text>
                     </Pressable>
-                  );
-                })}
-              </View>
-              <Input placeholder="Nome (ex: Supino reto)" value={e.nome} onChangeText={(v) => setExercicio(i, 'nome', v)} />
-              <View style={s.exRow}>
-                <View style={{ flex: 1 }}>
-                  <Input placeholder="Séries" keyboardType="number-pad" maxLength={2} value={e.seriesTexto} onChangeText={(v) => setExercicio(i, 'seriesTexto', v)} />
+                  ))}
                 </View>
-                <View style={{ flex: 1.4 }}>
-                  <Input placeholder="Repetições (12, 10-12...)" value={e.repeticoes} onChangeText={(v) => setExercicio(i, 'repeticoes', v)} />
-                </View>
-                <View style={{ flex: 1.2 }}>
-                  <Input placeholder="Carga (opc.)" value={e.carga} onChangeText={(v) => setExercicio(i, 'carga', v)} />
-                </View>
-              </View>
-              <Input placeholder="Observação (opcional)" value={e.observacao} onChangeText={(v) => setExercicio(i, 'observacao', v)} />
-            </Card>
+              ) : null}
+
+              {secao.itens.map((e, ii) => (
+                <Card key={ii} style={s.exCard} padding={14} bordered>
+                  <View style={s.exHead}>
+                    <Text style={s.exNum}>{ii + 1}º exercício</Text>
+                    {secao.itens.length > 1 ? (
+                      <Pressable hitSlop={6} onPress={() => removeItem(si, ii)}>
+                        <Icon name="trash-outline" size={16} color={LC.danger} />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <Input placeholder="Nome (ex: Supino reto)" value={e.nome} onChangeText={(v) => setItem(si, ii, 'nome', v)} />
+                  <View style={s.exRow}>
+                    <View style={{ flex: 1 }}>
+                      <Input placeholder="Séries" keyboardType="number-pad" maxLength={2} value={e.seriesTexto} onChangeText={(v) => setItem(si, ii, 'seriesTexto', v)} />
+                    </View>
+                    <View style={{ flex: 1.4 }}>
+                      <Input placeholder="Repetições (12, 10-12...)" value={e.repeticoes} onChangeText={(v) => setItem(si, ii, 'repeticoes', v)} />
+                    </View>
+                    <View style={{ flex: 1.2 }}>
+                      <Input placeholder="Carga (opc.)" value={e.carga} onChangeText={(v) => setItem(si, ii, 'carga', v)} />
+                    </View>
+                  </View>
+                  <Input placeholder="Observação (opcional)" value={e.observacao} onChangeText={(v) => setItem(si, ii, 'observacao', v)} />
+                </Card>
+              ))}
+
+              <Pressable style={s.addExBtn} onPress={() => addItem(si)}>
+                <Icon name="add-circle-outline" size={18} color={LC.primary} />
+                <Text style={s.addExText}>
+                  Adicionar exercício{secao.grupo ? ` em ${secao.grupo}` : ''}
+                </Text>
+              </Pressable>
+            </View>
           ))}
 
-          <Pressable
-            style={s.addExBtn}
-            onPress={() => setExercicios((atual) => [...atual, exercicioVazio(atual[atual.length - 1]?.grupo)])}
-          >
-            <Icon name="add-circle-outline" size={18} color={LC.primary} />
-            <Text style={s.addExText}>Adicionar exercício</Text>
+          <Pressable style={s.addGrupoBtn} onPress={addSecao}>
+            <Icon name="add" size={18} color="#fff" />
+            <Text style={s.addGrupoText}>Adicionar grupo muscular</Text>
           </Pressable>
             </>
           ) : null}
@@ -573,6 +635,23 @@ const s = StyleSheet.create({
   grupoChipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
   grupoChipText: { fontSize: 12, fontWeight: '600', color: LC.textSecondary },
   grupoChipTextSel: { color: LC.primary, fontWeight: '700' },
+  // Seção = um grupo muscular com seus exercícios
+  secao: {
+    marginBottom: 18, paddingTop: 14, paddingHorizontal: 12, paddingBottom: 12,
+    backgroundColor: LC.bg, borderRadius: LC.radius.lg, borderWidth: 1, borderColor: LC.border,
+  },
+  secaoHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, paddingHorizontal: 2 },
+  secaoTitulo: {
+    fontSize: 15, fontWeight: '800', color: LC.primary,
+    textTransform: 'uppercase', letterSpacing: 0.8,
+  },
+  secaoTituloVazio: { fontSize: 13.5, fontWeight: '700', color: LC.textSecondary },
+  secaoTrocar: { fontSize: 12, fontWeight: '700', color: LC.textMuted, textDecorationLine: 'underline' },
+  addGrupoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    paddingVertical: 13, borderRadius: LC.radius.md, backgroundColor: LC.primary, marginTop: 4,
+  },
+  addGrupoText: { fontSize: 14, fontWeight: '800', color: '#fff' },
   exCard: { marginBottom: 12, gap: 10 },
   exHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   exNum: { fontSize: 12, fontWeight: '800', color: LC.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
