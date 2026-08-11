@@ -33,8 +33,8 @@ export default function Perfil() {
     });
   };
 
+  // O treino não aparece para o aluno: a ficha é ferramenta do professor.
   const menu: { label: string; icon: IconName; onPress: () => void }[] = [
-    { label: 'Meus treinos', icon: 'barbell-outline', onPress: () => router.push('/meus-treinos' as any) },
     { label: 'Dados pessoais', icon: 'person-outline', onPress: () => setEmBreve(true) },
     { label: 'Alterar senha', icon: 'lock-closed-outline', onPress: () => setEmBreve(true) },
     { label: 'Notificações', icon: 'notifications-outline', onPress: () => router.push('/notificacoes') },
