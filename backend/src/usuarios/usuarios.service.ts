@@ -175,17 +175,34 @@ export class UsuariosService {
       include: { plano: true, modalidade: true },
     });
     if (!plano) throw new NotFoundException("Plano não encontrado");
-    // Verifica reset semanal
     const inicioSemana = dayjs().startOf("isoWeek").toDate();
-    if (dayjs(plano.semanaReferencia).isBefore(inicioSemana)) {
+    const fimSemana = dayjs().endOf("isoWeek").toDate();
+
+    // Conta as aulas REAIS da semana corrente, do mesmo jeito que a validação
+    // de limite em agendamentos.service. O contador aulasUsadasSemana não é
+    // usado aqui: ele desanda quando se geram aulas de semanas futuras.
+    const usadas = await this.prisma.agendamento.count({
+      where: {
+        usuarioId,
+        dataAula: { gte: inicioSemana, lte: fimSemana },
+        status: { in: ["CONFIRMADO", "REALIZADO"] },
+        reposicao: false, // reposição usa crédito, não a cota da semana
+      },
+    });
+
+    // Mantém o contador em dia para os relatórios que ainda o leem.
+    if (
+      dayjs(plano.semanaReferencia).isBefore(inicioSemana) ||
+      plano.aulasUsadasSemana !== usadas
+    ) {
       await this.prisma.usuarioPlano.update({
         where: { id: plano.id },
-        data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemana },
+        data: { aulasUsadasSemana: usadas, semanaReferencia: inicioSemana },
       });
-      plano.aulasUsadasSemana = 0;
     }
+
     return {
-      usadas: plano.aulasUsadasSemana,
+      usadas,
       total: plano.plano.aulasSemanais,
       modalidade: plano.modalidade.nome,
       plano: plano.plano.nome,
