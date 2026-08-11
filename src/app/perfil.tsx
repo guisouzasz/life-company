@@ -10,6 +10,7 @@ import { Icon, type IconName } from '../components/ui/icon';
 import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { useMe } from '../services/auth/auth.queries';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
+import { useMinhaAnamnese } from '../services/anamnese/anamnese.queries';
 import { useLogout, useExcluirConta } from '../services/auth/auth.mutations';
 import { ApiError } from '../services/http';
 
@@ -17,6 +18,7 @@ export default function Perfil() {
   const nome = useAuthStore((s) => s.nome);
   const me = useMe();
   const saldo = useSaldo();
+  const anamnese = useMinhaAnamnese();
   const logout = useLogout();
   const excluir = useExcluirConta();
   const [confirmarSaida, setConfirmarSaida] = useState(false);
@@ -34,7 +36,13 @@ export default function Perfil() {
   };
 
   // O treino não aparece para o aluno: a ficha é ferramenta do professor.
-  const menu: { label: string; icon: IconName; onPress: () => void }[] = [
+  const menu: { label: string; icon: IconName; onPress: () => void; alerta?: boolean }[] = [
+    {
+      label: 'Ficha de saúde',
+      icon: 'clipboard-outline',
+      onPress: () => router.push('/anamnese' as any),
+      alerta: !anamnese.isLoading && !anamnese.data, // ainda não preencheu
+    },
     { label: 'Dados pessoais', icon: 'person-outline', onPress: () => setEmBreve(true) },
     { label: 'Alterar senha', icon: 'lock-closed-outline', onPress: () => setEmBreve(true) },
     { label: 'Notificações', icon: 'notifications-outline', onPress: () => router.push('/notificacoes') },
@@ -88,6 +96,11 @@ export default function Perfil() {
                 <Icon name={item.icon} size={18} color={LC.primary} />
               </View>
               <Text style={s.menuLabel}>{item.label}</Text>
+              {item.alerta ? (
+                <View style={s.pendente}>
+                  <Text style={s.pendenteTexto}>Preencher</Text>
+                </View>
+              ) : null}
               <Icon name="chevron-forward" size={18} color={LC.textMuted} />
             </Pressable>
           ))}
@@ -163,6 +176,8 @@ const s = StyleSheet.create({
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 14 },
   menuIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
   menuLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: LC.textPrimary },
+  pendente: { backgroundColor: LC.warningBg, borderRadius: LC.radius.full, paddingHorizontal: 10, paddingVertical: 4, marginRight: 6 },
+  pendenteTexto: { fontSize: 11.5, fontWeight: '800', color: '#92400E' },
   logout: {
     marginHorizontal: 16, marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 15, borderRadius: LC.radius.lg, backgroundColor: LC.dangerBg,

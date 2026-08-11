@@ -16,6 +16,8 @@ import { Badge } from '../../components/ui/badge';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino } from '../../services/treinos/treinos.mutations';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
+import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
+import { AnamneseModal } from '../../components/professor/anamnese-modal';
 import { useMe } from '../../services/auth/auth.queries';
 import type { ExercicioPayload, Treino } from '../../services/treinos/treinos.types';
 import { ApiError } from '../../services/http';
@@ -88,6 +90,8 @@ export default function TreinosAluno() {
 
   const treinos = useTreinosDoAluno(alunoId);
   const cargas = useCargasDoAluno(alunoId);
+  const anamnese = useAnamneseDoAluno(alunoId);
+  const [verAnamnese, setVerAnamnese] = useState(false);
   const criar = useCriarTreino();
   const atualizar = useAtualizarTreino();
   const remover = useRemoverTreino();
@@ -461,6 +465,15 @@ export default function TreinosAluno() {
             <Text style={s.subtitle}>Treinos do aluno</Text>
           </View>
         </View>
+
+        {/* Ficha de saúde: ler antes de montar o treino */}
+        <Pressable style={s.fichaSaude} onPress={() => setVerAnamnese(true)}>
+          <Icon name="clipboard-outline" size={16} color={anamnese.data ? LC.primary : LC.textMuted} />
+          <Text style={[s.fichaSaudeTexto, !anamnese.data && { color: LC.textMuted }]}>
+            {anamnese.data ? 'Ver ficha de saúde' : 'Sem ficha de saúde preenchida'}
+          </Text>
+          {anamnese.data ? <Icon name="chevron-forward" size={15} color={LC.primary} /> : null}
+        </Pressable>
       </View>
 
       {treinos.isLoading ? (
@@ -566,6 +579,12 @@ export default function TreinosAluno() {
       </Pressable>
 
       <TabBar isProfessor />
+      <AnamneseModal
+        visible={verAnamnese}
+        alunoNome={alunoNome}
+        ficha={anamnese.data}
+        onClose={() => setVerAnamnese(false)}
+      />
       <CargaExercicioModal
         exercicio={cargaDe?.nome ?? null}
         alunoId={alunoId}
@@ -599,6 +618,12 @@ const s = StyleSheet.create({
   },
   title: { fontSize: 20, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 13, color: LC.textSecondary, marginTop: 2 },
+  fichaSaude: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12,
+    backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border,
+    borderRadius: LC.radius.md, paddingHorizontal: 14, paddingVertical: 10,
+  },
+  fichaSaudeTexto: { flex: 1, fontSize: 13.5, fontWeight: '700', color: LC.primary },
   scroll: { ...LC.coluna, padding: 16, paddingTop: 8 },
 
   // Lista

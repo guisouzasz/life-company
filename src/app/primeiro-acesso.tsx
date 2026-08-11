@@ -91,8 +91,14 @@ export default function PrimeiroAcesso() {
 
   const senhaAtual = watch('senha') ?? '';
 
-  const irParaApp = (data: { tipoUsuario: string }) =>
-    router.replace(data.tipoUsuario === 'ADMIN' ? '/admin/dashboard' : '/dashboard');
+  // Aluno recém-ativado cai direto na ficha de saúde (é o "cadastro" dele);
+  // o botão de voltar da ficha leva ao dashboard. Professor e admin vão direto.
+  const irParaApp = (data: { tipoUsuario: string }) => {
+    if (data.tipoUsuario === 'ADMIN') return router.replace('/admin/dashboard');
+    if (data.tipoUsuario === 'PROFESSOR') return router.replace('/professor/agenda' as any);
+    router.replace('/dashboard');
+    router.push('/anamnese' as any);
+  };
 
   const onSubmit = handleSubmit((values) => {
     const cpf = values.cpf.replace(/\D/g, '');

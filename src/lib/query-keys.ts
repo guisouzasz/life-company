@@ -23,4 +23,6 @@ export const queryKeys = {
   treinoDia: (data?: string) => ['treinos', 'dia', data ?? ''] as const,
   cargasMinhas: ['cargas', 'meus'] as const,
   cargasAluno: (alunoId?: string) => ['cargas', 'aluno', alunoId ?? 'all'] as const,
+  anamneseMinha: ['anamnese', 'me'] as const,
+  anamneseAluno: (alunoId?: string) => ['anamnese', 'aluno', alunoId ?? 'all'] as const,
 };
