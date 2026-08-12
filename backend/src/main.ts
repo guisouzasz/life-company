@@ -7,6 +7,11 @@ import { AppModule } from './app.module';
 
 /** Origens do app web autorizadas a chamar a API (CORS_ORIGINS separa por vírgula). */
 const ORIGENS_PADRAO = [
+  // Domínio próprio do estúdio (com e sem www — o navegador manda a origem
+  // exata da barra de endereço, então as duas formas precisam constar).
+  'https://www.academialifecompany.com.br',
+  'https://academialifecompany.com.br',
+  // Domínio da Vercel, que segue valendo como acesso alternativo.
   'https://life-company.vercel.app',
   'http://localhost:8081',
   'http://localhost:19006',
