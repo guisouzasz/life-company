@@ -55,13 +55,14 @@ export class TreinosService {
     });
   }
 
-  /** Metadados opcionais da ficha (vencimento, frequência, pausa, velocidade). */
+  /** Metadados opcionais da ficha (vencimento, frequência). */
   private metaDados(dto: SalvarTreinoDto) {
     return {
       vencimento: dto.vencimento ? new Date(dto.vencimento + 'T00:00:00') : null,
       frequencia: dto.frequencia?.trim() || null,
-      pausaSeries: dto.pausaSeries?.trim() || null,
-      velocidade: dto.velocidade?.trim() || null,
+      // pausaSeries/velocidade saíram da ficha: nunca mais são gravados.
+      pausaSeries: null,
+      velocidade: null,
     };
   }
 

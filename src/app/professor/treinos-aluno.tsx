@@ -71,8 +71,6 @@ const DURACOES: { label: string; meses: number }[] = [
   { label: '2 meses', meses: 2 },
   { label: '3 meses', meses: 3 },
 ];
-const PAUSAS = ['30s', '45s', '60s', '90s'];
-const VELOCIDADES = ['Lenta', 'Moderada', 'Rápida'];
 
 /** Data de hoje + N meses no formato YYYY-MM-DD. */
 const emMeses = (n: number): string => {
@@ -122,8 +120,6 @@ export default function TreinosAluno() {
   // Metadados da ficha (opcionais)
   const [frequencia, setFrequencia] = useState('');
   const [vencimento, setVencimento] = useState(''); // YYYY-MM-DD
-  const [pausaSeries, setPausaSeries] = useState('');
-  const [velocidade, setVelocidade] = useState('');
 
   const abrirNovo = () => {
     setEditando(null);
@@ -133,8 +129,6 @@ export default function TreinosAluno() {
     setSecoes([secaoVazia()]);
     setFrequencia('');
     setVencimento('');
-    setPausaSeries('');
-    setVelocidade('');
     setFormAberto(true);
   };
 
@@ -145,8 +139,6 @@ export default function TreinosAluno() {
     setObservacoes(t.observacoes ?? '');
     setFrequencia(t.frequencia ?? '');
     setVencimento(t.vencimento ? t.vencimento.slice(0, 10) : '');
-    setPausaSeries(t.pausaSeries ?? '');
-    setVelocidade(t.velocidade ?? '');
     setSecoes(agrupar(t.exercicios));
     setFormAberto(true);
   };
@@ -180,8 +172,6 @@ export default function TreinosAluno() {
     const meta = {
       frequencia: frequencia || undefined,
       vencimento: vencimento || undefined,
-      pausaSeries: pausaSeries || undefined,
-      velocidade: velocidade || undefined,
     };
     let payload;
     if (formatoCarga) {
@@ -237,13 +227,7 @@ export default function TreinosAluno() {
   };
 
   /** Linha compacta com os metadados preenchidos da ficha. */
-  const metaResumo = (t: Treino): string => {
-    const partes: string[] = [];
-    if (t.frequencia) partes.push(t.frequencia);
-    if (t.pausaSeries) partes.push(`pausa ${t.pausaSeries}`);
-    if (t.velocidade) partes.push(t.velocidade);
-    return partes.join(' • ');
-  };
+  const metaResumo = (t: Treino): string => (t.frequencia ?? '');
 
   const confirmarExclusao = () => {
     if (!excluindo) return;
@@ -337,30 +321,6 @@ export default function TreinosAluno() {
             })}
           </View>
           {vencimento ? <Text style={s.metaHint}>Vence em {formatDate(vencimento, 'DD/MM/YYYY')}</Text> : null}
-
-          <Text style={s.metaLabel}>Pausa entre séries</Text>
-          <View style={s.grupoChips}>
-            {PAUSAS.map((p) => {
-              const sel = pausaSeries === p;
-              return (
-                <Pressable key={p} style={[s.grupoChip, sel && s.grupoChipSel]} onPress={() => setPausaSeries(sel ? '' : p)}>
-                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{p}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <Text style={s.metaLabel}>Velocidade de execução</Text>
-          <View style={s.grupoChips}>
-            {VELOCIDADES.map((v) => {
-              const sel = velocidade === v;
-              return (
-                <Pressable key={v} style={[s.grupoChip, sel && s.grupoChipSel]} onPress={() => setVelocidade(sel ? '' : v)}>
-                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{v}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
 
           {formatoCarga ? (
             <>

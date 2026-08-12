@@ -111,8 +111,10 @@ model Treino {
   // Metadados da ficha (todos opcionais)
   vencimento   DateTime? // até quando a ficha vale (renovar depois)
   frequencia   String? // "2x por semana"
-  pausaSeries  String? // "45 segundos"
-  velocidade   String? // "Moderada"
+  // Legado: saíram da ficha e não são mais gravados. Colunas mantidas para
+  // não migrar o banco em produção.
+  pausaSeries  String?
+  velocidade   String?
   concluido    Boolean  @default(false) // ficha arquivada (Concluída)
   ativo        Boolean  @default(true) // soft-delete
   createdAt    DateTime @default(now()) @map("created_at")

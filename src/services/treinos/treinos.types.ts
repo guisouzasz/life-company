@@ -21,8 +21,6 @@ export interface Treino {
   // Metadados da ficha (opcionais)
   vencimento?: string | null;
   frequencia?: string | null;
-  pausaSeries?: string | null;
-  velocidade?: string | null;
   concluido: boolean;
   ativo: boolean;
   createdAt: string;
@@ -70,7 +68,5 @@ export interface SalvarTreinoPayload {
   /** Metadados da ficha (opcionais). */
   vencimento?: string; // YYYY-MM-DD
   frequencia?: string;
-  pausaSeries?: string;
-  velocidade?: string;
   exercicios?: ExercicioPayload[];
 }

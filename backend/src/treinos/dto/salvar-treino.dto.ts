@@ -55,6 +55,11 @@ export class SalvarTreinoDto {
   @IsOptional() @IsString()
   frequencia?: string;
 
+  /**
+   * Legado: o app não envia mais pausa entre séries nem velocidade de
+   * execução. Continuam aceitos (e ignorados) para não quebrar versões
+   * antigas instaladas — o ValidationPipe roda com forbidNonWhitelisted.
+   */
   @IsOptional() @IsString()
   pausaSeries?: string;
 
