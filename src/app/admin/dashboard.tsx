@@ -14,6 +14,7 @@ import { useRelatorioDashboard } from '../../services/relatorios/relatorios.quer
 import { useResumoFinanceiro } from '../../services/financeiro/financeiro.queries';
 import { useLogout } from '../../services/auth/auth.mutations';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
+import { AlunosHorarioModal, type HorarioDoModal } from '../../components/admin/alunos-horario-modal';
 import { formatDate, getDiaSemanaKey } from '../../services/date';
 import { nomeModalidade } from '../../constants/assets';
 import type { RelatorioDashboard } from '../../services/relatorios/relatorios.types';
@@ -72,6 +73,9 @@ function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
   const todas = d?.aulasHoje ?? [];
   // '' = todas as modalidades
   const [filtro, setFiltro] = useState('');
+  // Horário aberto no modal de "quem está agendado"
+  const [verAlunos, setVerAlunos] = useState<HorarioDoModal | null>(null);
+  const hoje = getDiaSemanaKey(new Date()) as HorarioDoModal['diaSemana'];
 
   // Modalidades que têm aula hoje, já com o nome usado no app (Academia → Musculação)
   const modalidades = [...new Set(todas.map((a) => nomeModalidade(a.modalidade)))];
@@ -111,7 +115,20 @@ function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
           const lotado = a.agendados >= a.capacidade;
           const pct = a.capacidade > 0 ? (a.agendados / a.capacidade) * 100 : 0;
           return (
-            <View key={a.horarioId} style={s.hojeRow}>
+            <Pressable
+              key={a.horarioId}
+              style={({ pressed }) => [s.hojeRow, pressed && s.hojeRowPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Ver alunos de ${nomeModalidade(a.modalidade)} às ${a.horaInicio}`}
+              onPress={() =>
+                setVerAlunos({
+                  id: a.horarioId,
+                  diaSemana: hoje,
+                  horaInicio: a.horaInicio,
+                  modalidade: { nome: a.modalidade },
+                })
+              }
+            >
               <Text style={s.hojeHora}>{a.horaInicio}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.hojeModalidade}>{nomeModalidade(a.modalidade)}</Text>
@@ -121,10 +138,13 @@ function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
               </View>
               <Text style={s.hojeVagas}>{a.agendados}/{a.capacidade}</Text>
               <Badge label={lotado ? 'Lotado' : 'Disponível'} variant={lotado ? 'danger' : 'success'} />
-            </View>
+              <Icon name="chevron-forward" size={15} color={LC.textMuted} />
+            </Pressable>
           );
         })
       )}
+
+      <AlunosHorarioModal horario={verAlunos} onClose={() => setVerAlunos(null)} />
     </Card>
   );
 }
@@ -498,6 +518,7 @@ const s = StyleSheet.create({
   filtroTexto: { fontSize: 12.5, fontWeight: '600', color: LC.textSecondary },
   filtroTextoSel: { color: LC.primary, fontWeight: '700' },
   hojeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: LC.border },
+  hojeRowPressed: { opacity: 0.6 },
   hojeHora: { width: 44, fontSize: 13, fontWeight: '800', color: LC.textPrimary },
   hojeModalidade: { fontSize: 13, fontWeight: '600', color: LC.textPrimary, marginBottom: 4 },
   hojeTrack: { height: 5, borderRadius: 3, backgroundColor: LC.border, overflow: 'hidden' },

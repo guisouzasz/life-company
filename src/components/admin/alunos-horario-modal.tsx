@@ -16,10 +16,18 @@ import { ApiError } from '../../services/http';
 import { formatDate, proximaDataDoDia } from '../../services/date';
 
 /**
+ * O mínimo que o modal precisa. Um HorarioAdmin completo satisfaz este tipo,
+ * e as "aulas de hoje" do dashboard montam um objeto leve com os mesmos campos.
+ */
+export type HorarioDoModal = Pick<HorarioAdmin, 'id' | 'diaSemana' | 'horaInicio'> & {
+  modalidade: { nome: string };
+};
+
+/**
  * Alunos agendados na PRÓXIMA ocorrência do horário (inclui hoje).
  * Cancelar pelo admin gera 1 crédito de reposição para o aluno.
  */
-export function AlunosHorarioModal({ horario, onClose }: { horario: HorarioAdmin | null; onClose: () => void }) {
+export function AlunosHorarioModal({ horario, onClose }: { horario: HorarioDoModal | null; onClose: () => void }) {
   const data = horario ? proximaDataDoDia(horario.diaSemana) : undefined;
   const agendamentos = useAgendamentosDoHorario(horario?.id, data, !!horario);
   const cancelar = useCancelarAgendamentoAdmin();
