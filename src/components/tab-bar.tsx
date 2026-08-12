@@ -15,6 +15,7 @@ export type Tab = {
 const TABS: Tab[] = [
   { label: 'Início', route: '/dashboard', icon: 'home-outline', iconActive: 'home', activeRoutes: ['/dashboard'] },
   { label: 'Agenda', route: '/agendamento', icon: 'calendar-outline', iconActive: 'calendar', activeRoutes: ['/agendamento', '/minhas-aulas'] },
+  { label: 'Treinos', route: '/meus-treinos', icon: 'barbell-outline', iconActive: 'barbell', activeRoutes: ['/meus-treinos'] },
   { label: 'Histórico', route: '/historico', icon: 'time-outline', iconActive: 'time', activeRoutes: ['/historico'] },
   { label: 'Perfil', route: '/perfil', icon: 'person-outline', iconActive: 'person', activeRoutes: ['/perfil', '/meu-plano', '/notificacoes'] },
 ];
