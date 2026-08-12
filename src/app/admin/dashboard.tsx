@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -69,15 +69,42 @@ function AulasPorDiaChart({ d }: { d?: RelatorioDashboard }) {
 }
 
 function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
-  const aulas = d?.aulasHoje ?? [];
+  const todas = d?.aulasHoje ?? [];
+  // '' = todas as modalidades
+  const [filtro, setFiltro] = useState('');
+
+  // Modalidades que têm aula hoje, já com o nome usado no app (Academia → Musculação)
+  const modalidades = [...new Set(todas.map((a) => nomeModalidade(a.modalidade)))];
+  const aulas = filtro ? todas.filter((a) => nomeModalidade(a.modalidade) === filtro) : todas;
+
   return (
     <Card style={s.hojeCard} padding={18}>
       <Text style={s.blockTitle}>Aulas de hoje</Text>
-      <Text style={s.blockSub}>{aulas.length > 0 ? `${aulas.length} horários na grade` : ' '}</Text>
+      <Text style={s.blockSub}>
+        {todas.length > 0
+          ? filtro
+            ? `${aulas.length} de ${todas.length} horários`
+            : `${todas.length} horários na grade`
+          : ' '}
+      </Text>
+
+      {modalidades.length > 1 ? (
+        <View style={s.filtroRow}>
+          {['', ...modalidades].map((m) => {
+            const sel = filtro === m;
+            return (
+              <Pressable key={m || 'todas'} style={[s.filtroChip, sel && s.filtroChipSel]} onPress={() => setFiltro(m)}>
+                <Text style={[s.filtroTexto, sel && s.filtroTextoSel]}>{m || 'Todas'}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
       {aulas.length === 0 ? (
         <View style={s.hojeEmpty}>
           <Icon name="cafe-outline" size={26} color={LC.textMuted} />
-          <Text style={s.blockEmpty}>Sem aulas hoje.</Text>
+          <Text style={s.blockEmpty}>{todas.length === 0 ? 'Sem aulas hoje.' : 'Nenhuma aula desta modalidade hoje.'}</Text>
         </View>
       ) : (
         aulas.map((a) => {
@@ -87,7 +114,7 @@ function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
             <View key={a.horarioId} style={s.hojeRow}>
               <Text style={s.hojeHora}>{a.horaInicio}</Text>
               <View style={{ flex: 1 }}>
-                <Text style={s.hojeModalidade}>{a.modalidade}</Text>
+                <Text style={s.hojeModalidade}>{nomeModalidade(a.modalidade)}</Text>
                 <View style={s.hojeTrack}>
                   <View style={[s.hojeFill, { width: `${pct}%` }, lotado && { backgroundColor: LC.danger }]} />
                 </View>
@@ -462,6 +489,14 @@ const s = StyleSheet.create({
   finAlertaText: { fontSize: 12, fontWeight: '700', color: LC.danger },
 
   hojeEmpty: { alignItems: 'center', paddingVertical: 20, gap: 4 },
+  filtroRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12, marginBottom: 2 },
+  filtroChip: {
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: LC.radius.full,
+    backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border,
+  },
+  filtroChipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
+  filtroTexto: { fontSize: 12.5, fontWeight: '600', color: LC.textSecondary },
+  filtroTextoSel: { color: LC.primary, fontWeight: '700' },
   hojeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: LC.border },
   hojeHora: { width: 44, fontSize: 13, fontWeight: '800', color: LC.textPrimary },
   hojeModalidade: { fontSize: 13, fontWeight: '600', color: LC.textPrimary, marginBottom: 4 },
