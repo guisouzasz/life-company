@@ -16,6 +16,9 @@ import { LoginDto } from "./dto/login.dto";
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
 import { AtivarContaDto, DOMINIOS_EMAIL_PERMITIDOS } from "./dto/ativar-conta.dto";
 
+/** Domínio público do estúdio — destino dos links de primeiro acesso. */
+const APP_URL_PUBLICA = "https://www.academialifecompany.com.br";
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -208,8 +211,30 @@ export class AuthService {
       update: { token, expiraEm, usado: false },
       create: { usuarioId, token, expiraEm },
     });
-    const baseUrl = this.config.get("APP_URL") || "http://localhost:8081";
-    return { link: `${baseUrl}/primeiro-acesso?token=${token}`, token };
+    return { link: `${this.baseDoApp()}/primeiro-acesso?token=${token}`, token };
+  }
+
+  /**
+   * Base dos links de primeiro acesso enviados aos alunos.
+   *
+   * Um link para localhost não abre no celular de ninguém — e localhost é
+   * justamente o que está no `.env` versionado, que sobe junto no deploy. Por
+   * isso o valor local é RECUSADO, em vez de virar um link quebrado na mão do
+   * aluno; quem testa o fluxo na própria máquina libera com APP_URL_LOCAL=1.
+   *
+   * A checagem não olha NODE_ENV de propósito: esse mesmo `.env` declara
+   * "development", então ele não serve para saber se a API está em produção.
+   */
+  private baseDoApp(): string {
+    const configurada = (this.config.get<string>("APP_URL") ?? "")
+      .trim()
+      .replace(/\/+$/, ""); // barra no fim geraria //primeiro-acesso
+    if (!configurada) return APP_URL_PUBLICA;
+    const ehLocal = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.0\.2\.2)(:|\/|$)/i.test(
+      configurada,
+    );
+    if (ehLocal && this.config.get("APP_URL_LOCAL") !== "1") return APP_URL_PUBLICA;
+    return configurada;
   }
 
   private async gerarTokens(
