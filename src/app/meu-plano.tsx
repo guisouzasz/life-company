@@ -1,6 +1,7 @@
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LC } from '../constants/theme';
+import { DIAS_VALIDADE_CREDITO } from '../constants/app';
 import { TabBar } from '../components/tab-bar';
 import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
@@ -117,7 +118,7 @@ export default function MeuPlano() {
               </View>
             ) : (
               <Text style={s.credHint}>
-                Cancelamentos dentro do prazo viram crédito (válido por 45 dias) para você repor a aula quando quiser.
+                Cancelamentos dentro do prazo viram crédito (válido por {DIAS_VALIDADE_CREDITO} dias) para você repor a aula quando quiser.
               </Text>
             )}
           </Card>

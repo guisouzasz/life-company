@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
+import { DIAS_VALIDADE_CREDITO } from '../../constants/app';
 import { AppModal } from '../ui/modal';
 import { Button } from '../ui/button';
 import { Icon } from '../ui/icon';
@@ -28,7 +29,7 @@ export function CreditosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin | nul
   return (
     <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Créditos — ${primeiroNome}` : ''}>
       <Button
-        title="Conceder crédito (45 dias)"
+        title={`Conceder crédito (${DIAS_VALIDADE_CREDITO} dias)`}
         size="md"
         loading={conceder.isPending}
         onPress={() => aluno && conceder.mutate({ usuarioId: aluno.id })}

@@ -3,6 +3,7 @@ import * as dayjs from 'dayjs';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
+import { DIAS_VALIDADE_CREDITO } from '../creditos/creditos.constantes';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -115,13 +116,15 @@ export class AgendamentosService {
       return { mensagem: 'Aula de reposição cancelada. O crédito foi perdido e não gera novo crédito.' };
     }
 
-    // Aula normal cancelada no prazo → convertida em 1 crédito de reposição (45 dias)
-    const expiraEm = dayjs(ag.dataAula).add(45, 'day').endOf('day').toDate();
+    // Aula normal cancelada no prazo → convertida em 1 crédito de reposição
+    const expiraEm = dayjs(ag.dataAula).add(DIAS_VALIDADE_CREDITO, 'day').endOf('day').toDate();
     await this.prisma.$transaction([
       this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),
       this.prisma.creditoReposicao.create({ data: { usuarioId, origemAgendamentoId: ag.id, expiraEm } }),
     ]);
-    return { mensagem: 'Aula cancelada. Você recebeu 1 crédito de reposição (válido por 45 dias).' };
+    return {
+      mensagem: `Aula cancelada. Você recebeu 1 crédito de reposição (válido por ${DIAS_VALIDADE_CREDITO} dias).`,
+    };
   }
 
   async listarMeus(usuarioId: string) {
@@ -170,13 +173,15 @@ export class AgendamentosService {
     if (ag.status !== 'CONFIRMADO') throw new BadRequestException('Agendamento não pode ser cancelado');
 
     // Cancelamento pelo admin não é culpa do aluno: sempre compensa com
-    // 1 crédito de reposição (45 dias, mesma regra do cancelamento no prazo) —
+    // 1 crédito de reposição (mesma validade do cancelamento no prazo) —
     // inclusive se a aula tinha sido marcada com crédito (devolve um novo).
-    const expiraEm = dayjs(ag.dataAula).add(45, 'day').endOf('day').toDate();
+    const expiraEm = dayjs(ag.dataAula).add(DIAS_VALIDADE_CREDITO, 'day').endOf('day').toDate();
     await this.prisma.$transaction([
       this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),
       this.prisma.creditoReposicao.create({ data: { usuarioId: ag.usuarioId, origemAgendamentoId: ag.id, expiraEm, concedidoAdmin: true } }),
     ]);
-    return { mensagem: 'Agendamento cancelado. O aluno recebeu 1 crédito de reposição (válido por 45 dias).' };
+    return {
+      mensagem: `Agendamento cancelado. O aluno recebeu 1 crédito de reposição (válido por ${DIAS_VALIDADE_CREDITO} dias).`,
+    };
   }
 }

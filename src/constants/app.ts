@@ -1,6 +1,17 @@
 /** Constantes de marca/configuração do app (não vêm da API). */
 export const STUDIO_NOME = 'Studio Life Company';
 
+/**
+ * Prazo para usar um crédito de reposição, em dias. Usado nos textos que
+ * explicam o cancelamento ao aluno.
+ *
+ * Quem decide o prazo de verdade é o backend, ao gravar a data de expiração
+ * do crédito; este valor existe só para o texto bater com a regra. Espelha
+ * DIAS_VALIDADE_CREDITO em backend/src/creditos/creditos.constantes.ts —
+ * manter os dois em sincronia.
+ */
+export const DIAS_VALIDADE_CREDITO = 30;
+
 export const DIAS_PT: Record<string, string> = {
   SEGUNDA: 'Segunda',
   TERCA: 'Terça',

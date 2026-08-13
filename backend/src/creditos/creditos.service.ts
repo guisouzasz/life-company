@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { DIAS_VALIDADE_CREDITO } from './creditos.constantes';
 
 type Credito = {
   id: string;
@@ -49,7 +50,7 @@ export class CreditosService {
     return creditos.map((c) => ({ ...c, status: this.statusDe(c) }));
   }
 
-  async conceder(usuarioId: string, dias = 45) {
+  async conceder(usuarioId: string, dias = DIAS_VALIDADE_CREDITO) {
     const expiraEm = dayjs().add(dias, 'day').endOf('day').toDate();
     return this.prisma.creditoReposicao.create({
       data: { usuarioId, concedidoAdmin: true, expiraEm },

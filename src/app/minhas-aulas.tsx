@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../constants/theme';
-import { STUDIO_NOME, DIAS_PT } from '../constants/app';
+import { STUDIO_NOME, DIAS_PT, DIAS_VALIDADE_CREDITO } from '../constants/app';
 import { iconePorModalidade, nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
@@ -118,7 +118,7 @@ export default function MinhasAulas() {
             ? `${nomeModalidade(alvo.horario.modalidade.nome)} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.\n\n${
                 alvo.reposicao
                   ? '⚠️ Esta é uma aula de reposição: ao cancelar, o crédito usado NÃO é devolvido.'
-                  : 'Cancelando dentro do prazo, você recebe 1 crédito de reposição (válido por 45 dias).'
+                  : `Cancelando dentro do prazo, você recebe 1 crédito de reposição (válido por ${DIAS_VALIDADE_CREDITO} dias).`
               }`
             : ''
         }
