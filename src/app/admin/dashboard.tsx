@@ -8,6 +8,7 @@ import { DIAS_PT } from '../../constants/app';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
+import { Avatar } from '../../components/ui/avatar';
 import { Icon, type IconName } from '../../components/ui/icon';
 import { Loading, ErrorState } from '../../components/ui/states';
 import { useRelatorioDashboard } from '../../services/relatorios/relatorios.queries';
@@ -181,6 +182,43 @@ function ProximasAulasHero({ d }: { d?: RelatorioDashboard }) {
         <Icon name="arrow-forward" size={15} color={LC.primaryDark} />
       </Pressable>
     </View>
+  );
+}
+
+/**
+ * Aniversariantes do dia. Some da tela quando não há ninguém fazendo
+ * aniversário — que é a maioria dos dias — em vez de ocupar espaço vazio.
+ */
+function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
+  const aniversariantes = d?.aniversariantes ?? [];
+  if (aniversariantes.length === 0) return null;
+
+  return (
+    <Card style={s.aniversarioCard} padding={16}>
+      <View style={s.aniversarioHead}>
+        <View style={s.aniversarioIcone}>
+          <Icon name="gift" size={20} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.blockTitle}>
+            {aniversariantes.length === 1 ? 'Aniversariante do dia' : 'Aniversariantes do dia'}
+          </Text>
+          <Text style={s.aniversarioSub}>
+            {aniversariantes.length === 1
+              ? 'Não esqueça de dar os parabéns!'
+              : `${aniversariantes.length} alunos fazem aniversário hoje`}
+          </Text>
+        </View>
+      </View>
+
+      {aniversariantes.map((a) => (
+        <View key={a.id} style={s.aniversarioLinha}>
+          <Avatar nome={a.nome} size={34} />
+          <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
+          <Text style={s.aniversarioIdade}>{a.idade} anos</Text>
+        </View>
+      ))}
+    </Card>
   );
 }
 
@@ -358,6 +396,7 @@ export default function AdminDashboard() {
             <ErrorState message="Não foi possível carregar o painel." onRetry={() => relatorio.refetch()} />
           ) : (
             <>
+              <AniversariantesCard d={d} />
               <View style={s.deskStatsRow}>
                 {statsDesktop.map((stat) => (
                   <Card key={stat.label} style={s.deskStatCard} padding={16}>
@@ -417,6 +456,7 @@ export default function AdminDashboard() {
             <ErrorState message="Não foi possível carregar o painel." onRetry={() => relatorio.refetch()} />
           ) : (
             <>
+              <AniversariantesCard d={d} />
               <AtencaoSection d={d} />
 
               <Text style={s.sectionTitle}>Visão geral</Text>
@@ -554,6 +594,21 @@ const s = StyleSheet.create({
   heroAgendaBtnText: { color: LC.primaryDark, fontSize: 14, fontWeight: '800' },
 
   // Precisa de atenção
+  // Aniversariantes: card de destaque, com a borda na cor da marca
+  aniversarioCard: { width: '100%', marginBottom: GAP, borderWidth: 1.5, borderColor: LC.primary },
+  aniversarioHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  aniversarioIcone: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: LC.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  aniversarioSub: { fontSize: 12, color: LC.textMuted, marginTop: 2 },
+  aniversarioLinha: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 10, marginTop: 8,
+    borderTopWidth: 1, borderTopColor: LC.border,
+  },
+  aniversarioNome: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary },
+  aniversarioIdade: { fontSize: 13, fontWeight: '700', color: LC.primary },
+
   atCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   atIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   atTitulo: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },

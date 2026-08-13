@@ -25,6 +25,8 @@ export interface RelatorioDashboard {
   reposicoesPendentes?: { total: number; alunos: { nome: string; creditos: number }[] };
   /** Alunos cadastrados que ainda não ativaram a conta. */
   aguardandoAcesso?: { total: number; nomes: string[] };
+  /** Aniversariantes do dia. Vem vazio na maioria dos dias — aí o card some. */
+  aniversariantes?: { id: string; nome: string; idade: number }[];
 }
 
 export interface AlunoFrequencia {

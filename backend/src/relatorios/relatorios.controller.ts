@@ -107,7 +107,44 @@ export class RelatoriosController {
     return {
       totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, ocupacao, aulasPorDia, aulasHoje,
       canceladosOntem, reposicoesPendentes, aguardandoAcesso,
+      aniversariantes: await this.aniversariantesDeHoje(),
     };
+  }
+
+  /**
+   * Alunos que fazem aniversário hoje. Lista vazia quando não há ninguém —
+   * é o que faz o card sumir da tela em vez de aparecer vazio.
+   *
+   * O dia vem do Node, que roda no fuso do estúdio (ver timezone.ts), e NÃO
+   * de CURRENT_DATE: o Postgres da Railway está em UTC e depois das 21h já
+   * teria virado o dia, mostrando os aniversariantes de amanhã.
+   *
+   * Só entram alunos ativos: quem foi desativado não deve mais aparecer no
+   * painel.
+   */
+  private async aniversariantesDeHoje() {
+    const agora = dayjs();
+    const mes = agora.month() + 1;
+    const dia = agora.date();
+    const ano = agora.year();
+
+    // Quem nasceu em 29/02 só faz aniversário em ano bissexto; nos demais
+    // anos entra no dia 28, senão passaria três anos sem aparecer aqui.
+    const bissexto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0;
+    const diaExtra = !bissexto && mes === 2 && dia === 28 ? 29 : dia;
+
+    const linhas = await this.prisma.$queryRaw<{ id: string; nome: string; ano: number }[]>`
+      SELECT id, nome, EXTRACT(YEAR FROM data_nascimento)::int AS ano
+      FROM usuarios
+      WHERE tipo_usuario = 'ALUNO'
+        AND ativo = true
+        AND cpf NOT LIKE 'REMOVIDO-%'
+        AND data_nascimento IS NOT NULL
+        AND EXTRACT(MONTH FROM data_nascimento) = ${mes}
+        AND EXTRACT(DAY FROM data_nascimento) IN (${dia}, ${diaExtra})
+      ORDER BY nome
+    `;
+    return linhas.map((l) => ({ id: l.id, nome: l.nome, idade: ano - l.ano }));
   }
 
   @Get('frequencia')
