@@ -28,63 +28,79 @@ export class AgendamentosService {
     const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null }, include: { plano: true } });
     if (!usuarioPlano) throw new ForbiddenException('Você não possui um plano ativo');
 
-    // Validações comuns aos dois fluxos (vaga/duplicidade)
-    const jaAgendado = await this.prisma.agendamento.findFirst({ where: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
-    if (jaAgendado) throw new ConflictException('Você já possui agendamento neste horário');
-
-    const ocupacao = await this.prisma.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
-    if (ocupacao >= horario.capacidadeMaxima) throw new BadRequestException('Horário lotado');
-
-    // ── Fluxo por CRÉDITO de reposição (não consome vaga semanal) ──────
-    if (dto.usarCredito === true) {
-      const credito = await this.prisma.creditoReposicao.findFirst({
-        where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
-        orderBy: { expiraEm: 'asc' },
-      });
-      if (!credito) throw new ForbiddenException('Você não possui crédito de reposição válido');
-      const agendamento = await this.prisma.agendamento.create({
-        data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO', reposicao: true, creditoId: credito.id },
-        include: { horario: { include: { modalidade: true } } },
-      });
-      await this.prisma.creditoReposicao.update({
-        where: { id: credito.id },
-        data: { usado: true, usadoEm: new Date(), usadoAgendamentoId: agendamento.id },
-      });
-      return agendamento;
-    }
-
-    // ── Fluxo normal: limite semanal do plano ──────────────────────────
-    // O limite vale para a SEMANA DA AULA sendo agendada (não a semana atual):
-    // cada semana tem sua própria cota, permitindo agendar semanas futuras.
     const inicioSemanaAula = dayjs(dto.dataAula).startOf('isoWeek').toDate();
     const fimSemanaAula = dayjs(dto.dataAula).endOf('isoWeek').toDate();
-    const usadasNaSemana = await this.prisma.agendamento.count({
-      where: {
-        usuarioId,
-        dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
-        status: { in: ['CONFIRMADO', 'REALIZADO'] },
-        reposicao: false, // aulas por crédito não consomem a cota semanal
-      },
-    });
-    if (usadasNaSemana >= usuarioPlano.plano.aulasSemanais) throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
-
-    // aulasUsadasSemana/semanaReferencia seguem existindo só para relatórios:
-    // incrementa apenas quando a aula pertence à semana corrente.
     const inicioSemanaAtual = dayjs().startOf('isoWeek').toDate();
     const aulaNaSemanaAtual = dayjs(dto.dataAula).startOf('isoWeek').isSame(dayjs(inicioSemanaAtual));
-    if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemanaAtual)) {
-      await this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemanaAtual } });
-      usuarioPlano.aulasUsadasSemana = 0;
-    }
 
-    const agendamento = await this.prisma.agendamento.create({
-      data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' },
-      include: { horario: { include: { modalidade: true } } },
+    /**
+     * Daqui para baixo tudo decide "ainda cabe esta aula?" — contar e só então
+     * inserir. Fora de uma transação com trava, duas requisições quase
+     * simultâneas (dois toques no botão, o app repetindo o envio, ou o
+     * auto-agendamento rodando junto) leem a MESMA contagem e ambas inserem:
+     * era assim que um aluno de plano 1x conseguia marcar mais de uma aula na
+     * semana. As travas ficam sempre na mesma ordem — horário e depois plano —
+     * para dois alunos marcando ao mesmo tempo não travarem um ao outro.
+     */
+    return this.prisma.$transaction(async (tx) => {
+      // Trava a aula (protege a lotação) e o plano do aluno (protege a cota).
+      await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${dto.horarioId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
+
+      // Validações comuns aos dois fluxos (vaga/duplicidade)
+      const jaAgendado = await tx.agendamento.findFirst({ where: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
+      if (jaAgendado) throw new ConflictException('Você já possui agendamento neste horário');
+
+      const ocupacao = await tx.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
+      if (ocupacao >= horario.capacidadeMaxima) throw new BadRequestException('Horário lotado');
+
+      // ── Fluxo por CRÉDITO de reposição (não consome vaga semanal) ──────
+      if (dto.usarCredito === true) {
+        const credito = await tx.creditoReposicao.findFirst({
+          where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
+          orderBy: { expiraEm: 'asc' },
+        });
+        if (!credito) throw new ForbiddenException('Você não possui crédito de reposição válido');
+        const agendamento = await tx.agendamento.create({
+          data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO', reposicao: true, creditoId: credito.id },
+          include: { horario: { include: { modalidade: true } } },
+        });
+        await tx.creditoReposicao.update({
+          where: { id: credito.id },
+          data: { usado: true, usadoEm: new Date(), usadoAgendamentoId: agendamento.id },
+        });
+        return agendamento;
+      }
+
+      // ── Fluxo normal: limite semanal do plano ──────────────────────────
+      // O limite vale para a SEMANA DA AULA sendo agendada (não a semana atual):
+      // cada semana tem sua própria cota, permitindo agendar semanas futuras.
+      const usadasNaSemana = await tx.agendamento.count({
+        where: {
+          usuarioId,
+          dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
+          status: { in: ['CONFIRMADO', 'REALIZADO'] },
+          reposicao: false, // aulas por crédito não consomem a cota semanal
+        },
+      });
+      if (usadasNaSemana >= usuarioPlano.plano.aulasSemanais) throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
+
+      // aulasUsadasSemana/semanaReferencia seguem existindo só para relatórios:
+      // incrementa apenas quando a aula pertence à semana corrente.
+      if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemanaAtual)) {
+        await tx.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemanaAtual } });
+        usuarioPlano.aulasUsadasSemana = 0;
+      }
+
+      const agendamento = await tx.agendamento.create({
+        data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' },
+        include: { horario: { include: { modalidade: true } } },
+      });
+      if (aulaNaSemanaAtual) {
+        await tx.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { increment: 1 } } });
+      }
+      return agendamento;
     });
-    if (aulaNaSemanaAtual) {
-      await this.prisma.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { increment: 1 } } });
-    }
-    return agendamento;
   }
 
   async cancelar(agendamentoId: string, usuarioId: string) {
