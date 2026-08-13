@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
 
@@ -89,8 +89,39 @@ export class HorariosService {
     return this.prisma.horario.update({ where: { id }, data: { ativo: !h.ativo } });
   }
 
+  /**
+   * Remove o horário de vez quando ele não deixa rastro (sem aulas no
+   * histórico e sem aluno com horário fixo). Se tiver, apenas desativa — o
+   * histórico do aluno não pode sumir junto.
+   *
+   * Antes isto era sempre `ativo: false`, então excluir um horário JÁ inativo
+   * não fazia nada e ele ficava preso na lista para sempre.
+   */
   async excluir(id: string) {
-    await this.prisma.horario.update({ where: { id }, data: { ativo: false } });
-    return { mensagem: 'Horário desativado' };
+    const horario = await this.prisma.horario.findUnique({
+      where: { id },
+      include: { _count: { select: { agendamentos: true, horariosFixos: true } } },
+    });
+    if (!horario) throw new NotFoundException('Horário não encontrado');
+
+    const { agendamentos, horariosFixos } = horario._count;
+    if (agendamentos > 0 || horariosFixos > 0) {
+      if (!horario.ativo) {
+        const motivo = [
+          agendamentos > 0 ? `${agendamentos} aula(s) no histórico` : null,
+          horariosFixos > 0 ? `${horariosFixos} aluno(s) com horário fixo` : null,
+        ]
+          .filter(Boolean)
+          .join(' e ');
+        throw new ConflictException(
+          `Este horário não pode ser excluído porque tem ${motivo}. Ele fica inativo para preservar o histórico.`,
+        );
+      }
+      await this.prisma.horario.update({ where: { id }, data: { ativo: false } });
+      return { mensagem: 'Horário desativado (tem histórico, por isso não foi apagado)' };
+    }
+
+    await this.prisma.horario.delete({ where: { id } });
+    return { mensagem: 'Horário excluído' };
   }
 }
