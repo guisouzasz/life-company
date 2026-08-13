@@ -4,6 +4,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { PrismaService } from './prisma/prisma.service';
+import { garantirEsquema } from './prisma/garantir-esquema';
 
 /** Origens do app web autorizadas a chamar a API (CORS_ORIGINS separa por vírgula). */
 const ORIGENS_PADRAO = [
@@ -55,6 +57,10 @@ async function bootstrap() {
       .build();
     SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, config));
   }
+
+  // Alinha o banco ANTES de aceitar tráfego: enquanto isto não passa, quem
+  // está usando o sistema continua atendido pela versão anterior do deploy.
+  await garantirEsquema(app.get(PrismaService));
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
