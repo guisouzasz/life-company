@@ -3,25 +3,55 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+/** O banco apontado é da própria máquina? */
+function bancoLocal(): boolean {
+  return /@(localhost|127\.0\.0\.1|host\.docker\.internal)[:/]/.test(process.env.DATABASE_URL ?? '');
+}
+
+function abortar(motivo: string, comoResolver: string): never {
+  console.error(`\n❌ ${motivo}\n   ${comoResolver}\n`);
+  process.exit(1);
+}
+
 async function main() {
+  // Este seed já criou em produção um admin com senha trivial. As duas travas
+  // abaixo existem para isso não se repetir: rodar contra banco remoto passa a
+  // exigir intenção explícita, e não há mais senha embutida no código.
+  if (!bancoLocal() && process.env.SEED_FORCAR !== '1') {
+    abortar(
+      'DATABASE_URL não aponta para um banco local.',
+      'Se é isso mesmo que você quer, rode de novo com SEED_FORCAR=1.',
+    );
+  }
+  const senhaAdminPura = process.env.SEED_ADMIN_SENHA;
+  if (!senhaAdminPura || senhaAdminPura.length < 8) {
+    abortar(
+      'Falta SEED_ADMIN_SENHA (mínimo de 8 caracteres) para a conta de administrador.',
+      'Ex.: SEED_ADMIN_SENHA="uma-senha-forte" npm run prisma:seed',
+    );
+  }
+  const emailAdmin = process.env.SEED_ADMIN_EMAIL || 'admin@studio.com';
+
   console.log('🌱 Iniciando seed...');
 
   // Admin
-  const senhaAdmin = await bcrypt.hash('admin123', 12);
+  const senhaAdmin = await bcrypt.hash(senhaAdminPura, 12);
   const admin = await prisma.usuario.upsert({
     where: { cpf: '00000000000' },
-    update: {},
+    // A senha é reescrita a cada execução: é assim que se troca a senha do
+    // admin num banco que já existe, já que o app não tem essa tela.
+    update: { senhaHash: senhaAdmin, email: emailAdmin },
     create: {
       nome: 'Administrador',
       cpf: '00000000000',
-      email: 'admin@studio.com',
+      email: emailAdmin,
       telefone: '41999999999',
       senhaHash: senhaAdmin,
       tipoUsuario: 'ADMIN',
       ativo: true,
     },
   });
-  console.log('✅ Admin criado:', admin.email);
+  console.log('✅ Admin criado/atualizado:', admin.email);
 
   // Planos
   const planos = await Promise.all([
@@ -82,47 +112,48 @@ async function main() {
   }
   console.log('✅ Horários criados');
 
-  // Aluno de exemplo
-  const senhaAluno = await bcrypt.hash('aluno123', 12);
-  const aluno = await prisma.usuario.upsert({
-    where: { cpf: '12345678901' },
-    update: {},
-    create: {
-      nome: 'Maria Silva',
-      cpf: '12345678901',
-      email: 'maria@email.com',
-      telefone: '41988887777',
-      senhaHash: senhaAluno,
-      tipoUsuario: 'ALUNO',
-      ativo: true,
-    },
-  });
+  // Aluna de exemplo: só com SEED_EXEMPLO=1. Num banco de verdade ela seria
+  // uma conta ativa com senha conhecida no meio dos alunos reais.
+  if (process.env.SEED_EXEMPLO === '1') {
+    const senhaAluno = await bcrypt.hash('aluno123', 12);
+    const aluno = await prisma.usuario.upsert({
+      where: { cpf: '12345678901' },
+      update: {},
+      create: {
+        nome: 'Maria Silva',
+        cpf: '12345678901',
+        email: 'maria@email.com',
+        telefone: '41988887777',
+        senhaHash: senhaAluno,
+        tipoUsuario: 'ALUNO',
+        ativo: true,
+      },
+    });
 
-  // Plano do aluno
-  const inicioSemana = new Date();
-  inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay() + 1);
-  inicioSemana.setHours(0, 0, 0, 0);
+    // Plano do aluno
+    const inicioSemana = new Date();
+    inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay() + 1);
+    inicioSemana.setHours(0, 0, 0, 0);
 
-  await prisma.usuarioPlano.upsert({
-    where: { id: 'up-maria' },
-    update: {},
-    create: {
-      id: 'up-maria',
-      usuarioId: aluno.id,
-      planoId: 'p3',
-      modalidadeId: pilates.id,
-      vigenciaInicio: new Date('2024-01-01'),
-      aulasUsadasSemana: 1,
-      semanaReferencia: inicioSemana,
-    },
-  });
-  console.log('✅ Aluno exemplo criado:', aluno.email);
+    await prisma.usuarioPlano.upsert({
+      where: { id: 'up-maria' },
+      update: {},
+      create: {
+        id: 'up-maria',
+        usuarioId: aluno.id,
+        planoId: 'p3',
+        modalidadeId: pilates.id,
+        vigenciaInicio: new Date('2024-01-01'),
+        aulasUsadasSemana: 1,
+        semanaReferencia: inicioSemana,
+      },
+    });
+    console.log('✅ Aluna de exemplo criada:', aluno.email, '(senha aluno123)');
+  }
+
   console.log('\n🎉 Seed concluído!');
-  console.log('\n📋 Credenciais:');
-  console.log('  Admin → admin@studio.com / admin123');
-  console.log('  Aluno → maria@email.com / aluno123');
-  console.log('  Admin CPF → 000.000.000-00');
-  console.log('  Aluno CPF → 123.456.789-01');
+  console.log(`\n📋 Admin → ${emailAdmin} / a senha passada em SEED_ADMIN_SENHA`);
+  console.log('   Admin CPF → 000.000.000-00');
 }
 
 main()

@@ -29,7 +29,11 @@ function origensPermitidas(): string[] {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  const producao = process.env.NODE_ENV === 'production';
+  // O Swagger expõe o mapa completo da API, então fica DESLIGADO por padrão e
+  // só sobe com SWAGGER_DOCS=1, na máquina de quem desenvolve. Antes dependia
+  // de NODE_ENV — que o .env versionado declara como "development" e sobe
+  // junto no deploy —, ou seja, a proteção não valia justamente em produção.
+  const swaggerLigado = process.env.SWAGGER_DOCS === '1';
 
   // Railway/Vercel entregam a requisição por um proxy: sem isto todo mundo
   // chega com o mesmo req.ip e o rate limit contaria os alunos juntos.
@@ -47,8 +51,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Swagger fica fora do ar em produção: expõe o mapa completo da API.
-  if (!producao) {
+  if (swaggerLigado) {
     const config = new DocumentBuilder()
       .setTitle('Studio API')
       .setDescription('API completa para Studio de Atividade Física')
@@ -66,6 +69,10 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`\n🚀 Studio API rodando na porta ${port}`);
   console.log(`🔒 CORS liberado para: ${permitidas.join(', ')}`);
-  console.log(producao ? '📚 Swagger desabilitado (produção)\n' : `📚 Swagger: http://localhost:${port}/api/docs\n`);
+  console.log(
+    swaggerLigado
+      ? `📚 Swagger: http://localhost:${port}/api/docs\n`
+      : '📚 Swagger desligado (defina SWAGGER_DOCS=1 para ligar)\n',
+  );
 }
 bootstrap();

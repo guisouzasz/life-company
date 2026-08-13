@@ -30,8 +30,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
+# Arquivos de ambiente: guardam senha de banco e segredo de JWT, nunca vão
+# para o repositório. O .env.example é o modelo, sem valor real dentro.
+.env
+.env.*
+!.env.example
 
 # typescript
 *.tsbuildinfo
