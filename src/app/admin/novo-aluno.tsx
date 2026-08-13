@@ -14,21 +14,17 @@ import { usePlanos } from '../../services/planos/planos.queries';
 import { useModalidades } from '../../services/modalidades/modalidades.queries';
 import { useCriarAluno } from '../../services/usuarios/usuarios.mutations';
 import { ApiError } from '../../services/http';
-
-function formatCpf(v: string) {
-  return v
-    .replace(/\D/g, '')
-    .slice(0, 11)
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-}
+import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, dataParaIso, soDigitos } from '../../services/mascaras';
 
 export default function NovoAluno() {
   const [tipo, setTipo] = useState<'ALUNO' | 'PROFESSOR'>('ALUNO');
   const [nome, setNome] = useState('');
+  const [rg, setRg] = useState('');
   const [cpf, setCpf] = useState('');
+  const [endereco, setEndereco] = useState('');
+  const [cep, setCep] = useState('');
   const [email, setEmail] = useState('');
+  const [nascimento, setNascimento] = useState('');
   const [telefone, setTelefone] = useState('');
   const [planoId, setPlanoId] = useState('');
   const [modalidadeProfId, setModalidadeProfId] = useState('');
@@ -44,13 +40,39 @@ export default function NovoAluno() {
   const ehProfessor = tipo === 'PROFESSOR';
 
   const submit = () => {
-    if (!nome.trim() || cpf.replace(/\D/g, '').length !== 11 || (!ehProfessor && !planoId)) {
-      setErro(ehProfessor ? 'Preencha nome e CPF (11 dígitos).' : 'Preencha nome, CPF (11 dígitos) e plano.');
+    if (!nome.trim() || soDigitos(cpf).length !== 11) {
+      setErro('Preencha nome completo e CPF (11 dígitos).');
       return;
     }
     if (ehProfessor && !modalidadeProfId) {
       setErro('Escolha a modalidade do professor.');
       return;
+    }
+    // A ficha completa é exigida só do aluno; o professor entra com nome e CPF.
+    let nascimentoIso: string | undefined;
+    if (!ehProfessor) {
+      if (!planoId) {
+        setErro('Escolha o plano do aluno.');
+        return;
+      }
+      const faltando: string[] = [];
+      if (rg.trim().length < 5) faltando.push('RG');
+      if (endereco.trim().length < 5) faltando.push('endereço');
+      if (soDigitos(cep).length !== 8) faltando.push('CEP');
+      if (!email.trim()) faltando.push('e-mail');
+      if (faltando.length > 0) {
+        setErro(`Preencha ${faltando.join(', ')}.`);
+        return;
+      }
+      nascimentoIso = dataParaIso(nascimento) ?? undefined;
+      if (!nascimentoIso) {
+        setErro(
+          soDigitos(nascimento).length === 8
+            ? 'Data de nascimento inválida — confira o dia, o mês e o ano.'
+            : 'Preencha a data de nascimento (DD/MM/AAAA).',
+        );
+        return;
+      }
     }
     // O plano dá acesso a todas as modalidades; o backend exige um modalidadeId
     // por schema, então usamos a primeira disponível (não restringe agendamentos).
@@ -62,11 +84,20 @@ export default function NovoAluno() {
     criar.mutate(
       {
         nome: nome.trim(),
-        cpf: cpf.replace(/\D/g, ''),
+        cpf: soDigitos(cpf),
         email: email.trim() || undefined,
-        telefone: telefone.trim() || undefined,
+        telefone: soDigitos(telefone) || undefined,
         tipoUsuario: tipo,
-        ...(ehProfessor ? { modalidadeId: modalidadeProfId } : { planoId, modalidadeId }),
+        ...(ehProfessor
+          ? { modalidadeId: modalidadeProfId }
+          : {
+              planoId,
+              modalidadeId,
+              rg: rg.trim(),
+              endereco: endereco.trim(),
+              cep: soDigitos(cep),
+              dataNascimento: nascimentoIso,
+            }),
       },
       {
         onSuccess: (data) => {
@@ -118,10 +149,30 @@ export default function NovoAluno() {
           <Card style={s.section} padding={16}>
             <Text style={s.sectionTitle}>Dados pessoais</Text>
             <View style={s.fields}>
-              <Input label="Nome completo *" placeholder="Nome do aluno" value={nome} onChangeText={setNome} autoCapitalize="words" />
-              <Input label="CPF *" placeholder="000.000.000-00" value={cpf} onChangeText={(t) => setCpf(formatCpf(t))} keyboardType="numeric" />
-              <Input label="E-mail (opcional)" placeholder="o aluno cadastra ao ativar a conta" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-              <Input label="Telefone" placeholder="(00) 00000-0000" value={telefone} onChangeText={setTelefone} keyboardType="phone-pad" />
+              <Input label="Nome completo *" placeholder={ehProfessor ? 'Nome do professor' : 'Nome do aluno'} value={nome} onChangeText={setNome} autoCapitalize="words" />
+              {ehProfessor ? null : (
+                <Input label="RG *" placeholder="00.000.000-0" value={rg} onChangeText={setRg} autoCapitalize="characters" />
+              )}
+              <Input label="CPF *" placeholder="000.000.000-00" value={cpf} onChangeText={(t) => setCpf(mascaraCpf(t))} keyboardType="numeric" />
+              {ehProfessor ? null : (
+                <>
+                  <Input label="Endereço *" placeholder="Rua, número, complemento, bairro, cidade" value={endereco} onChangeText={setEndereco} autoCapitalize="words" />
+                  <Input label="CEP *" placeholder="00000-000" value={cep} onChangeText={(t) => setCep(mascaraCep(t))} keyboardType="numeric" />
+                </>
+              )}
+              <Input
+                label={ehProfessor ? 'E-mail (opcional)' : 'E-mail *'}
+                placeholder={ehProfessor ? 'o professor cadastra ao ativar a conta' : 'email@exemplo.com'}
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {ehProfessor ? null : (
+                <Input label="Data de nascimento *" placeholder="DD/MM/AAAA" value={nascimento} onChangeText={(t) => setNascimento(mascaraData(t))} keyboardType="numeric" />
+              )}
+              <Input label="Telefone" placeholder="(00) 00000-0000" value={telefone} onChangeText={(t) => setTelefone(mascaraTelefone(t))} keyboardType="phone-pad" />
             </View>
           </Card>
 

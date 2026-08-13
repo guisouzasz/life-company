@@ -10,14 +10,25 @@ export interface AlunoAdmin {
   cpf: string;
   telefone?: string | null;
   ativo: boolean;
+  // Ficha cadastral preenchida pelo admin. Vem null nos cadastros feitos
+  // antes destes campos existirem.
+  rg?: string | null;
+  endereco?: string | null;
+  cep?: string | null; // 8 dígitos, sem hífen
+  dataNascimento?: string | null; // ISO
   usuarioPlanos: AlunoPlanoInfo[];
 }
 
 export interface CriarAlunoPayload {
   nome: string;
   cpf: string;
-  email?: string; // opcional: o aluno cadastra o próprio e-mail na ativação
+  email?: string; // obrigatório para ALUNO; PROFESSOR ativa pelo CPF
   telefone?: string;
+  /** Ficha cadastral: obrigatória para ALUNO, dispensada para PROFESSOR. */
+  rg?: string;
+  endereco?: string;
+  cep?: string;
+  dataNascimento?: string; // YYYY-MM-DD
   /** ALUNO (default) ou PROFESSOR (sem plano). */
   tipoUsuario?: 'ALUNO' | 'PROFESSOR';
   planoId?: string; // obrigatório para ALUNO
@@ -29,13 +40,20 @@ export interface CriarAlunoResposta {
   linkAcesso: string;
 }
 
-/** PUT /usuarios/:id — backend atualiza nome, email e telefone. */
+/**
+ * PUT /usuarios/:id — só os campos enviados são alterados, então dá para
+ * corrigir um dado isolado sem apagar o resto do cadastro.
+ */
 export interface AtualizarAlunoPayload {
   nome?: string;
   cpf?: string;
   /** String vazia limpa o e-mail (o aluno cadastra o dele na ativação). */
   email?: string;
   telefone?: string;
+  rg?: string;
+  endereco?: string;
+  cep?: string;
+  dataNascimento?: string; // YYYY-MM-DD
   /** Reativar/desativar o cadastro. */
   ativo?: boolean;
 }

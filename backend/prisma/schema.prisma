@@ -41,6 +41,12 @@ model Usuario {
   cpf         String      @unique
   email       String?     @unique
   telefone    String?
+  // Ficha cadastral preenchida pelo admin. Opcionais no banco porque os
+  // cadastros anteriores a este campo não os têm; o service exige no ALUNO.
+  rg             String?
+  endereco       String?
+  cep            String?
+  dataNascimento DateTime? @map("data_nascimento")
   senhaHash   String?     @map("senha_hash")
   tipoUsuario TipoUsuario @default(ALUNO) @map("tipo_usuario")
   ativo       Boolean     @default(true)

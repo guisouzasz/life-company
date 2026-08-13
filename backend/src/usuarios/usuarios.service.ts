@@ -18,11 +18,54 @@ export class UsuariosService {
     private authService: AuthService,
   ) {}
 
+  /** CEP só com dígitos; undefined quando não veio nada. */
+  private normalizarCep(cep?: string): string | undefined {
+    const d = cep?.replace(/\D/g, "");
+    return d ? d : undefined;
+  }
+
+  /**
+   * Data de nascimento YYYY-MM-DD → Date no início do dia.
+   * Recusa data inexistente, futura ou anterior a 1900. O Date do JS "conserta"
+   * sozinho uma data impossível (31/02 vira 03/03), então comparar os campos de
+   * volta é o que pega esse caso.
+   */
+  private converterNascimento(valor?: string): Date | undefined {
+    if (!valor) return undefined;
+    const data = new Date(`${valor}T00:00:00`);
+    const [ano, mes, dia] = valor.split("-").map(Number);
+    const invalida =
+      Number.isNaN(data.getTime()) ||
+      data.getFullYear() !== ano ||
+      data.getMonth() + 1 !== mes ||
+      data.getDate() !== dia ||
+      ano < 1900;
+    if (invalida) throw new ConflictException("Data de nascimento inválida");
+    if (data > new Date()) {
+      throw new ConflictException("Data de nascimento não pode ser no futuro");
+    }
+    return data;
+  }
+
+  /** A ficha cadastral completa é exigida do ALUNO; do PROFESSOR, não. */
+  private exigirFichaDoAluno(dto: CriarUsuarioDto) {
+    const faltando: string[] = [];
+    if (!dto.rg?.trim()) faltando.push("RG");
+    if (!dto.endereco?.trim()) faltando.push("endereço");
+    if (!this.normalizarCep(dto.cep)) faltando.push("CEP");
+    if (!dto.email?.trim()) faltando.push("e-mail");
+    if (!dto.dataNascimento) faltando.push("data de nascimento");
+    if (faltando.length > 0) {
+      throw new ConflictException(`Cadastro do aluno exige: ${faltando.join(", ")}`);
+    }
+  }
+
   async criar(dto: CriarUsuarioDto) {
     const tipo = dto.tipoUsuario === "PROFESSOR" ? "PROFESSOR" : "ALUNO";
     if (tipo === "ALUNO" && (!dto.planoId || !dto.modalidadeId)) {
       throw new ConflictException("Aluno precisa de plano e modalidade");
     }
+    if (tipo === "ALUNO") this.exigirFichaDoAluno(dto);
     // Professor pertence a UMA modalidade: só vê a agenda e os treinos dela.
     if (tipo === "PROFESSOR" && !dto.modalidadeId) {
       throw new ConflictException("Professor precisa de uma modalidade");
@@ -40,6 +83,10 @@ export class UsuariosService {
         cpf: cpfNorm,
         email: dto.email,
         telefone: dto.telefone,
+        rg: dto.rg?.trim() || null,
+        endereco: dto.endereco?.trim() || null,
+        cep: this.normalizarCep(dto.cep) ?? null,
+        dataNascimento: this.converterNascimento(dto.dataNascimento) ?? null,
         tipoUsuario: tipo as any,
         ...(tipo === "PROFESSOR" ? { modalidadeProfessorId: dto.modalidadeId } : {}),
         ativo: false,
@@ -99,8 +146,13 @@ export class UsuariosService {
   }
 
   /**
-   * Edição completa do cadastro: nome, CPF, e-mail, telefone e status
-   * ativo/inativo — com checagem de unicidade (CPF/e-mail) excluindo o próprio.
+   * Edição completa do cadastro: nome, CPF, e-mail, telefone, ficha cadastral
+   * (RG, endereço, CEP, nascimento) e status ativo/inativo — com checagem de
+   * unicidade (CPF/e-mail) excluindo o próprio.
+   *
+   * Cada campo só é tocado quando vem no corpo: assim dá para corrigir um dado
+   * isolado sem apagar o resto, e os cadastros antigos, sem ficha, continuam
+   * editáveis normalmente.
    */
   async atualizar(id: string, data: Partial<CriarUsuarioDto> & { ativo?: boolean }) {
     await this.buscarPorId(id);
@@ -130,6 +182,13 @@ export class UsuariosService {
         // e-mail vazio limpa o campo (o aluno cadastra o dele na ativação)
         email: data.email !== undefined ? data.email || null : undefined,
         telefone: data.telefone !== undefined ? data.telefone || null : undefined,
+        rg: data.rg !== undefined ? data.rg.trim() || null : undefined,
+        endereco: data.endereco !== undefined ? data.endereco.trim() || null : undefined,
+        cep: data.cep !== undefined ? this.normalizarCep(data.cep) ?? null : undefined,
+        dataNascimento:
+          data.dataNascimento !== undefined
+            ? this.converterNascimento(data.dataNascimento) ?? null
+            : undefined,
         ativo: data.ativo,
       },
     });

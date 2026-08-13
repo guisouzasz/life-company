@@ -19,6 +19,39 @@ import { useGerarLink, useAtualizarAluno } from '../../services/usuarios/usuario
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { ApiError } from '../../services/http';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
+import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, dataParaIso, isoParaData, soDigitos } from '../../services/mascaras';
+
+/**
+ * Ficha cadastral no card do aluno. Some inteira quando o cadastro é antigo e
+ * não tem nenhum destes dados, para não poluir a lista com linhas vazias.
+ */
+function FichaCadastral({ aluno }: { aluno: AlunoAdmin }) {
+  const linhas: { icone: React.ComponentProps<typeof Icon>['name']; texto: string }[] = [];
+  if (aluno.cpf) linhas.push({ icone: 'card-outline', texto: `CPF ${mascaraCpf(aluno.cpf)}` });
+  if (aluno.rg) linhas.push({ icone: 'id-card-outline', texto: `RG ${aluno.rg}` });
+  if (aluno.dataNascimento) {
+    linhas.push({ icone: 'calendar-number-outline', texto: `Nasc. ${isoParaData(aluno.dataNascimento)}` });
+  }
+  if (aluno.telefone) linhas.push({ icone: 'call-outline', texto: mascaraTelefone(aluno.telefone) });
+  if (aluno.endereco || aluno.cep) {
+    const cep = aluno.cep ? `CEP ${mascaraCep(aluno.cep)}` : '';
+    linhas.push({
+      icone: 'location-outline',
+      texto: [aluno.endereco, cep].filter(Boolean).join(' — '),
+    });
+  }
+  if (linhas.length === 0) return null;
+  return (
+    <View style={s.ficha}>
+      {linhas.map((l) => (
+        <View key={l.texto} style={s.fichaLinha}>
+          <Icon name={l.icone} size={13} color={LC.textMuted} />
+          <Text style={s.fichaTexto} numberOfLines={2}>{l.texto}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function AdminAlunos() {
   const isDesktop = useIsDesktop();
@@ -45,23 +78,23 @@ export default function AdminAlunos() {
 
   // Modal de edição (cadastro completo)
   const [editando, setEditando] = useState<AlunoAdmin | null>(null);
-  const [form, setForm] = useState({ nome: '', cpf: '', email: '', telefone: '', ativo: true });
+  const [form, setForm] = useState({
+    nome: '', rg: '', cpf: '', endereco: '', cep: '', email: '', nascimento: '', telefone: '', ativo: true,
+  });
   const [erroEdicao, setErroEdicao] = useState<string | null>(null);
-
-  const formatCpf = (v: string) =>
-    v.replace(/\D/g, '').slice(0, 11)
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 
   const abrirEdicao = (aluno: AlunoAdmin) => {
     setEditando(aluno);
     setErroEdicao(null);
     setForm({
       nome: aluno.nome,
-      cpf: formatCpf(aluno.cpf ?? ''),
+      rg: aluno.rg ?? '',
+      cpf: mascaraCpf(aluno.cpf ?? ''),
+      endereco: aluno.endereco ?? '',
+      cep: mascaraCep(aluno.cep ?? ''),
       email: aluno.email ?? '',
-      telefone: aluno.telefone ?? '',
+      nascimento: isoParaData(aluno.dataNascimento),
+      telefone: mascaraTelefone(aluno.telefone ?? ''),
       ativo: aluno.ativo,
     });
   };
@@ -72,18 +105,36 @@ export default function AdminAlunos() {
       setErroEdicao('Nome é obrigatório.');
       return;
     }
-    if (form.cpf.replace(/\D/g, '').length !== 11) {
+    if (soDigitos(form.cpf).length !== 11) {
       setErroEdicao('CPF deve ter 11 dígitos.');
       return;
+    }
+    if (form.cep && soDigitos(form.cep).length !== 8) {
+      setErroEdicao('CEP deve ter 8 dígitos.');
+      return;
+    }
+    // Data em branco limpa o campo; preenchida, precisa ser uma data real.
+    let nascimento = '';
+    if (form.nascimento.trim()) {
+      const iso = dataParaIso(form.nascimento);
+      if (!iso) {
+        setErroEdicao('Data de nascimento inválida — confira o dia, o mês e o ano.');
+        return;
+      }
+      nascimento = iso;
     }
     atualizar.mutate(
       {
         id: editando.id,
         payload: {
           nome: form.nome.trim(),
-          cpf: form.cpf.replace(/\D/g, ''),
+          cpf: soDigitos(form.cpf),
           email: form.email.trim(), // vazio limpa o e-mail
-          telefone: form.telefone.trim(),
+          telefone: soDigitos(form.telefone),
+          rg: form.rg.trim(),
+          endereco: form.endereco.trim(),
+          cep: soDigitos(form.cep),
+          dataNascimento: nascimento,
           ativo: form.ativo,
         },
       },
@@ -210,6 +261,9 @@ export default function AdminAlunos() {
                     </View>
                     <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
                   </View>
+
+                  <FichaCadastral aluno={aluno} />
+
                   <View style={s.actions}>
                     <Button
                       title="Editar"
@@ -274,10 +328,14 @@ export default function AdminAlunos() {
       <AppModal visible={!!editando} onClose={() => setEditando(null)} title="Editar aluno">
         <ScrollView style={s.editScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={s.editForm}>
-            <Input label="Nome" value={form.nome} onChangeText={(t) => setForm((f) => ({ ...f, nome: t }))} autoCapitalize="words" />
-            <Input label="CPF" value={form.cpf} onChangeText={(t) => setForm((f) => ({ ...f, cpf: formatCpf(t) }))} keyboardType="numeric" placeholder="000.000.000-00" />
+            <Input label="Nome completo" value={form.nome} onChangeText={(t) => setForm((f) => ({ ...f, nome: t }))} autoCapitalize="words" />
+            <Input label="RG" value={form.rg} onChangeText={(t) => setForm((f) => ({ ...f, rg: t }))} autoCapitalize="characters" placeholder="00.000.000-0" />
+            <Input label="CPF" value={form.cpf} onChangeText={(t) => setForm((f) => ({ ...f, cpf: mascaraCpf(t) }))} keyboardType="numeric" placeholder="000.000.000-00" />
+            <Input label="Endereço" value={form.endereco} onChangeText={(t) => setForm((f) => ({ ...f, endereco: t }))} autoCapitalize="words" placeholder="Rua, número, bairro, cidade" />
+            <Input label="CEP" value={form.cep} onChangeText={(t) => setForm((f) => ({ ...f, cep: mascaraCep(t) }))} keyboardType="numeric" placeholder="00000-000" />
             <Input label="E-mail" value={form.email} onChangeText={(t) => setForm((f) => ({ ...f, email: t }))} keyboardType="email-address" autoCapitalize="none" placeholder="vazio = aluno cadastra na ativação" />
-            <Input label="Telefone" value={form.telefone} onChangeText={(t) => setForm((f) => ({ ...f, telefone: t }))} keyboardType="phone-pad" />
+            <Input label="Data de nascimento" value={form.nascimento} onChangeText={(t) => setForm((f) => ({ ...f, nascimento: mascaraData(t) }))} keyboardType="numeric" placeholder="DD/MM/AAAA" />
+            <Input label="Telefone" value={form.telefone} onChangeText={(t) => setForm((f) => ({ ...f, telefone: mascaraTelefone(t) }))} keyboardType="phone-pad" placeholder="(00) 00000-0000" />
 
             <Text style={s.editLabel}>Status</Text>
             <View style={s.editChips}>
@@ -327,6 +385,9 @@ const s = StyleSheet.create({
   plano: { fontSize: 11, color: LC.textMuted, marginTop: 2 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
   actionBtn: { flex: 1 },
+  ficha: { gap: 5, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: LC.border },
+  fichaLinha: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
+  fichaTexto: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 17 },
   credLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 6 },
   credLinkText: { fontSize: 13, fontWeight: '600', color: LC.primary },
   fab: {
