@@ -12,6 +12,7 @@ import { Avatar } from '../../components/ui/avatar';
 import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { CargaExercicioModal } from '../../components/professor/carga-exercicio-modal';
+import { FichaExercicios } from '../../components/professor/ficha-exercicios';
 import { Badge } from '../../components/ui/badge';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino } from '../../services/treinos/treinos.mutations';
@@ -59,9 +60,6 @@ function agrupar(exercicios: Treino['exercicios']): Secao[] {
   }
   return secoes.length > 0 ? secoes : [secaoVazia()];
 }
-
-/** 22.5 → "22,5" | 20 → "20" */
-const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
 
 // ── Metadados da ficha (chips de atalho) ──────────────────────────────
 const FREQUENCIAS = ['1x', '2x', '3x', '4x', '5x', '6x']; // → "3x por semana"
@@ -448,7 +446,7 @@ export default function TreinosAluno() {
                 <View style={s.treinoHead}>
                   <View style={{ flex: 1 }}>
                     <View style={s.tituloRow}>
-                      <Text style={s.treinoTitulo}>{t.titulo}</Text>
+                      <Text style={s.treinoTitulo}>{t.titulo.toUpperCase()}</Text>
                       <Badge label={t.concluido ? 'Concluída' : 'Ativa'} variant={t.concluido ? 'neutral' : 'success'} />
                     </View>
                     <Text style={s.treinoMeta}>
@@ -486,43 +484,11 @@ export default function TreinosAluno() {
 
                 {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
 
-                {t.exercicios.map((e, idx) => {
-                  const evo = evolucaoDe(e.nome);
-                  // Cabeçalho do grupo muscular quando muda em relação ao anterior
-                  const grupoAnterior = idx > 0 ? t.exercicios[idx - 1].grupo : undefined;
-                  const mostraGrupo = !!e.grupo && e.grupo !== grupoAnterior;
-                  return (
-                    <View key={e.id}>
-                      {mostraGrupo ? <Text style={s.grupoHeader}>{e.grupo}</Text> : null}
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => setCargaDe({ nome: e.nome, reps: e.repeticoes })}
-                      style={({ pressed }) => [s.exLinha, pressed && s.pressed]}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.exNome} numberOfLines={1}>{e.nome}</Text>
-                        {evo ? (
-                          <View style={s.exEvoRow}>
-                            <Icon
-                              name={evo.evolucaoKg > 0 ? 'trending-up' : evo.evolucaoKg < 0 ? 'trending-down' : 'remove'}
-                              size={12}
-                              color={evo.evolucaoKg > 0 ? LC.success : evo.evolucaoKg < 0 ? LC.danger : LC.textMuted}
-                            />
-                            <Text style={s.exEvoText}>
-                              {kgFmt(evo.atual)} kg
-                              {evo.evolucaoKg !== 0 ? ` (${evo.evolucaoKg > 0 ? '+' : ''}${kgFmt(evo.evolucaoKg)})` : ''}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text style={s.exDetalhe}>
-                        {e.series}x{e.repeticoes}{e.carga ? ` • ${e.carga}` : ''}
-                      </Text>
-                      <Icon name="stats-chart-outline" size={15} color={LC.primary} />
-                    </Pressable>
-                    </View>
-                  );
-                })}
+                <FichaExercicios
+                  exercicios={t.exercicios}
+                  evolucaoDe={evolucaoDe}
+                  onAbrirCarga={setCargaDe}
+                />
                 {t.observacoes ? <Text style={s.treinoObs}>{t.observacoes}</Text> : null}
               </Card>
             ))
@@ -591,21 +557,13 @@ const s = StyleSheet.create({
   treinoCardConcluido: { opacity: 0.7 },
   treinoHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
   tituloRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  treinoTitulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
+  // Título da ficha em maiúsculas e na cor da marca, como no cabeçalho de uma
+  // ficha impressa (o modelo de referência usa vermelho; aqui vale o teal).
+  treinoTitulo: { fontSize: 16, fontWeight: '800', color: LC.primary, letterSpacing: 0.4 },
   treinoMeta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   metaChipText: { fontSize: 12, fontWeight: '600', color: LC.textSecondary },
   acao: { width: 34, height: 34, borderRadius: 17, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  exLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: LC.border },
-  exNome: { fontSize: 14, fontWeight: '600', color: LC.textPrimary },
-  grupoHeader: {
-    fontSize: 12, fontWeight: '800', color: LC.primary, textTransform: 'uppercase', letterSpacing: 0.5,
-    marginTop: 12, marginBottom: 2, paddingTop: 8, borderTopWidth: 1, borderTopColor: LC.border,
-  },
-  exEvoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  exEvoText: { fontSize: 11, fontWeight: '700', color: LC.textSecondary },
-  exDetalhe: { fontSize: 13, fontWeight: '700', color: LC.primary },
-  pressed: { opacity: 0.7 },
   treinoObs: { fontSize: 12, color: LC.textMuted, marginTop: 10, fontStyle: 'italic' },
   conteudoTexto: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, paddingTop: 6, borderTopWidth: 1, borderTopColor: LC.border },
 
