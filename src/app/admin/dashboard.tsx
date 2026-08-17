@@ -15,6 +15,7 @@ import { useRelatorioDashboard } from '../../services/relatorios/relatorios.quer
 import { useResumoFinanceiro } from '../../services/financeiro/financeiro.queries';
 import { useLogout } from '../../services/auth/auth.mutations';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
+import { AppModal } from '../../components/ui/modal';
 import { AlunosHorarioModal, type HorarioDoModal } from '../../components/admin/alunos-horario-modal';
 import { formatDate, getDiaSemanaKey } from '../../services/date';
 import { nomeModalidade } from '../../constants/assets';
@@ -227,16 +228,29 @@ function AtencaoSection({ d }: { d?: RelatorioDashboard }) {
   const reposicoes = d?.reposicoesPendentes;
   const acesso = d?.aguardandoAcesso;
   const cancelados = d?.canceladosOntem ?? [];
+  // Qual lista está aberta. Antes o toque no card jogava na lista completa de
+  // alunos, sem filtro — não dava para saber QUEM precisava de quê.
+  const [lista, setLista] = useState<'reposicoes' | 'acesso' | null>(null);
 
   const temAlgo = (reposicoes?.total ?? 0) > 0 || (acesso?.total ?? 0) > 0 || cancelados.length > 0;
   if (!temAlgo) return null;
+
+  /**
+   * Abre a tela de Alunos já filtrada por este aluno. É lá que ficam as ações
+   * (gerar link de acesso, gerenciar créditos, editar plano), então não vale
+   * duplicá-las aqui.
+   */
+  const abrirAluno = (nome: string) => {
+    setLista(null);
+    router.push({ pathname: '/admin/alunos', params: { busca: nome } } as any);
+  };
 
   return (
     <>
       <Text style={s.sectionTitle}>Precisa de atenção</Text>
 
       {reposicoes && reposicoes.total > 0 ? (
-        <Pressable onPress={() => router.push('/admin/alunos' as any)} style={({ pressed }) => [pressed && s.pressed]}>
+        <Pressable onPress={() => setLista('reposicoes')} style={({ pressed }) => [pressed && s.pressed]}>
           <Card style={s.atCard} padding={14}>
             <View style={[s.atIcon, { backgroundColor: LC.warningBg }]}>
               <Icon name="ticket-outline" size={18} color={LC.warning} />
@@ -255,7 +269,7 @@ function AtencaoSection({ d }: { d?: RelatorioDashboard }) {
       ) : null}
 
       {acesso && acesso.total > 0 ? (
-        <Pressable onPress={() => router.push('/admin/alunos' as any)} style={({ pressed }) => [pressed && s.pressed]}>
+        <Pressable onPress={() => setLista('acesso')} style={({ pressed }) => [pressed && s.pressed]}>
           <Card style={s.atCard} padding={14}>
             <View style={[s.atIcon, { backgroundColor: LC.infoBg }]}>
               <Icon name="key-outline" size={18} color={LC.info} />
@@ -270,6 +284,51 @@ function AtencaoSection({ d }: { d?: RelatorioDashboard }) {
           </Card>
         </Pressable>
       ) : null}
+
+      {/* Lista de quem tem reposição pendente */}
+      <AppModal visible={lista === 'reposicoes'} onClose={() => setLista(null)} title="Reposições para agendar">
+        <Text style={s.atListaHint}>
+          Estes alunos têm crédito de reposição sem usar. Toque no nome para abrir o cadastro.
+        </Text>
+        <ScrollView style={s.atListaScroll} showsVerticalScrollIndicator={false}>
+          {(reposicoes?.alunos ?? []).map((a) => (
+            <Pressable
+              key={a.nome}
+              onPress={() => abrirAluno(a.nome)}
+              style={({ pressed }) => [s.atLinha, pressed && s.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Abrir cadastro de ${a.nome}`}
+            >
+              <Avatar nome={a.nome} size={34} />
+              <Text style={s.atLinhaNome} numberOfLines={1}>{a.nome}</Text>
+              <Badge label={a.creditos === 1 ? '1 crédito' : `${a.creditos} créditos`} variant="neutral" />
+              <Icon name="chevron-forward" size={16} color={LC.textMuted} />
+            </Pressable>
+          ))}
+        </ScrollView>
+      </AppModal>
+
+      {/* Lista de quem ainda não ativou a conta */}
+      <AppModal visible={lista === 'acesso'} onClose={() => setLista(null)} title="Aguardando primeiro acesso">
+        <Text style={s.atListaHint}>
+          Cadastrados que ainda não criaram a senha. Toque no nome para abrir o cadastro e gerar o link de acesso.
+        </Text>
+        <ScrollView style={s.atListaScroll} showsVerticalScrollIndicator={false}>
+          {(acesso?.nomes ?? []).map((nome) => (
+            <Pressable
+              key={nome}
+              onPress={() => abrirAluno(nome)}
+              style={({ pressed }) => [s.atLinha, pressed && s.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={`Abrir cadastro de ${nome}`}
+            >
+              <Avatar nome={nome} size={34} />
+              <Text style={s.atLinhaNome} numberOfLines={1}>{nome}</Text>
+              <Icon name="chevron-forward" size={16} color={LC.textMuted} />
+            </Pressable>
+          ))}
+        </ScrollView>
+      </AppModal>
 
       {cancelados.length > 0 ? (
         <Card style={s.atCard} padding={14}>
@@ -610,6 +669,14 @@ const s = StyleSheet.create({
   aniversarioIdade: { fontSize: 13, fontWeight: '700', color: LC.primary },
 
   atCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  // Listas abertas pelos cards de "Precisa de atenção"
+  atListaHint: { fontSize: 13, color: LC.textSecondary, lineHeight: 19, marginBottom: 12 },
+  atListaScroll: { maxHeight: 340 },
+  atLinha: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10,
+    borderTopWidth: 1, borderTopColor: LC.border,
+  },
+  atLinhaNome: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary },
   atIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   atTitulo: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
   atSub: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
