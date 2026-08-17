@@ -5,6 +5,8 @@ export interface AlunoFinanceiro {
   usuarioId: string;
   nome: string;
   cpf: string;
+  /** Alimenta o aviso por WhatsApp; null quando não foi cadastrado. */
+  telefone?: string | null;
   plano: { id: string; nome: string } | null;
   diaVencimento: number;
   status: StatusMensalidade;

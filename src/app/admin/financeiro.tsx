@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { openBrowserAsync } from 'expo-web-browser';
 import { LC } from '../../constants/theme';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
@@ -16,6 +17,44 @@ import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types
 import { formatDate } from '../../services/date';
 import { ApiError } from '../../services/http';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
+import { linkWhatsapp, mensagemVencimento, telefoneParaWhatsapp } from '../../services/whatsapp';
+
+/**
+ * Aviso de mensalidade pelo WhatsApp. Vale para quem está a vencer ou
+ * atrasado — quem já pagou não precisa de lembrete.
+ *
+ * O envio é manual de propósito: o app abre a conversa com o texto pronto e
+ * quem aperta enviar é o admin. Sem custo e sem depender de número dedicado
+ * nem de modelo aprovado pela Meta, que é o que a API oficial exigiria.
+ */
+function useAvisoWhatsapp() {
+  const [erro, setErro] = useState<string | null>(null);
+
+  const cabeAviso = (a: AlunoFinanceiro) => a.status === 'A_VENCER' || a.status === 'ATRASADO';
+
+  const avisar = async (a: AlunoFinanceiro) => {
+    const numero = telefoneParaWhatsapp(a.telefone);
+    if (!numero) {
+      setErro(
+        `${a.nome.split(' ')[0]} não tem telefone válido no cadastro. ` +
+          'Vá em Alunos, toque em Editar e informe o número com DDD.',
+      );
+      return;
+    }
+    const texto = mensagemVencimento({
+      nome: a.nome,
+      vencimento: a.vencimento,
+      atrasado: a.status === 'ATRASADO',
+    });
+    try {
+      await openBrowserAsync(linkWhatsapp(numero, texto));
+    } catch {
+      setErro('Não foi possível abrir o WhatsApp neste aparelho.');
+    }
+  };
+
+  return { avisar, cabeAviso, erro, limparErro: () => setErro(null) };
+}
 
 function statusInfo(a: AlunoFinanceiro): { label: string; variant: BadgeVariant } {
   switch (a.status) {
@@ -39,6 +78,7 @@ export default function AdminFinanceiro() {
   const [configurando, setConfigurando] = useState<AlunoFinanceiro | null>(null);
   const [desfazendo, setDesfazendo] = useState<AlunoFinanceiro | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const aviso = useAvisoWhatsapp();
 
   const dados = resumo.data;
 
@@ -73,6 +113,12 @@ export default function AdminFinanceiro() {
         onCancel={() => setDesfazendo(null)}
       />
       <InfoModal visible={!!erro} title="Erro" message={erro ?? ''} onClose={() => setErro(null)} />
+      <InfoModal
+        visible={!!aviso.erro}
+        title="Não foi possível avisar"
+        message={aviso.erro ?? ''}
+        onClose={aviso.limparErro}
+      />
     </>
   );
 
@@ -162,6 +208,17 @@ export default function AdminFinanceiro() {
                       <Pressable style={s.acaoBtn} hitSlop={4} onPress={() => setConfigurando(a)}>
                         <Icon name="calendar-outline" size={16} color={LC.primary} />
                       </Pressable>
+                      {aviso.cabeAviso(a) ? (
+                        <Pressable
+                          style={[s.acaoBtn, s.acaoBtnZap]}
+                          hitSlop={4}
+                          onPress={() => aviso.avisar(a)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Avisar ${a.nome} no WhatsApp`}
+                        >
+                          <Icon name="logo-whatsapp" size={16} color="#fff" />
+                        </Pressable>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -219,6 +276,17 @@ export default function AdminFinanceiro() {
                     <Icon name="calendar-outline" size={18} color={LC.primary} />
                   </Pressable>
                 </View>
+                {aviso.cabeAviso(a) ? (
+                  <Pressable
+                    style={({ pressed }) => [s.zapBtn, pressed && { opacity: 0.75 }]}
+                    onPress={() => aviso.avisar(a)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Avisar ${a.nome} no WhatsApp`}
+                  >
+                    <Icon name="logo-whatsapp" size={17} color="#fff" />
+                    <Text style={s.zapBtnText}>Avisar no WhatsApp</Text>
+                  </Pressable>
+                ) : null}
               </Card>
             );
           })}
@@ -265,6 +333,8 @@ const s = StyleSheet.create({
   tAcoes: { flexDirection: 'row', gap: 8 },
   acaoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, alignItems: 'center', justifyContent: 'center' },
   acaoBtnPrimary: { backgroundColor: LC.primary, borderColor: LC.primary },
+  // Verde oficial do WhatsApp: o botão é reconhecido pelo que é, sem precisar de rótulo
+  acaoBtnZap: { backgroundColor: '#25D366', borderColor: '#25D366' },
   tLegenda: { paddingHorizontal: 16, paddingVertical: 10 },
   tLegendaText: { fontSize: 11, color: LC.textMuted },
 
@@ -275,4 +345,9 @@ const s = StyleSheet.create({
   cardSub: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
   cardConfig: { width: 40, height: 40, borderRadius: 20, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  zapBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: 10, paddingVertical: 11, borderRadius: LC.radius.md, backgroundColor: '#25D366',
+  },
+  zapBtnText: { fontSize: 14, fontWeight: '800', color: '#fff' },
 });

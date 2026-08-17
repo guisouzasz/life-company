@@ -43,7 +43,8 @@ export class FinanceiroService {
       this.prisma.usuario.findMany({
         where: { tipoUsuario: 'ALUNO', ativo: true },
         select: {
-          id: true, nome: true, cpf: true, diaVencimento: true,
+          // telefone alimenta o aviso de vencimento pelo WhatsApp, no painel
+          id: true, nome: true, cpf: true, telefone: true, diaVencimento: true,
           usuarioPlanos: { where: { vigenciaFim: null }, include: { plano: true }, take: 1 },
         },
         orderBy: { nome: 'asc' },
@@ -63,6 +64,7 @@ export class FinanceiroService {
         usuarioId: a.id,
         nome: a.nome,
         cpf: a.cpf,
+        telefone: a.telefone,
         plano: plano ? { id: plano.id, nome: plano.nome } : null,
         diaVencimento: a.diaVencimento,
         status,
