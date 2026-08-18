@@ -15,6 +15,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
 import { AtivarContaDto, erroDeEmail } from "./dto/ativar-conta.dto";
+import { segredoJwt } from "./jwt.config";
 
 /** Domínio público do estúdio — destino dos links de primeiro acesso. */
 const APP_URL_PUBLICA = "https://www.academialifecompany.com.br";
@@ -280,7 +281,7 @@ export class AuthService {
     const payload = { sub: usuarioId, tipo: tipoUsuario };
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: "15m",
-      secret: this.config.get("JWT_SECRET") || "studio-jwt-secret-dev",
+      secret: segredoJwt(this.config),
     });
     const refreshToken = uuidv4();
     const expiraEm = dayjs().add(7, "day").toDate();
