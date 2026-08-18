@@ -15,6 +15,7 @@ import { useResumoFinanceiro } from '../../services/financeiro/financeiro.querie
 import { useDesfazerPagamento } from '../../services/financeiro/financeiro.mutations';
 import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types';
 import { formatDate } from '../../services/date';
+import { formatarReal } from '../../services/mascaras';
 import { ApiError } from '../../services/http';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { linkWhatsapp, mensagemVencimento, telefoneParaWhatsapp } from '../../services/whatsapp';
@@ -45,6 +46,7 @@ function useAvisoWhatsapp() {
       nome: a.nome,
       vencimento: a.vencimento,
       atrasado: a.status === 'ATRASADO',
+      valor: a.valorMensalidade,
     });
     try {
       await openBrowserAsync(linkWhatsapp(numero, texto));
@@ -122,6 +124,42 @@ export default function AdminFinanceiro() {
     </>
   );
 
+  /**
+   * O dinheiro do mês, antes da contagem de pessoas.
+   *
+   * "Previsto" só soma quem tem valor definido — por isso o aviso de quantos
+   * ficaram de fora: um total incompleto sem avisar faria a dona planejar em
+   * cima de um número menor do que a realidade.
+   */
+  const cardDinheiro = dados ? (
+    <Card style={s.dinheiro} padding={16}>
+      <View style={s.dinheiroLinha}>
+        <View style={s.dinheiroItem}>
+          <Text style={s.dinheiroLabel}>Previsto</Text>
+          <Text style={s.dinheiroValor}>{formatarReal(dados.previsto)}</Text>
+        </View>
+        <View style={s.dinheiroDivisor} />
+        <View style={s.dinheiroItem}>
+          <Text style={s.dinheiroLabel}>Recebido</Text>
+          <Text style={[s.dinheiroValor, { color: LC.successFg }]}>{formatarReal(dados.recebido)}</Text>
+        </View>
+        <View style={s.dinheiroDivisor} />
+        <View style={s.dinheiroItem}>
+          <Text style={s.dinheiroLabel}>Em aberto</Text>
+          <Text style={[s.dinheiroValor, dados.emAberto > 0 && { color: LC.danger }]}>
+            {formatarReal(dados.emAberto)}
+          </Text>
+        </View>
+      </View>
+      {dados.semValor > 0 ? (
+        <Text style={s.dinheiroAviso}>
+          {dados.semValor} {dados.semValor === 1 ? 'aluno está' : 'alunos estão'} sem valor de
+          mensalidade — {dados.semValor === 1 ? 'ele não entra' : 'eles não entram'} nesta conta.
+        </Text>
+      ) : null}
+    </Card>
+  ) : null;
+
   const statCards = dados ? (
     <View style={s.stats}>
       <Card style={s.statCard} padding={14}>
@@ -170,11 +208,13 @@ export default function AdminFinanceiro() {
         {header}
         {estadoBase ?? (
           <ScrollView contentContainerStyle={s.deskScroll} showsVerticalScrollIndicator={false}>
+            {cardDinheiro}
             {statCards}
             <Card style={s.tabela} padding={0}>
               <View style={[s.tRow, s.tHead]}>
                 <Text style={[s.tCol, s.tColAluno, s.tHeadText]}>Aluno</Text>
                 <Text style={[s.tCol, s.tColPlano, s.tHeadText]}>Plano</Text>
+                <Text style={[s.tCol, s.tColValor, s.tHeadText]}>Valor</Text>
                 <Text style={[s.tCol, s.tColVenc, s.tHeadText]}>Vencimento</Text>
                 <Text style={[s.tCol, s.tColStatus, s.tHeadText]}>Situação</Text>
                 <Text style={[s.tCol, s.tColAcoes, s.tHeadText]}>Ações</Text>
@@ -188,6 +228,14 @@ export default function AdminFinanceiro() {
                       <Text style={s.tNome} numberOfLines={1}>{a.nome}</Text>
                     </View>
                     <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>{a.plano?.nome ?? '—'}</Text>
+                    <View style={[s.tCol, s.tColValor]}>
+                      <Text style={a.valorMensalidade === null ? s.tSemValor : s.tValor}>
+                        {a.valorMensalidade === null ? 'a definir' : formatarReal(a.valorMensalidade)}
+                      </Text>
+                      {a.pagamento && a.pagamento.valor > 0 && a.pagamento.valor !== a.valorMensalidade ? (
+                        <Text style={s.tPagoEm}>recebido {formatarReal(a.pagamento.valor)}</Text>
+                      ) : null}
+                    </View>
                     <Text style={[s.tCol, s.tColVenc, s.tTexto]}>Dia {a.diaVencimento}</Text>
                     <View style={[s.tCol, s.tColStatus]}>
                       <Badge label={st.label} variant={st.variant} />
@@ -201,11 +249,23 @@ export default function AdminFinanceiro() {
                           <Icon name="arrow-undo-outline" size={16} color={LC.textSecondary} />
                         </Pressable>
                       ) : (
-                        <Pressable style={[s.acaoBtn, s.acaoBtnPrimary]} hitSlop={4} onPress={() => setRegistrando(a)}>
+                        <Pressable
+                          style={[s.acaoBtn, s.acaoBtnPrimary]}
+                          hitSlop={4}
+                          onPress={() => setRegistrando(a)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Marcar ${a.nome} como pago`}
+                        >
                           <Icon name="checkmark" size={16} color="#fff" />
                         </Pressable>
                       )}
-                      <Pressable style={s.acaoBtn} hitSlop={4} onPress={() => setConfigurando(a)}>
+                      <Pressable
+                        style={s.acaoBtn}
+                        hitSlop={4}
+                        onPress={() => setConfigurando(a)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mensalidade de ${a.nome}`}
+                      >
                         <Icon name="calendar-outline" size={16} color={LC.primary} />
                       </Pressable>
                       {aviso.cabeAviso(a) ? (
@@ -245,6 +305,7 @@ export default function AdminFinanceiro() {
       {header}
       {estadoBase ?? (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          {cardDinheiro}
           {statCards}
           {dados!.alunos.map((a) => {
             const st = statusInfo(a);
@@ -256,6 +317,15 @@ export default function AdminFinanceiro() {
                     <Text style={s.cardNome}>{a.nome}</Text>
                     <Text style={s.cardSub}>
                       {a.plano?.nome ?? 'Sem plano'} • vence dia {a.diaVencimento}
+                    </Text>
+                    {/* O valor combinado é a informação principal. O recebido
+                        só entra quando foi informado e é diferente — pagamento
+                        antigo veio sem valor, e "R$ 0,00 recebido" mentiria. */}
+                    <Text style={a.valorMensalidade === null ? s.cardSemValor : s.cardValor}>
+                      {a.valorMensalidade === null ? 'Sem valor definido' : formatarReal(a.valorMensalidade)}
+                      {a.pagamento && a.pagamento.valor > 0 && a.pagamento.valor !== a.valorMensalidade
+                        ? ` · ${formatarReal(a.pagamento.valor)} recebido`
+                        : ''}
                     </Text>
                   </View>
                   <Badge label={st.label} variant={st.variant} />
@@ -272,7 +342,13 @@ export default function AdminFinanceiro() {
                   ) : (
                     <Button title="Marcar como pago" size="sm" onPress={() => setRegistrando(a)} style={{ flex: 1 }} />
                   )}
-                  <Pressable style={s.cardConfig} hitSlop={6} onPress={() => setConfigurando(a)}>
+                  <Pressable
+                    style={s.cardConfig}
+                    hitSlop={6}
+                    onPress={() => setConfigurando(a)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Mensalidade de ${a.nome}`}
+                  >
                     <Icon name="calendar-outline" size={18} color={LC.primary} />
                   </Pressable>
                 </View>
@@ -311,6 +387,21 @@ const s = StyleSheet.create({
   // ── Stat cards ──────────────────────────────────────────────────
   stats: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   statCard: { flex: 1 },
+  dinheiro: { marginBottom: 12 },
+  dinheiroLinha: { flexDirection: 'row', alignItems: 'center' },
+  dinheiroItem: { flex: 1, alignItems: 'center' },
+  dinheiroDivisor: { width: 1, height: 34, backgroundColor: LC.border },
+  dinheiroLabel: { fontSize: 11.5, color: LC.textSecondary, marginBottom: 3 },
+  dinheiroValor: { fontSize: 16.5, fontWeight: '800', color: LC.textPrimary },
+  dinheiroAviso: {
+    fontSize: 11.5, color: LC.warningFg, marginTop: 12, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: LC.border, lineHeight: 16,
+  },
+  tColValor: { width: 110 },
+  tValor: { fontSize: 13.5, fontWeight: '700', color: LC.textPrimary },
+  tSemValor: { fontSize: 12.5, color: LC.warningFg },
+  cardValor: { fontSize: 12.5, fontWeight: '700', color: LC.textPrimary, marginTop: 2 },
+  cardSemValor: { fontSize: 12, color: LC.warningFg, marginTop: 2 },
   statIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
   statValor: { fontSize: 20, fontWeight: '800', color: LC.textPrimary },
   statLabel: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },

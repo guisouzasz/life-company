@@ -71,3 +71,29 @@ export function isoParaData(v?: string | null): string {
   const m = v.match(/(\d{4})-(\d{2})-(\d{2})/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
 }
+
+/**
+ * Dinheiro em real, para leitura: 180 → "R$ 180,00".
+ * `null`/indefinido vira um traço — é o jeito de a tela dizer "ainda não
+ * definido" sem fingir que o valor é zero.
+ */
+export function formatarReal(valor?: number | null): string {
+  if (valor === null || valor === undefined) return '—';
+  return `R$ ${valor.toFixed(2).replace('.', ',')}`;
+}
+
+/** Campo de valor: só dígitos, lidos como centavos. "18000" → 180.00 */
+export function mascaraReal(texto: string): string {
+  const centavos = texto.replace(/\D/g, '').slice(0, 8);
+  if (!centavos) return '';
+  const n = Number(centavos) / 100;
+  return n.toFixed(2).replace('.', ',');
+}
+
+/** Lê o texto do campo de valor como número. "180,00" → 180 */
+export function realParaNumero(texto: string): number | null {
+  const limpo = texto.replace(/\./g, '').replace(',', '.').trim();
+  if (!limpo) return null;
+  const n = Number(limpo);
+  return Number.isFinite(n) ? n : null;
+}

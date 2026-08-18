@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Matches } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Matches, Min } from 'class-validator';
 
 export class RegistrarPagamentoDto {
   @IsString()
@@ -12,4 +12,10 @@ export class RegistrarPagamentoDto {
   @IsOptional()
   @IsString()
   observacao?: string;
+
+  /** Quanto entrou. Sem isto, vale a mensalidade cadastrada do aluno. */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  valor?: number;
 }

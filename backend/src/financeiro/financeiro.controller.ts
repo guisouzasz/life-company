@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Request }
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { FinanceiroService } from './financeiro.service';
 import { RegistrarPagamentoDto } from './dto/registrar-pagamento.dto';
+import { ConfigurarAlunoDto } from './dto/configurar-aluno.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 
@@ -38,8 +39,8 @@ export class FinanceiroController {
     return this.service.desfazer(id);
   }
 
-  @Patch('aluno/:usuarioId/config') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Dia de vencimento do aluno (admin)' })
-  configurar(@Param('usuarioId') usuarioId: string, @Body() body: { diaVencimento?: number }) {
+  @Patch('aluno/:usuarioId/config') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Vencimento e valor da mensalidade (admin)' })
+  configurar(@Param('usuarioId') usuarioId: string, @Body() body: ConfigurarAlunoDto) {
     return this.service.configurarAluno(usuarioId, body);
   }
 }

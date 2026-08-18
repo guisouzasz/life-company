@@ -8,6 +8,7 @@
  */
 import { STUDIO_NOME } from '../constants/app';
 import { formatDate } from './date';
+import { formatarReal } from './mascaras';
 
 /** Código do país usado quando o telefone vem só com DDD + número. */
 const DDI_BRASIL = '55';
@@ -37,19 +38,24 @@ export function mensagemVencimento(params: {
   nome: string;
   vencimento: string;
   atrasado: boolean;
+  /** Valor combinado; omitido quando o estúdio ainda não definiu. */
+  valor?: number | null;
 }): string {
-  const { nome, vencimento, atrasado } = params;
+  const { nome, vencimento, atrasado, valor } = params;
   const dia = formatDate(vencimento, 'DD/MM');
+  // Falar o valor evita a ida e volta de "quanto é mesmo?" — mas só quando
+  // ele existe; mandar "R$ 0,00" seria pior do que não falar nada.
+  const quanto = valor ? ` de ${formatarReal(valor)}` : '';
   if (atrasado) {
     return (
       `Oi, ${primeiroNome(nome)}! Tudo bem? ` +
-      `Passando para avisar que a sua mensalidade do ${STUDIO_NOME} venceu no dia ${dia}. ` +
+      `Passando para avisar que a sua mensalidade${quanto} do ${STUDIO_NOME} venceu no dia ${dia}. ` +
       `Se você já pagou, me manda um retorno que eu registro por aqui. Obrigada!`
     );
   }
   return (
     `Oi, ${primeiroNome(nome)}! Tudo bem? ` +
-    `Passando para lembrar que a sua mensalidade do ${STUDIO_NOME} vence no dia ${dia}. ` +
+    `Passando para lembrar que a sua mensalidade${quanto} do ${STUDIO_NOME} vence no dia ${dia}. ` +
     `Qualquer dúvida, é só me chamar por aqui!`
   );
 }

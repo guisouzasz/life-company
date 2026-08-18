@@ -33,7 +33,10 @@ export const financeiroService = {
     return data;
   },
 
-  async configurarAluno(usuarioId: string, payload: { diaVencimento: number }) {
+  async configurarAluno(
+    usuarioId: string,
+    payload: { diaVencimento?: number; valorMensalidade?: number | null },
+  ) {
     const { data } = await http.patch(`/financeiro/aluno/${usuarioId}/config`, payload);
     return data;
   },

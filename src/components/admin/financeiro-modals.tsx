@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Icon } from '../ui/icon';
 import { formatDate } from '../../services/date';
+import { formatarReal, mascaraReal, realParaNumero } from '../../services/mascaras';
 import { useRegistrarPagamento, useConfigurarFinanceiroAluno } from '../../services/financeiro/financeiro.mutations';
 import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types';
 import { ApiError } from '../../services/http';
@@ -19,23 +20,38 @@ function mesRef(offset: number): { key: string; label: string } {
   return { key, label };
 }
 
-/** Marcar o mês do aluno como pago (sem valores — só o registro). */
+/**
+ * Marcar o mês do aluno como pago.
+ *
+ * O valor vem preenchido com a mensalidade dele, mas fica editável: aluno
+ * paga metade, traz o mês anterior junto, ou combina um desconto — e o que o
+ * histórico precisa guardar é o que entrou, não o que era para entrar.
+ */
 export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanceiro | null; onClose: () => void }) {
   const registrar = useRegistrarPagamento();
   const [refSel, setRefSel] = useState(0); // offset de mês: -1, 0, +1
+  const [valorTexto, setValorTexto] = useState('');
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     if (aluno) {
       setRefSel(0);
+      setValorTexto(
+        aluno.valorMensalidade === null ? '' : aluno.valorMensalidade.toFixed(2).replace('.', ','),
+      );
       setErro(null);
     }
   }, [aluno]);
 
   const salvar = () => {
     if (!aluno) return;
+    const valor = realParaNumero(valorTexto);
+    if (valorTexto.trim() && (valor === null || valor < 0)) {
+      setErro('Valor inválido.');
+      return;
+    }
     registrar.mutate(
-      { usuarioId: aluno.usuarioId, referencia: mesRef(refSel).key },
+      { usuarioId: aluno.usuarioId, referencia: mesRef(refSel).key, valor: valor ?? undefined },
       {
         onSuccess: onClose,
         onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível registrar.'),
@@ -58,6 +74,21 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
 
       {erro ? <Text style={s.erro}>{erro}</Text> : null}
 
+      <Text style={s.label}>Valor recebido</Text>
+      <Input
+        value={valorTexto}
+        onChangeText={(v) => setValorTexto(mascaraReal(v))}
+        keyboardType="number-pad"
+        placeholder="0,00"
+        leftIcon={<Text style={s.prefixo}>R$</Text>}
+      />
+      {aluno?.valorMensalidade === null ? (
+        <Text style={s.avisoSemValor}>
+          Este aluno ainda não tem mensalidade definida. Informe o valor aqui, ou defina no botão de
+          vencimento para não precisar digitar todo mês.
+        </Text>
+      ) : null}
+
       <View style={s.actions}>
         <Button title="Cancelar" variant="outline" onPress={onClose} style={{ flex: 1 }} />
         <Button title="Confirmar pagamento" loading={registrar.isPending} onPress={salvar} style={{ flex: 1 }} />
@@ -67,15 +98,19 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
   );
 }
 
-/** Configurar o dia de vencimento do aluno. */
+/** Mensalidade do aluno: quanto é e quando vence. */
 export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinanceiro | null; onClose: () => void }) {
   const configurar = useConfigurarFinanceiroAluno();
   const [diaTexto, setDiaTexto] = useState('5');
+  const [valorTexto, setValorTexto] = useState('');
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
     if (aluno) {
       setDiaTexto(String(aluno.diaVencimento));
+      setValorTexto(
+        aluno.valorMensalidade === null ? '' : aluno.valorMensalidade.toFixed(2).replace('.', ','),
+      );
       setErro(null);
     }
   }, [aluno]);
@@ -87,8 +122,15 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
       setErro('Dia de vencimento deve ser entre 1 e 28');
       return;
     }
+    const valor = realParaNumero(valorTexto);
+    if (valorTexto.trim() && (valor === null || valor < 0)) {
+      setErro('Valor da mensalidade inválido.');
+      return;
+    }
     configurar.mutate(
-      { usuarioId: aluno.usuarioId, diaVencimento: dia },
+      // Campo vazio limpa o valor de propósito: é como desfazer um lançamento
+      // errado sem mexer no cadastro do aluno.
+      { usuarioId: aluno.usuarioId, diaVencimento: dia, valorMensalidade: valor },
       {
         onSuccess: onClose,
         onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar.'),
@@ -97,7 +139,19 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
   };
 
   return (
-    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Vencimento — ${aluno.nome.split(' ')[0]}` : ''}>
+    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Mensalidade — ${aluno.nome.split(' ')[0]}` : ''}>
+      <Text style={s.label}>Valor da mensalidade</Text>
+      <Input
+        value={valorTexto}
+        onChangeText={(v) => setValorTexto(mascaraReal(v))}
+        keyboardType="number-pad"
+        placeholder="0,00"
+        leftIcon={<Text style={s.prefixo}>R$</Text>}
+      />
+      <Text style={s.ajuda}>
+        O valor é deste aluno — não vem do plano. Deixe vazio se ainda não houver valor combinado.
+      </Text>
+
       <Text style={s.label}>Dia do vencimento (1 a 28)</Text>
       <Input
         value={diaTexto}
@@ -114,7 +168,10 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
         <Button title="Cancelar" variant="outline" onPress={onClose} style={{ flex: 1 }} />
         <Button title="Salvar" loading={configurar.isPending} onPress={salvar} style={{ flex: 1 }} />
       </View>
-      <Text style={s.hint}>O aluno recebe um lembrete no app quando o vencimento se aproxima.</Text>
+      <Text style={s.hint}>
+        O aluno recebe um lembrete no app quando o vencimento se aproxima, e o valor entra no total
+        previsto do mês.
+      </Text>
     </AppModal>
   );
 }
@@ -131,5 +188,11 @@ const s = StyleSheet.create({
   chipTextSel: { color: LC.primary, fontWeight: '700' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
   erro: { fontSize: 12, color: LC.danger, marginTop: 10 },
+  prefixo: { fontSize: 15, fontWeight: '700', color: LC.textSecondary },
+  ajuda: { fontSize: 11.5, color: LC.textMuted, marginTop: 6, lineHeight: 16 },
+  avisoSemValor: {
+    fontSize: 11.5, color: LC.warningFg, marginTop: 8, lineHeight: 16,
+    backgroundColor: LC.warningBg, borderRadius: LC.radius.sm, padding: 10,
+  },
   hint: { fontSize: 11, color: LC.textMuted, marginTop: 10, textAlign: 'center' },
 });

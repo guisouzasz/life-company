@@ -26,8 +26,11 @@ export function useDesfazerPagamento() {
 export function useConfigurarFinanceiroAluno() {
   const invalidar = useInvalidarFinanceiro();
   return useMutation({
-    mutationFn: ({ usuarioId, diaVencimento }: { usuarioId: string; diaVencimento: number }) =>
-      financeiroService.configurarAluno(usuarioId, { diaVencimento }),
+    mutationFn: ({
+      usuarioId,
+      ...config
+    }: { usuarioId: string; diaVencimento?: number; valorMensalidade?: number | null }) =>
+      financeiroService.configurarAluno(usuarioId, config),
     onSuccess: invalidar,
   });
 }

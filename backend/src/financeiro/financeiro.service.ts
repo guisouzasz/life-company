@@ -45,6 +45,7 @@ export class FinanceiroService {
         select: {
           // telefone alimenta o aviso de vencimento pelo WhatsApp, no painel
           id: true, nome: true, cpf: true, telefone: true, diaVencimento: true,
+          valorMensalidade: true,
           usuarioPlanos: { where: { vigenciaFim: null }, include: { plano: true }, take: 1 },
         },
         orderBy: { nome: 'asc' },
@@ -67,20 +68,60 @@ export class FinanceiroService {
         telefone: a.telefone,
         plano: plano ? { id: plano.id, nome: plano.nome } : null,
         diaVencimento: a.diaVencimento,
+        // Decimal do Prisma não atravessa JSON como número; convertemos aqui.
+        valorMensalidade: a.valorMensalidade === null ? null : Number(a.valorMensalidade),
         status,
         vencimento,
         dias, // dias de atraso (ATRASADO) ou dias até vencer (A_VENCER)
         pagamento: pagamento
-          ? { id: pagamento.id, pagoEm: pagamento.pagoEm, formaPagamento: pagamento.formaPagamento }
+          ? {
+              id: pagamento.id,
+              pagoEm: pagamento.pagoEm,
+              formaPagamento: pagamento.formaPagamento,
+              valor: Number(pagamento.valor),
+            }
           : null,
       };
     });
+
+    /**
+     * Dinheiro do mês.
+     *
+     * `previsto` soma só quem tem valor definido — por isso `semValor` vai
+     * junto: um total que ignora em silêncio os alunos sem valor faria a dona
+     * planejar em cima de um número menor do que a realidade, sem saber.
+     */
+    const soma = (ns: number[]) => Math.round(ns.reduce((t, n) => t + n, 0) * 100) / 100;
+    const previsto = soma(linhas.map((l) => l.valorMensalidade ?? 0));
+
+    /**
+     * Quanto entrou de cada aluno.
+     *
+     * Pagamento com valor 0 é de antes de existir valor no sistema: o estúdio
+     * marcou "pagou o mês" e não havia onde escrever quanto. Nesses casos vale
+     * a mensalidade dele — foi o que se combinou, e é a melhor leitura
+     * disponível. Zerar tudo faria o mês inteiro aparecer como não recebido no
+     * dia em que isto entrar no ar, o que seria falso.
+     */
+    const recebidoDe = (l: (typeof linhas)[number]) =>
+      l.pagamento ? l.pagamento.valor || l.valorMensalidade || 0 : 0;
+    const recebido = soma(linhas.map(recebidoDe));
 
     return {
       pagos: linhas.filter((l) => l.status === 'EM_DIA').length,
       aVencer: linhas.filter((l) => l.status === 'A_VENCER').length,
       atrasados: linhas.filter((l) => l.status === 'ATRASADO').length,
       semRegistro: linhas.filter((l) => l.status === 'SEM_REGISTRO').length,
+      previsto,
+      recebido,
+      /**
+       * O que ainda falta entrar. É previsto - recebido de propósito, para os
+       * três números fecharem entre si: somar só a mensalidade de quem não
+       * pagou esconderia quem pagou menos do que devia. Nunca negativo — quem
+       * adianta dois meses num lançamento só não vira "sobra".
+       */
+      emAberto: Math.max(soma([previsto, -recebido]), 0),
+      semValor: linhas.filter((l) => l.valorMensalidade === null).length,
       alunos: linhas,
     };
   }
@@ -91,16 +132,19 @@ export class FinanceiroService {
     if (!usuario) throw new NotFoundException('Aluno não encontrado');
     return this.prisma.pagamento.findMany({
       where: { usuarioId },
-      select: { id: true, referencia: true, pagoEm: true, formaPagamento: true, observacao: true },
+      select: { id: true, referencia: true, pagoEm: true, formaPagamento: true, observacao: true, valor: true },
       orderBy: { referencia: 'desc' },
       take: 24,
-    });
+    }).then((ps) => ps.map((p) => ({ ...p, valor: Number(p.valor) })));
   }
 
   /** Marcar mês como pago (admin). */
-  async registrar(dto: { usuarioId: string; referencia?: string; observacao?: string }) {
+  async registrar(dto: { usuarioId: string; referencia?: string; observacao?: string; valor?: number }) {
     const usuario = await this.prisma.usuario.findUnique({ where: { id: dto.usuarioId } });
     if (!usuario) throw new NotFoundException('Aluno não encontrado');
+    if (dto.valor !== undefined && (!Number.isFinite(dto.valor) || dto.valor < 0)) {
+      throw new BadRequestException('Valor inválido');
+    }
 
     const referencia = this.mesRef(dto.referencia);
     const jaExiste = await this.prisma.pagamento.findUnique({
@@ -108,8 +152,15 @@ export class FinanceiroService {
     });
     if (jaExiste) throw new ConflictException(`${dayjs(referencia).format('MM/YYYY')} já está marcado como pago`);
 
+    /**
+     * O valor fica gravado NO pagamento, não lido do aluno na hora de exibir:
+     * a mensalidade muda de preço, e o histórico tem de continuar mostrando o
+     * que foi pago à época. Sem valor informado, vale o do aluno.
+     */
+    const valor = dto.valor ?? Number(usuario.valorMensalidade ?? 0);
+
     return this.prisma.pagamento.create({
-      data: { usuarioId: dto.usuarioId, referencia, observacao: dto.observacao },
+      data: { usuarioId: dto.usuarioId, referencia, observacao: dto.observacao, valor },
     });
   }
 
@@ -121,25 +172,49 @@ export class FinanceiroService {
     return { mensagem: 'Marcação de pagamento desfeita' };
   }
 
-  /** Configurar o dia de vencimento do aluno (admin). */
-  async configurarAluno(usuarioId: string, dto: { diaVencimento?: number }) {
+  /**
+   * Mensalidade do aluno: dia de vencimento e valor (admin).
+   *
+   * O valor é por aluno, não pelo plano: o estúdio combina preço caso a caso
+   * (aluno antigo, indicação, dois da mesma casa), e amarrar ao plano obrigaria
+   * a inventar um plano novo a cada combinação. `null` limpa o valor.
+   */
+  async configurarAluno(
+    usuarioId: string,
+    dto: { diaVencimento?: number; valorMensalidade?: number | null },
+  ) {
     const usuario = await this.prisma.usuario.findUnique({ where: { id: usuarioId } });
     if (!usuario) throw new NotFoundException('Aluno não encontrado');
     if (dto.diaVencimento !== undefined && (dto.diaVencimento < 1 || dto.diaVencimento > 28)) {
       throw new BadRequestException('Dia de vencimento deve ser entre 1 e 28');
     }
-    return this.prisma.usuario.update({
+    if (
+      dto.valorMensalidade !== undefined &&
+      dto.valorMensalidade !== null &&
+      (!Number.isFinite(dto.valorMensalidade) || dto.valorMensalidade < 0 || dto.valorMensalidade > 99999)
+    ) {
+      throw new BadRequestException('Valor da mensalidade inválido');
+    }
+    const atualizado = await this.prisma.usuario.update({
       where: { id: usuarioId },
-      data: { ...(dto.diaVencimento !== undefined ? { diaVencimento: dto.diaVencimento } : {}) },
-      select: { id: true, diaVencimento: true },
+      data: {
+        ...(dto.diaVencimento !== undefined ? { diaVencimento: dto.diaVencimento } : {}),
+        ...(dto.valorMensalidade !== undefined ? { valorMensalidade: dto.valorMensalidade } : {}),
+      },
+      select: { id: true, diaVencimento: true, valorMensalidade: true },
     });
+    return {
+      ...atualizado,
+      valorMensalidade:
+        atualizado.valorMensalidade === null ? null : Number(atualizado.valorMensalidade),
+    };
   }
 
   /** Situação da mensalidade do aluno logado (Meu Plano / notificações). */
   async minhaSituacao(usuarioId: string) {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: usuarioId },
-      select: { diaVencimento: true },
+      select: { diaVencimento: true, valorMensalidade: true },
     });
     if (!usuario) throw new NotFoundException('Usuário não encontrado');
 
@@ -156,6 +231,8 @@ export class FinanceiroService {
 
     return {
       diaVencimento: usuario.diaVencimento,
+      valorMensalidade:
+        usuario.valorMensalidade === null ? null : Number(usuario.valorMensalidade),
       status,
       vencimento,
       dias,
