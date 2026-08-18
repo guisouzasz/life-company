@@ -13,7 +13,8 @@
     "prisma:generate": "prisma generate",
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "auditoria:limite": "ts-node scripts/varredura-limite-semanal.ts"
+    "auditoria:limite": "ts-node scripts/varredura-limite-semanal.ts",
+    "diagnostico": "bash scripts/diagnostico-api.sh"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
