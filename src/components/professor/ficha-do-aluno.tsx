@@ -3,6 +3,7 @@ import { LC } from '../../constants/theme';
 import { Icon } from '../ui/icon';
 import { Loading, ErrorState } from '../ui/states';
 import { FichaExercicios } from './ficha-exercicios';
+import { alertasDaFicha } from './ficha-saude';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
@@ -41,12 +42,8 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
   const ativos = todas.filter((t) => !t.concluido);
   const concluidos = todas.length - ativos.length;
 
-  const alertas = [
-    anamnese.data?.gestante ? 'Gestante' : null,
-    anamnese.data && !anamnese.data.liberacaoMedica ? 'Sem liberação médica' : null,
-    anamnese.data?.lesoes ? 'Lesão' : null,
-    anamnese.data?.problemasSaude ? 'Problema de saúde' : null,
-  ].filter(Boolean) as string[];
+  // Mesma regra da ficha em tela cheia — a lista de alertas mora num lugar só.
+  const alertas = alertasDaFicha(anamnese.data);
 
   return (
     <>

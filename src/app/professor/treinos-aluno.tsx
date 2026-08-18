@@ -20,7 +20,7 @@ import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino } from '../../services/treinos/treinos.mutations';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
-import { AnamneseModal } from '../../components/professor/anamnese-modal';
+import { FichaSaude, alertasDaFicha } from '../../components/professor/ficha-saude';
 import { useMe } from '../../services/auth/auth.queries';
 import type { ExercicioPayload, Treino } from '../../services/treinos/treinos.types';
 import { ApiError } from '../../services/http';
@@ -93,7 +93,17 @@ export default function TreinosAluno() {
   const treinos = useTreinosDoAluno(alunoId);
   const cargas = useCargasDoAluno(alunoId);
   const anamnese = useAnamneseDoAluno(alunoId);
-  const [verAnamnese, setVerAnamnese] = useState(false);
+
+  /**
+   * Ficha de saúde e treino são coisas separadas, e a ficha vem primeiro
+   * quando o aluno é novo: o professor recebe alguém que nunca treinou aqui e
+   * o que ele precisa ler antes de qualquer coisa é lesão, cirurgia e
+   * limitação — não uma lista de exercícios vazia.
+   */
+  const [aba, setAba] = useState<'treinos' | 'ficha' | null>(null);
+  const temTreino = (treinos.data ?? []).some((t) => !t.concluido);
+  const abaAtual = aba ?? (treinos.isSuccess && !temTreino ? 'ficha' : 'treinos');
+  const alertas = alertasDaFicha(anamnese.data);
   const criar = useCriarTreino();
   const atualizar = useAtualizarTreino();
   const remover = useRemoverTreino();
@@ -452,21 +462,51 @@ export default function TreinosAluno() {
           <Avatar nome={alunoNome} size={40} />
           <View style={{ flex: 1 }}>
             <Text style={s.title}>{alunoNome}</Text>
-            <Text style={s.subtitle}>Treinos do aluno</Text>
+            <Text style={s.subtitle}>
+              {abaAtual === 'ficha' ? 'Ficha de saúde' : 'Treinos do aluno'}
+            </Text>
           </View>
         </View>
 
-        {/* Ficha de saúde: ler antes de montar o treino */}
-        <Pressable style={s.fichaSaude} onPress={() => setVerAnamnese(true)}>
-          <Icon name="clipboard-outline" size={16} color={anamnese.data ? LC.primary : LC.textMuted} />
-          <Text style={[s.fichaSaudeTexto, !anamnese.data && { color: LC.textMuted }]}>
-            {anamnese.data ? 'Ver ficha de saúde' : 'Sem ficha de saúde preenchida'}
-          </Text>
-          {anamnese.data ? <Icon name="chevron-forward" size={15} color={LC.primary} /> : null}
-        </Pressable>
+        {/* Ficha e treino são duas coisas, e não uma dentro da outra */}
+        <View style={s.abas}>
+          <Pressable
+            style={[s.aba, abaAtual === 'treinos' && s.abaAtiva]}
+            onPress={() => setAba('treinos')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: abaAtual === 'treinos' }}
+          >
+            <Icon name="barbell-outline" size={16} color={abaAtual === 'treinos' ? LC.primary : LC.textSecondary} />
+            <Text style={[s.abaTexto, abaAtual === 'treinos' && s.abaTextoAtivo]}>Treinos</Text>
+          </Pressable>
+          <Pressable
+            style={[s.aba, abaAtual === 'ficha' && s.abaAtiva]}
+            onPress={() => setAba('ficha')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: abaAtual === 'ficha' }}
+            accessibilityLabel="Ficha de saúde do aluno"
+          >
+            <Icon name="clipboard-outline" size={16} color={abaAtual === 'ficha' ? LC.primary : LC.textSecondary} />
+            <Text style={[s.abaTexto, abaAtual === 'ficha' && s.abaTextoAtivo]}>Ficha de saúde</Text>
+            {/* Ponto de alerta: o professor precisa perceber que há algo na
+                ficha mesmo quando está olhando o treino. */}
+            {alertas.length > 0 ? <View style={s.abaPonto} /> : null}
+          </Pressable>
+        </View>
       </View>
 
-      {treinos.isLoading ? (
+      {abaAtual === 'ficha' ? (
+        anamnese.isLoading ? (
+          <Loading />
+        ) : (
+          <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+            <Card padding={16}>
+              <FichaSaude ficha={anamnese.data} alunoNome={alunoNome} completa />
+            </Card>
+            <View style={{ height: 90 }} />
+          </ScrollView>
+        )
+      ) : treinos.isLoading ? (
         <Loading />
       ) : treinos.isError ? (
         <ErrorState onRetry={() => treinos.refetch()} />
@@ -545,18 +585,14 @@ export default function TreinosAluno() {
         </ScrollView>
       )}
 
-      {/* FAB novo treino */}
+      {/* FAB novo treino — só faz sentido na aba de treinos */}
+      {abaAtual === 'ficha' ? null : (
       <Pressable style={s.fab} onPress={abrirNovo}>
         <Icon name="add" size={26} color="#fff" />
       </Pressable>
+      )}
 
       <TabBar isProfessor />
-      <AnamneseModal
-        visible={verAnamnese}
-        alunoNome={alunoNome}
-        ficha={anamnese.data}
-        onClose={() => setVerAnamnese(false)}
-      />
       <CargaExercicioModal
         exercicio={cargaDe?.nome ?? null}
         alunoId={alunoId}
@@ -590,12 +626,18 @@ const s = StyleSheet.create({
   },
   title: { fontSize: 20, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 13, color: LC.textSecondary, marginTop: 2 },
-  fichaSaude: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12,
-    backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border,
-    borderRadius: LC.radius.md, paddingHorizontal: 14, paddingVertical: 10,
+  abas: {
+    flexDirection: 'row', gap: 8, marginTop: 14,
+    backgroundColor: LC.neutralBg, borderRadius: LC.radius.md, padding: 4,
   },
-  fichaSaudeTexto: { flex: 1, fontSize: 13.5, fontWeight: '700', color: LC.primary },
+  aba: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 9, borderRadius: LC.radius.sm,
+  },
+  abaAtiva: { backgroundColor: LC.bgCard, ...LC.shadow },
+  abaTexto: { fontSize: 13, fontWeight: '700', color: LC.textSecondary },
+  abaTextoAtivo: { color: LC.primary },
+  abaPonto: { width: 7, height: 7, borderRadius: 4, backgroundColor: LC.warning },
   scroll: { ...LC.coluna, padding: 16, paddingTop: 8 },
 
   // Lista
