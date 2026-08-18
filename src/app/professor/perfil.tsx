@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { useAuthStore } from '../../store/auth';
 import { LC } from '../../constants/theme';
+import { nomeModalidade } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Avatar } from '../../components/ui/avatar';
 import { Card } from '../../components/ui/card';
@@ -20,6 +21,8 @@ export default function ProfessorPerfil() {
   const [confirmarSaida, setConfirmarSaida] = useState(false);
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [erroExcluir, setErroExcluir] = useState<string | null>(null);
+
+  const modalidade = me.data?.modalidadeProfessor?.nome;
 
   const excluirConta = () => {
     excluir.mutate(undefined, {
@@ -43,10 +46,21 @@ export default function ProfessorPerfil() {
         <View style={s.avatarSection}>
           <Avatar nome={nome} size={88} />
           <Text style={s.nome}>{nome}</Text>
+          {/* A modalidade não é enfeite: ela decide a agenda que ele vê e o
+              formato da ficha de treino. Ficava invisível para todo mundo —
+              quando vinha errada, o sintoma aparecia lá no treino e ninguém
+              tinha como ligar uma coisa na outra. */}
           <View style={s.tag}>
             <Icon name="school-outline" size={13} color={LC.primary} />
-            <Text style={s.tagText}>Professor</Text>
+            <Text style={s.tagText}>
+              {modalidade ? `Professor de ${nomeModalidade(modalidade)}` : 'Professor'}
+            </Text>
           </View>
+          {me.isSuccess && !modalidade ? (
+            <Text style={s.semModalidade}>
+              Sem modalidade definida. Peça à administração para ajustar em Alunos → Professores.
+            </Text>
+          ) : null}
           {me.data?.email ? <Text style={s.email}>{me.data.email}</Text> : null}
         </View>
 
@@ -123,6 +137,10 @@ const s = StyleSheet.create({
   },
   tagText: { fontSize: 12, fontWeight: '700', color: LC.primary },
   email: { fontSize: 13, color: LC.textSecondary, marginTop: 6 },
+  semModalidade: {
+    fontSize: 12, color: LC.warningFg, marginTop: 8, textAlign: 'center',
+    paddingHorizontal: 24, lineHeight: 17,
+  },
   card: { marginHorizontal: 16, marginBottom: 12 },
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 14 },
   rowBorder: { borderBottomWidth: 1, borderBottomColor: LC.border },
