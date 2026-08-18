@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../constants/theme';
 import { iconePorModalidade, nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
@@ -7,7 +7,7 @@ import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
 import { Badge, type BadgeVariant } from '../components/ui/badge';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
-import { useHistorico } from '../services/agendamentos/agendamentos.queries';
+import { useHistoricoPaginado } from '../services/agendamentos/agendamentos.queries';
 import type { Agendamento } from '../services/agendamentos/agendamentos.types';
 import { formatDate } from '../services/date';
 
@@ -37,17 +37,18 @@ function capitalize(s: string) {
 }
 
 export default function Historico() {
-  const historico = useHistorico();
+  const historico = useHistoricoPaginado();
+  const aulas = useMemo(() => historico.data?.pages.flat() ?? [], [historico.data]);
 
   const grupos = useMemo(() => {
     const map = new Map<string, Agendamento[]>();
-    (historico.data ?? []).forEach((ag) => {
+    aulas.forEach((ag) => {
       const chave = capitalize(formatDate(ag.dataAula, 'MMMM YYYY'));
       if (!map.has(chave)) map.set(chave, []);
       map.get(chave)!.push(ag);
     });
     return Array.from(map.entries());
-  }, [historico.data]);
+  }, [aulas]);
 
   return (
     <View style={s.root}>
@@ -91,6 +92,18 @@ export default function Historico() {
               })}
             </View>
           ))}
+          {historico.hasNextPage ? (
+            <Pressable
+              style={({ pressed }) => [s.maisBtn, pressed && s.maisBtnPress]}
+              onPress={() => historico.fetchNextPage()}
+              disabled={historico.isFetchingNextPage}
+              accessibilityRole="button"
+            >
+              <Text style={s.maisTexto}>
+                {historico.isFetchingNextPage ? 'Carregando...' : 'Carregar mais'}
+              </Text>
+            </Pressable>
+          ) : null}
           <View style={{ height: 8 }} />
         </ScrollView>
       )}
@@ -112,4 +125,11 @@ const s = StyleSheet.create({
   info: { flex: 1 },
   modalidade: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
   meta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  maisBtn: {
+    alignItems: 'center', paddingVertical: 13, marginTop: 4,
+    borderRadius: LC.radius.md, backgroundColor: LC.bgCard,
+    borderWidth: 1, borderColor: LC.border,
+  },
+  maisBtnPress: { opacity: 0.7 },
+  maisTexto: { fontSize: 14, fontWeight: '700', color: LC.primary },
 });
