@@ -97,7 +97,9 @@ export function SeletorExercicio({ grupo, selecionado, onSelecionar, onFechar }:
 
         {lista.length === 0 && !ofereceLivre ? (
           <Text style={s.vazio}>
-            Nenhum exercício de {grupo} com esse nome. Escreva o nome completo para usá-lo mesmo assim.
+            {busca.trim()
+              ? `Nenhum exercício de ${grupo} com esse nome. Escreva o nome completo para usá-lo mesmo assim.`
+              : `Ainda não há lista de ${grupo}. Escreva o nome do exercício acima para usá-lo.`}
           </Text>
         ) : null}
       </ScrollView>

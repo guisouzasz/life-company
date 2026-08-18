@@ -14,6 +14,7 @@ import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { CargaExercicioModal } from '../../components/professor/carga-exercicio-modal';
 import { FichaExercicios } from '../../components/professor/ficha-exercicios';
 import { SeletorExercicio } from '../../components/professor/seletor-exercicio';
+import { EXERCICIOS_POR_GRUPO } from '../../constants/exercicios';
 import { Badge } from '../../components/ui/badge';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino } from '../../services/treinos/treinos.mutations';
@@ -35,8 +36,12 @@ interface Secao {
   itens: ExercicioForm[];
 }
 
-/** Grupos musculares mais usados (chips de atalho no form). */
-const GRUPOS = ['Pernas', 'Peitoral', 'Costas', 'Ombro', 'Bíceps', 'Tríceps', 'Abdômen', 'Glúteos', 'Aeróbico'];
+/**
+ * Chips de grupo muscular do formulário. Saem do próprio catálogo para os
+ * dois nunca saírem de sincronia — grupo na tela sem lista, ou lista sem
+ * grupo por onde chegar nela.
+ */
+const GRUPOS = Object.keys(EXERCICIOS_POR_GRUPO);
 
 const exercicioVazio = (): ExercicioForm => ({ nome: '', seriesTexto: '3', repeticoes: '12', carga: '', observacao: '' });
 const secaoVazia = (grupo = ''): Secao => ({ grupo, itens: [exercicioVazio()] });
@@ -489,13 +494,27 @@ export default function TreinosAluno() {
                     style={[s.acao, { backgroundColor: t.concluido ? LC.primaryLight : LC.successBg }]}
                     hitSlop={4}
                     onPress={() => alternarStatus(t)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t.concluido ? `Reativar ${t.titulo}` : `Concluir ${t.titulo}`}
                   >
                     <Icon name={t.concluido ? 'refresh-outline' : 'checkmark-done-outline'} size={17} color={t.concluido ? LC.primary : LC.success} />
                   </Pressable>
-                  <Pressable style={s.acao} hitSlop={4} onPress={() => abrirEdicao(t)}>
+                  <Pressable
+                    style={s.acao}
+                    hitSlop={4}
+                    onPress={() => abrirEdicao(t)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Editar ${t.titulo}`}
+                  >
                     <Icon name="create-outline" size={17} color={LC.primary} />
                   </Pressable>
-                  <Pressable style={[s.acao, { backgroundColor: LC.dangerBg }]} hitSlop={4} onPress={() => setExcluindo(t)}>
+                  <Pressable
+                    style={[s.acao, { backgroundColor: LC.dangerBg }]}
+                    hitSlop={4}
+                    onPress={() => setExcluindo(t)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remover ${t.titulo}`}
+                  >
                     <Icon name="trash-outline" size={17} color={LC.danger} />
                   </Pressable>
                 </View>

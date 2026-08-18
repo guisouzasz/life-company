@@ -1,133 +1,136 @@
 /**
  * Catálogo de exercícios por grupo muscular, usado ao montar a ficha.
  *
- * Existe por dois motivos. O primeiro é conforto: o professor escolhe da lista
- * do grupo em vez de digitar. O segundo é mais importante — a evolução de
- * carga é casada pelo NOME do exercício (RegistroCarga.exercicio), então
- * "Supino reto" e "SUPINO RETO" viram históricos separados. Escolher da lista
- * mantém a grafia estável e o histórico do aluno inteiro.
+ * A lista é a do professor do estúdio — ordem e vocabulário dele. Serve de
+ * atalho, não de limite: quem monta o treino continua podendo escrever um
+ * exercício que não esteja aqui.
  *
- * As chaves batem com GRUPOS em app/professor/treinos-aluno.tsx. A lista é um
- * ponto de partida, não uma camisa de força: quem monta o treino pode digitar
- * um nome que não esteja aqui.
+ * Vale manter a grafia estável: a evolução de carga é casada pelo NOME do
+ * exercício (RegistroCarga.exercicio), então "Rosca direta" e "rosca direta"
+ * viram históricos separados e o aluno perde a progressão.
  */
 export const EXERCICIOS_POR_GRUPO: Record<string, string[]> = {
-  Pernas: [
-    'Agachamento livre',
-    'Agachamento no Smith',
-    'Agachamento sumô',
-    'Leg press 45°',
-    'Hack machine',
-    'Cadeira extensora',
-    'Cadeira flexora',
-    'Mesa flexora',
-    'Cadeira adutora',
-    'Cadeira abdutora',
-    'Afundo',
-    'Passada',
-    'Búlgaro',
-    'Stiff',
-    'Levantamento terra',
-    'Panturrilha em pé',
-    'Panturrilha sentado',
-  ],
-  Peitoral: [
-    'Supino reto (barra)',
-    'Supino reto (halteres)',
-    'Supino inclinado (barra)',
-    'Supino inclinado (halteres)',
-    'Supino declinado',
-    'Supino na máquina',
-    'Crucifixo reto',
-    'Crucifixo inclinado',
-    'Voador (peck deck)',
-    'Crossover',
-    'Pullover',
-    'Flexão de braço',
-  ],
-  Costas: [
-    'Puxada frente',
-    'Puxada supinada',
-    'Puxada triângulo',
-    'Barra fixa',
-    'Remada baixa',
-    'Remada curvada',
-    'Remada cavalinho',
-    'Remada unilateral (serrote)',
-    'Remada na máquina',
-    'Pulldown',
-    'Levantamento terra',
-    'Hiperextensão lombar',
-  ],
-  Ombro: [
-    'Desenvolvimento (halteres)',
-    'Desenvolvimento (máquina)',
-    'Desenvolvimento militar',
-    'Arnold press',
-    'Elevação lateral',
-    'Elevação frontal',
-    'Crucifixo inverso',
-    'Remada alta',
-    'Face pull',
-    'Encolhimento',
-    'Rotação externa',
-  ],
-  Bíceps: [
-    'Rosca direta (barra)',
-    'Rosca direta (halteres)',
-    'Rosca alternada',
-    'Rosca martelo',
-    'Rosca scott',
-    'Rosca concentrada',
-    'Rosca inversa',
-    'Rosca no cabo',
-    'Rosca 21',
-  ],
-  Tríceps: [
-    'Tríceps pulley (corda)',
-    'Tríceps pulley (barra)',
-    'Tríceps testa',
-    'Tríceps francês',
-    'Tríceps coice',
-    'Tríceps banco',
-    'Mergulho entre bancos',
-    'Supino fechado',
-  ],
-  Abdômen: [
-    'Abdominal supra',
-    'Abdominal infra',
-    'Abdominal oblíquo',
-    'Abdominal na máquina',
-    'Abdominal remador',
-    'Elevação de pernas',
-    'Prancha isométrica',
+  Abdominal: [
+    'Canivete',
+    'Canoa',
+    'Oblíquo',
+    'Extensão lombar bola',
+    'Infra',
+    'Militar',
+    'Perdigueiro invertido',
+    'Prancha',
     'Prancha lateral',
-    'Bicicleta',
-    'Russian twist',
-  ],
-  Glúteos: [
-    'Elevação pélvica',
-    'Coice na polia',
-    'Glúteo quatro apoios',
-    'Abdução na máquina',
-    'Abdução com elástico',
-    'Agachamento sumô',
-    'Afundo',
-    'Búlgaro',
-    'Stiff',
+    'Remador',
+    'Rodinha',
+    'Russo',
+    'Supra',
+    'Tesoura',
   ],
   Aeróbico: [
+    'Bicicleta',
     'Caminhada na esteira',
     'Corrida na esteira',
-    'Bicicleta ergométrica',
-    'Bike spinning',
-    'Elíptico',
-    'Escada (simulador)',
-    'Remo ergométrico',
-    'Pular corda',
+  ],
+  Antebraço: [
+    'Tortura chinesa',
+    'Rosca inversa',
+    'Rosca punho',
+  ],
+  Bíceps: [
+    'Rosca 21',
+    'Rosca 45º',
+    'Rosca alternada',
+    'Rosca concentrada',
+    'Rosca cross',
+    'Rosca cross 90º',
+    'Rosca direta',
+    'Rosca martelo',
+    'Rosca scott',
+    'Rosca zottman',
+  ],
+  Costas: [
+    'Barra fixa',
+    'Crucifixo inverso',
+    'Pull down',
+    'Puxada corda',
+    'Puxada frente',
+    'Remada aberta',
+    'Remada fechada',
+    'Remada alta',
+    'Remada cavalinho',
+    'Remada curvada',
+    'Serrote',
+    'Superman',
+  ],
+  Glúteo: [
+    'Descida do caixote',
+    'Elevação pélvica',
+    'Glúteo cross',
+    'Glúteo solo',
+    'Agachamento búlgaro',
+  ],
+  Ombro: [
+    'Desenvolvimento arnold',
+    'Desenvolvimento frente barra',
+    'Desenvolvimento halter',
+    'Elevação frontal',
+    'Elevação lateral',
+    'Elevação mista',
+    'Encolhimento',
+  ],
+  // O professor abriu o grupo mas ainda não mandou os exercícios. Fica
+  // disponível para escolher, com o campo livre até a lista chegar.
+  Panturrilha: [],
+  Peitoral: [
+    'Cross over',
+    'Crucifixo reto',
+    'Crucifixo inclinado',
+    'Supino reto',
+    'Supino inclinado',
+    'Flexão',
+    'Pull over',
+    'Voador',
+  ],
+  Pernas: [
+    'Abdutor',
+    'Adutor',
+    'Afundo',
+    'Agachamento',
+    'Extensor',
+    'Flexor',
+    'Extensão de quadril',
+    'Flexão de joelho',
+    'Flexão nórdica',
+    'Leg press',
+    'Levantamento terra',
+    'Stiff',
+    'Panturrilha',
+    'Sumô',
+    'Tibial',
+  ],
+  Tríceps: [
+    'Coice',
+    'Corda',
+    'Barra',
+    'Francês',
+    'Testa',
+    'Supino fechado',
+    'Tríceps banco',
   ],
 };
 
-/** Exercícios do grupo; lista vazia para grupo desconhecido. */
-export const exerciciosDoGrupo = (grupo?: string | null): string[] =>
-  EXERCICIOS_POR_GRUPO[(grupo ?? '').trim()] ?? [];
+/**
+ * Nomes de grupo usados em fichas antigas, antes de a lista do professor
+ * chegar. Sem isso, abrir uma dessas fichas para editar mostraria o catálogo
+ * vazio, porque a chave não bateria.
+ */
+const APELIDOS: Record<string, string> = {
+  Abdômen: 'Abdominal',
+  Glúteos: 'Glúteo',
+};
+
+/** Exercícios do grupo; lista vazia para grupo sem catálogo. */
+export const exerciciosDoGrupo = (grupo?: string | null): string[] => {
+  const chave = (grupo ?? '').trim();
+  return EXERCICIOS_POR_GRUPO[APELIDOS[chave] ?? chave] ?? [];
+};
