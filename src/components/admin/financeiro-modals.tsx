@@ -6,7 +6,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Icon } from '../ui/icon';
 import { formatDate } from '../../services/date';
-import { formatarReal, mascaraReal, realParaNumero } from '../../services/mascaras';
+import { formatarReal, mascaraReal, realParaNumero, valorOuNulo } from '../../services/mascaras';
 import { useRegistrarPagamento, useConfigurarFinanceiroAluno } from '../../services/financeiro/financeiro.mutations';
 import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types';
 import { ApiError } from '../../services/http';
@@ -36,9 +36,8 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
   useEffect(() => {
     if (aluno) {
       setRefSel(0);
-      setValorTexto(
-        aluno.valorMensalidade === null ? '' : aluno.valorMensalidade.toFixed(2).replace('.', ','),
-      );
+      const atual = valorOuNulo(aluno.valorMensalidade);
+      setValorTexto(atual === null ? '' : atual.toFixed(2).replace('.', ','));
       setErro(null);
     }
   }, [aluno]);
@@ -82,7 +81,7 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
         placeholder="0,00"
         leftIcon={<Text style={s.prefixo}>R$</Text>}
       />
-      {aluno?.valorMensalidade === null ? (
+      {valorOuNulo(aluno?.valorMensalidade) === null ? (
         <Text style={s.avisoSemValor}>
           Este aluno ainda não tem mensalidade definida. Informe o valor aqui, ou defina no botão de
           vencimento para não precisar digitar todo mês.
@@ -108,9 +107,8 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
   useEffect(() => {
     if (aluno) {
       setDiaTexto(String(aluno.diaVencimento));
-      setValorTexto(
-        aluno.valorMensalidade === null ? '' : aluno.valorMensalidade.toFixed(2).replace('.', ','),
-      );
+      const atual = valorOuNulo(aluno.valorMensalidade);
+      setValorTexto(atual === null ? '' : atual.toFixed(2).replace('.', ','));
       setErro(null);
     }
   }, [aluno]);

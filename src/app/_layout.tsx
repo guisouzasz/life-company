@@ -6,6 +6,7 @@ import { View, ActivityIndicator, StatusBar } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { LC } from '../constants/theme';
 import { useAuthStore } from '../store/auth';
+import { LimiteDeErro } from '../components/limite-de-erro';
 import { queryClient } from '../lib/query-client';
 
 function RootNavigator() {
@@ -73,7 +74,10 @@ export default function Layout() {
       <Head>
         <title>Studio Life Company</title>
       </Head>
-      <RootNavigator />
+      {/* Erro em qualquer tela vira mensagem com botão, e não tela branca. */}
+      <LimiteDeErro>
+        <RootNavigator />
+      </LimiteDeErro>
     </QueryClientProvider>
   );
 }

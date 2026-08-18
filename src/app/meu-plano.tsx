@@ -1,7 +1,7 @@
 import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LC } from '../constants/theme';
-import { formatarReal } from '../services/mascaras';
+import { formatarReal, valorOuNulo } from '../services/mascaras';
 import { DIAS_VALIDADE_CREDITO } from '../constants/app';
 import { TabBar } from '../components/tab-bar';
 import { Header } from '../components/ui/header';
@@ -74,7 +74,7 @@ export default function MeuPlano() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.credTitle}>
-                    Mensalidade{fin.valorMensalidade !== null ? ` · ${formatarReal(fin.valorMensalidade)}` : ''}
+                    Mensalidade{valorOuNulo(fin.valorMensalidade) !== null ? ` · ${formatarReal(fin.valorMensalidade)}` : ''}
                   </Text>
                   <Text style={s.credSub}>Vence todo dia {fin.diaVencimento}</Text>
                 </View>

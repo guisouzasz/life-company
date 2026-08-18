@@ -73,13 +73,26 @@ export function isoParaData(v?: string | null): string {
 }
 
 /**
+ * Lê um valor em dinheiro que pode não vir.
+ *
+ * Existe porque a API e o site sobem separados: numa janela de deploy o site
+ * novo conversa com a API antiga, que ainda não manda o campo. Tratar
+ * `undefined` como "sem valor" — e não confiar que só `null` acontece — é o
+ * que impede a tela de quebrar nessa janela.
+ */
+export function valorOuNulo(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+/**
  * Dinheiro em real, para leitura: 180 → "R$ 180,00".
  * `null`/indefinido vira um traço — é o jeito de a tela dizer "ainda não
  * definido" sem fingir que o valor é zero.
  */
 export function formatarReal(valor?: number | null): string {
-  if (valor === null || valor === undefined) return '—';
-  return `R$ ${valor.toFixed(2).replace('.', ',')}`;
+  const v = valorOuNulo(valor);
+  if (v === null) return '—';
+  return `R$ ${v.toFixed(2).replace('.', ',')}`;
 }
 
 /** Campo de valor: só dígitos, lidos como centavos. "18000" → 180.00 */

@@ -15,7 +15,7 @@ import { useResumoFinanceiro } from '../../services/financeiro/financeiro.querie
 import { useDesfazerPagamento } from '../../services/financeiro/financeiro.mutations';
 import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types';
 import { formatDate } from '../../services/date';
-import { formatarReal } from '../../services/mascaras';
+import { formatarReal, valorOuNulo } from '../../services/mascaras';
 import { ApiError } from '../../services/http';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { linkWhatsapp, mensagemVencimento, telefoneParaWhatsapp } from '../../services/whatsapp';
@@ -151,7 +151,7 @@ export default function AdminFinanceiro() {
           </Text>
         </View>
       </View>
-      {dados.semValor > 0 ? (
+      {(dados.semValor ?? 0) > 0 ? (
         <Text style={s.dinheiroAviso}>
           {dados.semValor} {dados.semValor === 1 ? 'aluno está' : 'alunos estão'} sem valor de
           mensalidade — {dados.semValor === 1 ? 'ele não entra' : 'eles não entram'} nesta conta.
@@ -229,11 +229,15 @@ export default function AdminFinanceiro() {
                     </View>
                     <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>{a.plano?.nome ?? '—'}</Text>
                     <View style={[s.tCol, s.tColValor]}>
-                      <Text style={a.valorMensalidade === null ? s.tSemValor : s.tValor}>
-                        {a.valorMensalidade === null ? 'a definir' : formatarReal(a.valorMensalidade)}
+                      <Text style={valorOuNulo(a.valorMensalidade) === null ? s.tSemValor : s.tValor}>
+                        {valorOuNulo(a.valorMensalidade) === null
+                          ? 'a definir'
+                          : formatarReal(a.valorMensalidade)}
                       </Text>
-                      {a.pagamento && a.pagamento.valor > 0 && a.pagamento.valor !== a.valorMensalidade ? (
-                        <Text style={s.tPagoEm}>recebido {formatarReal(a.pagamento.valor)}</Text>
+                      {valorOuNulo(a.pagamento?.valor) !== null &&
+                      a.pagamento!.valor > 0 &&
+                      a.pagamento!.valor !== a.valorMensalidade ? (
+                        <Text style={s.tPagoEm}>recebido {formatarReal(a.pagamento!.valor)}</Text>
                       ) : null}
                     </View>
                     <Text style={[s.tCol, s.tColVenc, s.tTexto]}>Dia {a.diaVencimento}</Text>
@@ -321,10 +325,14 @@ export default function AdminFinanceiro() {
                     {/* O valor combinado é a informação principal. O recebido
                         só entra quando foi informado e é diferente — pagamento
                         antigo veio sem valor, e "R$ 0,00 recebido" mentiria. */}
-                    <Text style={a.valorMensalidade === null ? s.cardSemValor : s.cardValor}>
-                      {a.valorMensalidade === null ? 'Sem valor definido' : formatarReal(a.valorMensalidade)}
-                      {a.pagamento && a.pagamento.valor > 0 && a.pagamento.valor !== a.valorMensalidade
-                        ? ` · ${formatarReal(a.pagamento.valor)} recebido`
+                    <Text style={valorOuNulo(a.valorMensalidade) === null ? s.cardSemValor : s.cardValor}>
+                      {valorOuNulo(a.valorMensalidade) === null
+                        ? 'Sem valor definido'
+                        : formatarReal(a.valorMensalidade)}
+                      {valorOuNulo(a.pagamento?.valor) !== null &&
+                      a.pagamento!.valor > 0 &&
+                      a.pagamento!.valor !== a.valorMensalidade
+                        ? ` · ${formatarReal(a.pagamento!.valor)} recebido`
                         : ''}
                     </Text>
                   </View>
