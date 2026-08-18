@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
-import { nomeModalidade } from '../../constants/assets';
+import { nomeModalidade, usaTreinoDoDia } from '../../constants/assets';
 import { AppModal } from '../ui/modal';
 import { Icon } from '../ui/icon';
 import { Badge } from '../ui/badge';
@@ -27,9 +27,7 @@ export function AlunosAulaModal({ aula, data, onClose }: Props) {
 
   // Funcional usa treino do DIA (não por aluno) → sem botão "Treinos" aqui
   const me = useMe();
-  const treinoPorAluno = me.data?.modalidadeProfessor
-    ? nomeModalidade(me.data.modalidadeProfessor.nome) !== 'Funcional'
-    : true;
+  const treinoPorAluno = !usaTreinoDoDia(me.data?.modalidadeProfessor?.nome);
 
   const titulo = aula ? `${aula.horaInicio} — ${nomeModalidade(aula.modalidade.nome)}` : '';
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
-import { nomeModalidade } from '../../constants/assets';
+import { iconePorModalidade, nomeModalidade } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -13,6 +13,7 @@ import { Badge, type BadgeVariant } from '../../components/ui/badge';
 import { AppModal, ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useProfessores } from '../../services/usuarios/usuarios.queries';
+import { useModalidades } from '../../services/modalidades/modalidades.queries';
 import { useAtualizarAluno, useDefinirSenha } from '../../services/usuarios/usuarios.mutations';
 import type { ProfessorAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { mascaraCpf } from '../../services/mascaras';
@@ -53,6 +54,7 @@ function situacao(p: ProfessorAdmin): { label: string; variant: BadgeVariant } {
 
 export default function AdminProfessores() {
   const professores = useProfessores();
+  const modalidades = useModalidades();
   const definirSenha = useDefinirSenha();
   const atualizar = useAtualizarAluno();
 
@@ -60,6 +62,7 @@ export default function AdminProfessores() {
   const [senha, setSenha] = useState('');
   const [confirmar, setConfirmar] = useState('');
   const [alternando, setAlternando] = useState<ProfessorAdmin | null>(null);
+  const [trocandoModalidade, setTrocandoModalidade] = useState<ProfessorAdmin | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -94,6 +97,21 @@ export default function AdminProfessores() {
           );
         },
         onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível definir a senha.'),
+      },
+    );
+  };
+
+  const trocarModalidade = (modalidadeId: string) => {
+    if (!trocandoModalidade) return;
+    const alvo = trocandoModalidade;
+    atualizar.mutate(
+      { id: alvo.id, payload: { modalidadeId } },
+      {
+        onSuccess: () => setTrocandoModalidade(null),
+        onError: (e) => {
+          setTrocandoModalidade(null);
+          setErro(e instanceof ApiError ? e.message : 'Não foi possível trocar a modalidade.');
+        },
       },
     );
   };
@@ -160,13 +178,22 @@ export default function AdminProfessores() {
                         <Text style={s.nome} numberOfLines={1}>{p.nome}</Text>
                         <Badge label={st.label} variant={st.variant} />
                       </View>
-                      {p.modalidadeProfessor ? (
-                        <Text style={s.modalidade}>
-                          {nomeModalidade(p.modalidadeProfessor.nome)}
+                      {/* A modalidade decide o que o professor enxerga: a
+                          agenda dela e o formato da ficha. Por isso é editável
+                          aqui — errar na criação não pode custar a conta. */}
+                      <Pressable
+                        style={({ pressed }) => [s.modalidadeBtn, pressed && s.acaoPress]}
+                        onPress={() => setTrocandoModalidade(p)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Trocar modalidade de ${p.nome}`}
+                      >
+                        <Text style={p.modalidadeProfessor ? s.modalidade : s.semModalidade}>
+                          {p.modalidadeProfessor
+                            ? nomeModalidade(p.modalidadeProfessor.nome)
+                            : 'Sem modalidade definida'}
                         </Text>
-                      ) : (
-                        <Text style={s.semModalidade}>Sem modalidade definida</Text>
-                      )}
+                        <Icon name="create-outline" size={13} color={LC.textMuted} />
+                      </Pressable>
                     </View>
                   </View>
 
@@ -310,6 +337,35 @@ export default function AdminProfessores() {
         onCancel={() => setAlternando(null)}
       />
 
+      <AppModal
+        visible={!!trocandoModalidade}
+        onClose={() => setTrocandoModalidade(null)}
+        title="Modalidade do professor"
+      >
+        <Text style={s.modalTexto}>
+          {trocandoModalidade?.nome} passa a ver a agenda desta modalidade, e a ficha de treino
+          segue o formato dela.
+        </Text>
+        <View style={s.chips}>
+          {(modalidades.data ?? []).map((m) => {
+            const sel = trocandoModalidade?.modalidadeProfessor?.id === m.id;
+            return (
+              <Pressable
+                key={m.id}
+                style={[s.chip, sel && s.chipSel]}
+                onPress={() => trocarModalidade(m.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Usar ${nomeModalidade(m.nome)}`}
+                accessibilityState={{ selected: sel }}
+              >
+                <Icon name={iconePorModalidade(m.nome)} size={14} color={sel ? LC.primary : LC.textSecondary} />
+                <Text style={[s.chipTexto, sel && s.chipTextoSel]}>{nomeModalidade(m.nome)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </AppModal>
+
       <InfoModal visible={!!aviso} title="Pronto" message={aviso ?? ''} onClose={() => setAviso(null)} />
       <InfoModal visible={!!erro} title="Atenção" message={erro ?? ''} onClose={() => setErro(null)} />
     </View>
@@ -333,8 +389,18 @@ const s = StyleSheet.create({
   cardTopo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nomeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   nome: { fontSize: 16, fontWeight: '800', color: LC.textPrimary, flexShrink: 1 },
-  modalidade: { fontSize: 13, fontWeight: '600', color: LC.primary, marginTop: 2 },
-  semModalidade: { fontSize: 13, color: LC.danger, marginTop: 2 },
+  modalidadeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, alignSelf: 'flex-start' },
+  modalidade: { fontSize: 13, fontWeight: '600', color: LC.primary },
+  semModalidade: { fontSize: 13, color: LC.danger },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: LC.radius.full,
+    backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border,
+  },
+  chipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
+  chipTexto: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
+  chipTextoSel: { color: LC.primary, fontWeight: '700' },
 
   dados: { marginTop: 12, gap: 5 },
   dadoLinha: { flexDirection: 'row', alignItems: 'center', gap: 7 },

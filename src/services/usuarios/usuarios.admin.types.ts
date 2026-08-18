@@ -56,6 +56,11 @@ export interface AtualizarAlunoPayload {
   dataNascimento?: string; // YYYY-MM-DD
   /** Reativar/desativar o cadastro. */
   ativo?: boolean;
+  /**
+   * Modalidade — só tem efeito em PROFESSOR, onde corrige a que ele leciona.
+   * No aluno a modalidade pertence ao plano, e quem troca é `atualizarPlano`.
+   */
+  modalidadeId?: string;
 }
 
 /** PUT /usuarios/:id/plano — encerra o plano ativo e cria um novo. */

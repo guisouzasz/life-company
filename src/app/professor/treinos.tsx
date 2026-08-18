@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
-import { nomeModalidade } from '../../constants/assets';
+import { nomeModalidade, usaTreinoDoDia } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -219,9 +219,7 @@ function TreinosPorAluno() {
 
 export default function ProfessorTreinos() {
   const me = useMe();
-  const ehFuncional = me.data?.modalidadeProfessor
-    ? nomeModalidade(me.data.modalidadeProfessor.nome) === 'Funcional'
-    : false;
+  const ehFuncional = usaTreinoDoDia(me.data?.modalidadeProfessor?.nome);
 
   return (
     <View style={s.root}>

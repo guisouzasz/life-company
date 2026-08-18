@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
-import { corPorModalidade, iconePorModalidade, nomeModalidade } from '../../constants/assets';
+import { corPorModalidade, iconePorModalidade, nomeModalidade, usaTreinoDoDia } from '../../constants/assets';
 import { useAuthStore } from '../../store/auth';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
@@ -46,9 +46,7 @@ export default function ProfessorAgenda() {
   // Funcional monta um treino por dia para a turma toda; as outras
   // modalidades têm ficha por aluno.
   const me = useMe();
-  const porAluno = me.data?.modalidadeProfessor
-    ? nomeModalidade(me.data.modalidadeProfessor.nome) !== 'Funcional'
-    : true;
+  const porAluno = !usaTreinoDoDia(me.data?.modalidadeProfessor?.nome);
 
   return (
     <View style={s.root}>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LC } from '../../constants/theme';
-import { nomeModalidade } from '../../constants/assets';
+import { nomeModalidade, usaFichaEstruturada } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -102,9 +102,7 @@ export default function TreinosAluno() {
   // Musculação monta treino estruturado (séries/reps/carga + evolução);
   // Funcional e Pilates escrevem o treino em texto livre (blocos de tempo).
   const me = useMe();
-  const formatoCarga = me.data?.modalidadeProfessor
-    ? nomeModalidade(me.data.modalidadeProfessor.nome) === 'Musculação'
-    : true; // admin usa o formato estruturado
+  const formatoCarga = usaFichaEstruturada(me.data?.modalidadeProfessor?.nome);
 
   /** Evolução registrada para um exercício (por nome). */
   const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;

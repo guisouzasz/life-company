@@ -193,7 +193,17 @@ export class UsuariosService {
    * editáveis normalmente.
    */
   async atualizar(id: string, data: Partial<CriarUsuarioDto> & { ativo?: boolean }) {
-    await this.buscarPorId(id);
+    const atual = await this.buscarPorId(id);
+
+    // Corrigir a modalidade do professor. Só vale para PROFESSOR: no aluno o
+    // `modalidadeId` pertence ao plano, e quem troca isso é `atualizarPlano`.
+    // Sem esta linha, professor cadastrado na modalidade errada só se resolvia
+    // apagando e refazendo a conta — e a modalidade decide o que ele enxerga:
+    // a agenda dela e o formato da ficha de treino.
+    const modalidadeProfessorId =
+      atual.tipoUsuario === "PROFESSOR" && data.modalidadeId
+        ? data.modalidadeId
+        : undefined;
 
     const cpfNorm = data.cpf !== undefined ? data.cpf.replace(/\D/g, "") : undefined;
     if (cpfNorm !== undefined && cpfNorm.length !== 11) {
@@ -228,6 +238,7 @@ export class UsuariosService {
             ? this.converterNascimento(data.dataNascimento) ?? null
             : undefined,
         ativo: data.ativo,
+        modalidadeProfessorId,
       },
     });
   }
