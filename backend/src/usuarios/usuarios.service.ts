@@ -89,6 +89,15 @@ export class UsuariosService {
         dataNascimento: this.converterNascimento(dto.dataNascimento) ?? null,
         tipoUsuario: tipo as any,
         ...(tipo === "PROFESSOR" ? { modalidadeProfessorId: dto.modalidadeId } : {}),
+        // Mensalidade é coisa de aluno; professor não paga plano.
+        ...(tipo === "ALUNO"
+          ? {
+              ...(dto.valorMensalidade !== undefined
+                ? { valorMensalidade: dto.valorMensalidade }
+                : {}),
+              ...(dto.diaVencimento !== undefined ? { diaVencimento: dto.diaVencimento } : {}),
+            }
+          : {}),
         ativo: false,
       },
     });

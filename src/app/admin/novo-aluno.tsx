@@ -14,7 +14,7 @@ import { usePlanos } from '../../services/planos/planos.queries';
 import { useModalidades } from '../../services/modalidades/modalidades.queries';
 import { useCriarAluno } from '../../services/usuarios/usuarios.mutations';
 import { ApiError } from '../../services/http';
-import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, dataParaIso, soDigitos } from '../../services/mascaras';
+import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, mascaraReal, realParaNumero, dataParaIso, soDigitos } from '../../services/mascaras';
 
 export default function NovoAluno() {
   const [tipo, setTipo] = useState<'ALUNO' | 'PROFESSOR'>('ALUNO');
@@ -27,6 +27,8 @@ export default function NovoAluno() {
   const [nascimento, setNascimento] = useState('');
   const [telefone, setTelefone] = useState('');
   const [planoId, setPlanoId] = useState('');
+  const [valorTexto, setValorTexto] = useState('');
+  const [diaTexto, setDiaTexto] = useState('5');
   const [modalidadeProfId, setModalidadeProfId] = useState('');
 
   const planos = usePlanos();
@@ -81,6 +83,18 @@ export default function NovoAluno() {
       setErro('Aguarde carregar as modalidades e tente novamente.');
       return;
     }
+    // Mensalidade é opcional: nem sempre o preço está fechado na hora de
+    // cadastrar. Quando vem, precisa ser um número que faça sentido.
+    const valor = realParaNumero(valorTexto);
+    if (!ehProfessor && valorTexto.trim() && (valor === null || valor < 0)) {
+      setErro('Valor da mensalidade inválido.');
+      return;
+    }
+    const dia = parseInt(diaTexto, 10);
+    if (!ehProfessor && (!Number.isFinite(dia) || dia < 1 || dia > 28)) {
+      setErro('Dia de vencimento deve ser entre 1 e 28.');
+      return;
+    }
     criar.mutate(
       {
         nome: nome.trim(),
@@ -97,6 +111,8 @@ export default function NovoAluno() {
               endereco: endereco.trim(),
               cep: soDigitos(cep),
               dataNascimento: nascimentoIso,
+              ...(valor !== null ? { valorMensalidade: valor } : {}),
+              diaVencimento: dia,
             }),
       },
       {
@@ -224,6 +240,42 @@ export default function NovoAluno() {
           </Card>
           )}
 
+          {/* Mensalidade (só aluno) */}
+          {ehProfessor ? null : (
+          <Card style={s.section} padding={16}>
+            <Text style={s.sectionTitle}>Mensalidade</Text>
+            <View style={s.linhaDupla}>
+              <View style={{ flex: 1.4 }}>
+                <Input
+                  label="Valor"
+                  placeholder="0,00"
+                  value={valorTexto}
+                  onChangeText={(v) => setValorTexto(mascaraReal(v))}
+                  keyboardType="number-pad"
+                  leftIcon={<Text style={s.prefixo}>R$</Text>}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  label="Vence dia"
+                  placeholder="5"
+                  value={diaTexto}
+                  onChangeText={setDiaTexto}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                />
+              </View>
+            </View>
+            <View style={s.hintRow}>
+              <Icon name="information-circle-outline" size={16} color={LC.primary} />
+              <Text style={s.hintText}>
+                O valor é deste aluno, não do plano. Preenchido aqui, ele já entra no previsto do
+                mês no Financeiro. Pode ficar vazio se o preço ainda não foi combinado.
+              </Text>
+            </View>
+          </Card>
+          )}
+
           <Button
             title={ehProfessor ? 'Criar professor e gerar link' : 'Criar aluno e gerar link'}
             size="lg"
@@ -280,6 +332,8 @@ const s = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { paddingHorizontal: 16, paddingBottom: 40 },
   section: { marginBottom: 12 },
+  linhaDupla: { flexDirection: 'row', gap: 10 },
+  prefixo: { fontSize: 15, fontWeight: '700', color: LC.textSecondary },
   sectionTitle: { fontSize: 13, fontWeight: '800', color: LC.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 },
   fields: { gap: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

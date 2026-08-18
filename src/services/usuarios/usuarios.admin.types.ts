@@ -31,6 +31,10 @@ export interface CriarAlunoPayload {
   dataNascimento?: string; // YYYY-MM-DD
   /** ALUNO (default) ou PROFESSOR (sem plano). */
   tipoUsuario?: 'ALUNO' | 'PROFESSOR';
+  /** Mensalidade combinada com o aluno (opcional; editável depois no Financeiro). */
+  valorMensalidade?: number;
+  /** Dia do vencimento, 1 a 28. */
+  diaVencimento?: number;
   planoId?: string; // obrigatório para ALUNO
   modalidadeId?: string; // obrigatório para ALUNO
 }

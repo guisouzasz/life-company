@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, IsIn, Matches, MinLength, MaxLength } from 'class-validator';
+import { IsEmail, IsString, IsOptional, IsIn, IsInt, IsNumber, Matches, Max, Min, MinLength, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 export class CriarUsuarioDto {
   @ApiProperty() @IsString() nome: string;
@@ -33,6 +33,20 @@ export class CriarUsuarioDto {
   // planoId/modalidadeId são ids de referência (os planos usam ids curtos como "p3",
   // não UUID), por isso validamos como string e não como UUID.
   // Obrigatórios para ALUNO; ignorados para PROFESSOR (validado no service).
+  // ── Mensalidade (só ALUNO) ──────────────────────────────────────────
+  /**
+   * Valor combinado com este aluno. Fica aqui, e não no plano, porque o preço
+   * é caso a caso; preenchido no cadastro, o aluno já nasce contando no
+   * previsto do mês em vez de aparecer como "sem valor definido".
+   */
+  @ApiProperty({ required: false })
+  @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(99999)
+  valorMensalidade?: number;
+
+  @ApiProperty({ required: false, description: 'Dia do vencimento (1 a 28)' })
+  @IsOptional() @IsInt() @Min(1) @Max(28)
+  diaVencimento?: number;
+
   @ApiProperty({ required: false }) @IsOptional() @IsString() planoId?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() modalidadeId?: string;
 }

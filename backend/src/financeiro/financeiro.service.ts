@@ -41,7 +41,25 @@ export class FinanceiroService {
   async resumo() {
     const [alunos, pagamentosMes, comHistorico] = await Promise.all([
       this.prisma.usuario.findMany({
-        where: { tipoUsuario: 'ALUNO', ativo: true },
+        /**
+         * Quem entra na conta do mês.
+         *
+         * `ativo` só vira true no primeiro acesso, então filtrar por ele
+         * escondia o aluno recém-cadastrado — justamente aquele cuja
+         * mensalidade a dona acabou de combinar. Ele treina e paga desde o
+         * primeiro dia, mesmo que demore a abrir o app (ou nunca abra).
+         *
+         * Então: entra quem está ativo, e também quem ainda não acessou
+         * (sem senha). Fica de fora quem o estúdio desligou de propósito —
+         * esse tem senha e está inativo. E o `REMOVIDO-` precisa ser barrado
+         * à mão: conta excluída fica sem senha e inativa, e voltaria à lista
+         * pela mesma porta que abrimos para o aluno novo.
+         */
+        where: {
+          tipoUsuario: 'ALUNO',
+          NOT: { cpf: { startsWith: 'REMOVIDO-' } },
+          OR: [{ ativo: true }, { ativo: false, senhaHash: null }],
+        },
         select: {
           // telefone alimenta o aviso de vencimento pelo WhatsApp, no painel
           id: true, nome: true, cpf: true, telefone: true, diaVencimento: true,
