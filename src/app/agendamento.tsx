@@ -42,6 +42,19 @@ export default function Agendamento() {
   const vagas = useVagas(modalSel?.id, diaSel?.data);
   const horariosDoDia = (vagas.data ?? []).filter((h) => h.diaSemana === diaSel?.diaSemana);
 
+  /**
+   * Aula que já começou não pode ser marcada — o servidor recusa, e a tela
+   * não deve oferecer o que ele recusa. Sem isto, quem abrisse o app às 9h
+   * via "Agendar" na aula das 7h e levava um erro no rosto.
+   */
+  const jaComecou = (horario: { horaInicio: string }) => {
+    if (!diaSel?.data) return false;
+    const [h, m] = horario.horaInicio.split(':').map(Number);
+    const inicio = new Date(`${diaSel.data}T00:00:00`);
+    inicio.setHours(h, m, 0, 0);
+    return inicio.getTime() <= Date.now();
+  };
+
   // Aulas que a aluna já tem agendadas (para marcar "Agendada" nos slots)
   const meus = useMeusAgendamentos();
   const jaAgendado = (horarioId: string) =>
@@ -85,6 +98,7 @@ export default function Agendamento() {
   if (detalhe) {
     const lotado = detalhe.vagas <= 0;
     const minha = jaAgendado(detalhe.id);
+    const passou = jaComecou(detalhe) && !minha;
     return (
       <View style={s.root}>
         <StatusBar barStyle="light-content" />
@@ -117,13 +131,18 @@ export default function Agendamento() {
 
           <View style={s.detBtns}>
             <Button
-              title={minha ? 'Você já está nesta aula' : lotado ? 'Horário lotado' : 'Agendar aula'}
+              title={
+                minha ? 'Você já está nesta aula'
+                : passou ? 'Esta aula já começou'
+                : lotado ? 'Horário lotado'
+                : 'Agendar aula'
+              }
               size="lg"
-              disabled={lotado || minha}
+              disabled={lotado || minha || passou}
               loading={criar.isPending && criar.variables?.usarCredito !== true}
               onPress={() => agendar(detalhe)}
             />
-            {!lotado && !minha && creditosDisponiveis > 0 ? (
+            {!lotado && !minha && !passou && creditosDisponiveis > 0 ? (
               <Button
                 title={`Usar crédito de reposição (${creditosDisponiveis})`}
                 variant="outline"
@@ -185,14 +204,16 @@ export default function Agendamento() {
           horariosDoDia.map((h) => {
             const lotado = h.vagas <= 0;
             const minha = jaAgendado(h.id);
+            const passou = jaComecou(h) && !minha;
             return (
               <Pressable
                 key={h.id}
-                style={({ pressed }) => [s.slot, lotado && !minha && s.slotLotado, minha && s.slotMinha, pressed && s.pressed]}
-                onPress={() => setDetalhe(h)}
+                style={({ pressed }) => [s.slot, lotado && !minha && !passou && s.slotLotado, passou && s.slotPassou, minha && s.slotMinha, pressed && s.pressed]}
+                onPress={() => (passou ? undefined : setDetalhe(h))}
+                disabled={passou}
               >
                 <View style={s.slotTime}>
-                  <Text style={[s.slotHora, lotado && !minha && s.mutedText]}>{h.horaInicio}</Text>
+                  <Text style={[s.slotHora, (lotado || passou) && !minha && s.mutedText]}>{h.horaInicio}</Text>
                   <Text style={s.slotHoraFim}>{h.horaFim}</Text>
                 </View>
                 <View style={s.slotInfo}>
@@ -207,6 +228,8 @@ export default function Agendamento() {
                 </View>
                 {minha ? (
                   <Badge label="Agendada" variant="success" />
+                ) : passou ? (
+                  <Badge label="Encerrada" variant="neutral" />
                 ) : lotado ? (
                   <Badge label="Lotada" variant="danger" />
                 ) : (
@@ -255,6 +278,9 @@ const s = StyleSheet.create({
   listContent: { ...LC.coluna, paddingHorizontal: 16, paddingTop: 6 },
   slot: { backgroundColor: LC.bgCard, borderRadius: LC.radius.lg, borderWidth: 1, borderColor: LC.border, padding: 14, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12, ...LC.shadow },
   slotLotado: { backgroundColor: LC.dangerBg, opacity: 0.75 },
+  // Aula encerrada não é problema, é passado: cinza, e não o vermelho de
+  // lotada — senão o aluno lê "encheu" onde deveria ler "já aconteceu".
+  slotPassou: { backgroundColor: LC.neutralBg, opacity: 0.6 },
   slotMinha: { borderColor: LC.success, borderWidth: 1.5 },
   slotTime: { alignItems: 'center', minWidth: 52, borderRightWidth: 1, borderRightColor: LC.border, paddingRight: 12 },
   slotHora: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },

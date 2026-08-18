@@ -24,6 +24,23 @@ export class AgendamentosService {
     const diaSemana = DIA_MAP[dow];
     if (diaSemana !== horario.diaSemana) throw new BadRequestException('Data incompatível com o dia do horário');
 
+    /**
+     * Aula que já começou não se marca.
+     *
+     * Faltava esta checagem: só o dia da semana era conferido, nunca a hora.
+     * Dava para marcar a aula das 7h às 9h da manhã, a aula de ontem e até a
+     * da semana passada — e cada uma dessas consumia uma aula da cota semanal
+     * do aluno, por uma aula que ele não teve. Ele descobriria só ao tentar
+     * marcar a próxima e ouvir que o limite acabou.
+     */
+    const [hora, minuto] = horario.horaInicio.split(':').map(Number);
+    const inicioAula = dayjs(dto.dataAula).startOf('day').hour(hora).minute(minuto);
+    if (!inicioAula.isAfter(dayjs())) {
+      throw new BadRequestException(
+        'Esta aula já começou. Escolha um horário que ainda vai acontecer.',
+      );
+    }
+
     // Plano dá N aulas/semana para QUALQUER modalidade (não trava por categoria)
     const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null }, include: { plano: true } });
     if (!usuarioPlano) throw new ForbiddenException('Você não possui um plano ativo');
