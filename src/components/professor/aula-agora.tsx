@@ -9,6 +9,11 @@ import { Avatar } from '../ui/avatar';
 import { Loading } from '../ui/states';
 import { TreinoAlunoModal, type AlunoDaAula } from './treino-aluno-modal';
 import { AdicionarAlunoModal } from './adicionar-aluno-modal';
+import { FichaDoAluno } from './ficha-do-aluno';
+import { CargaExercicioModal } from './carga-exercicio-modal';
+import { AnamneseModal } from './anamnese-modal';
+import { useIsTablet } from '../../hooks/use-is-desktop';
+import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { useAulaAgora } from '../../hooks/use-aula-agora';
 import { useAlunosExtras } from '../../services/aula-extras';
 import { useAgendamentosDoHorario } from '../../services/agendamentos/agendamentos.queries';
@@ -50,6 +55,11 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
 
   const [indice, setIndice] = useState<number | null>(null);
   const [adicionando, setAdicionando] = useState(false);
+  // No tablet a ficha fica sempre aberta ao lado: o que muda é qual aluno.
+  const [selecionado, setSelecionado] = useState(0);
+  const [cargaDe, setCargaDe] = useState<{ nome: string; reps: string } | null>(null);
+  const [verFicha, setVerFicha] = useState(false);
+  const tablet = useIsTablet();
 
   const alunos: AlunoDaAula[] = useMemo(() => {
     const daAgenda = (agendamentos.data ?? [])
@@ -71,6 +81,13 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
     return [...atuais, ...restantes];
   }, [agendamentos.data, extras, daAnterior.data, anterior]);
 
+  // Painel lateral: a turma muda ao longo do dia, então a seleção é presa ao
+  // tamanho da lista em vez de guardada — evita ficar apontando para ninguém.
+  const emFoco = alunos.length > 0 ? Math.min(selecionado, alunos.length - 1) : -1;
+  const alunoEmFoco = emFoco >= 0 ? alunos[emFoco] : null;
+  const painel = tablet && porAluno;
+  const anamnese = useAnamneseDoAluno(alunoEmFoco?.id, painel);
+
   if (!aula || !foco) return null;
 
   // Índice em que começam os alunos da turma anterior (-1 = não há)
@@ -81,7 +98,7 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
   const corRotulo = foco.estado === 'agora' ? LC.success : LC.textSecondary;
 
   return (
-    <View style={s.wrap}>
+    <View style={[s.wrap, painel && s.wrapLargo]}>
       <Card style={s.card} padding={16}>
         <View style={s.topo}>
           <View style={[s.rotulo, { backgroundColor: corRotulo + '1A' }]}>
@@ -94,6 +111,8 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
           <Text style={s.modalidade}>{nomeModalidade(aula.modalidade.nome)}</Text>
         </View>
 
+        <View style={painel ? s.linhaPainel : undefined}>
+          <View style={painel ? s.colunaLista : undefined}>
         {agendamentos.isLoading ? (
           <View style={{ height: 70 }}>
             <Loading />
@@ -101,7 +120,7 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
         ) : alunos.length === 0 ? (
           <Text style={s.vazio}>Nenhum aluno agendado nesta aula.</Text>
         ) : (
-          <View style={s.grade}>
+          <View style={[s.grade, painel && s.gradeColuna]}>
             {alunos.map((a, i) => (
               <Fragment key={a.id}>
                 {i === inicioRestantes ? (
@@ -114,11 +133,13 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
               <Pressable
                 style={({ pressed }) => [
                   s.aluno,
+                  painel && s.alunoLinha,
                   pressed && s.alunoPress,
+                  painel && i === emFoco && s.alunoSel,
                   !porAluno && s.alunoInerte,
                   a.daTurmaDe && s.alunoAnterior,
                 ]}
-                onPress={porAluno ? () => setIndice(i) : undefined}
+                onPress={porAluno ? () => (painel ? setSelecionado(i) : setIndice(i)) : undefined}
                 disabled={!porAluno}
                 accessibilityRole={porAluno ? 'button' : undefined}
                 accessibilityLabel={porAluno ? `Ver treino de ${a.nome}` : undefined}
@@ -146,7 +167,11 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
                     <Icon name="close" size={15} color={LC.textMuted} />
                   </Pressable>
                 ) : porAluno ? (
-                  <Icon name="chevron-forward" size={16} color={LC.primary} />
+                  <Icon
+                    name={painel && i === emFoco ? 'chevron-forward-circle' : 'chevron-forward'}
+                    size={16}
+                    color={LC.primary}
+                  />
                 ) : null}
               </Pressable>
               </Fragment>
@@ -174,18 +199,74 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
               <Text style={s.linkDiaTexto}>Treino do dia</Text>
               <Icon name="chevron-forward" size={15} color={LC.primary} />
             </Pressable>
-          ) : alunos.length > 1 ? (
+          ) : !painel && alunos.length > 1 ? (
             <Pressable style={s.linkDia} onPress={() => setIndice(0)} accessibilityRole="button">
               <Text style={s.linkDiaTexto}>Ver as {alunos.length} fichas</Text>
               <Icon name="chevron-forward" size={15} color={LC.primary} />
             </Pressable>
           ) : null}
         </View>
+          </View>
+
+          {painel ? (
+            <View style={s.colunaFicha}>
+              {alunoEmFoco ? (
+                <>
+                  <View style={s.fichaTopo}>
+                    <Text style={s.fichaNome} numberOfLines={1}>{alunoEmFoco.nome}</Text>
+                    <Pressable
+                      style={({ pressed }) => [s.abrirBtn, pressed && s.abrirBtnPress]}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/professor/treinos-aluno' as any,
+                          params: { id: alunoEmFoco.id, nome: alunoEmFoco.nome },
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Abrir treinos de ${alunoEmFoco.nome}`}
+                    >
+                      <Icon name="create-outline" size={15} color={LC.primary} />
+                      <Text style={s.abrirTexto}>Abrir treinos</Text>
+                    </Pressable>
+                  </View>
+                  <FichaDoAluno
+                    alunoId={alunoEmFoco.id}
+                    ativo
+                    alturaMax={360}
+                    onAbrirCarga={setCargaDe}
+                    onVerFicha={() => setVerFicha(true)}
+                  />
+                </>
+              ) : (
+                <Text style={s.fichaVazia}>Escolha um aluno ao lado para ver o treino.</Text>
+              )}
+            </View>
+          ) : null}
+        </View>
+
       </Card>
+
+      {painel ? (
+        <>
+          <CargaExercicioModal
+            exercicio={cargaDe?.nome ?? null}
+            alunoId={alunoEmFoco?.id}
+            alunoNome={alunoEmFoco?.nome}
+            repeticoesPadrao={cargaDe?.reps}
+            onClose={() => setCargaDe(null)}
+          />
+          <AnamneseModal
+            visible={verFicha}
+            alunoNome={alunoEmFoco?.nome ?? ''}
+            ficha={anamnese.data}
+            onClose={() => setVerFicha(false)}
+          />
+        </>
+      ) : null}
 
       <TreinoAlunoModal
         alunos={alunos}
-        indice={indice}
+        indice={painel ? null : indice}
         onIndice={setIndice}
         onClose={() => setIndice(null)}
       />
@@ -201,6 +282,9 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
 
 const s = StyleSheet.create({
   wrap: { ...LC.coluna, paddingHorizontal: 16, paddingBottom: 4 },
+  // No tablet o cartão sai da coluna de 560 e ocupa a largura útil: é ela que
+  // permite a ficha ficar aberta ao lado da turma.
+  wrapLargo: { maxWidth: 1000 },
   card: { borderWidth: 1.5, borderColor: LC.primaryLight },
 
   topo: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 },
@@ -211,13 +295,36 @@ const s = StyleSheet.create({
   modalidade: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
 
   grade: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  // Com a ficha ao lado, a turma vira uma coluna estreita de nomes
+  gradeColuna: { flexDirection: 'column', flexWrap: 'nowrap' },
+
+  linhaPainel: { flexDirection: 'row', gap: 16, alignItems: 'flex-start' },
+  colunaLista: { width: 236 },
+  colunaFicha: {
+    flex: 1, minHeight: 220, paddingLeft: 16,
+    borderLeftWidth: 1, borderLeftColor: LC.border,
+  },
+  fichaTopo: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  fichaNome: { flex: 1, fontSize: 16, fontWeight: '800', color: LC.textPrimary },
+  abrirBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: LC.radius.full,
+    backgroundColor: LC.primaryLight,
+  },
+  abrirBtnPress: { opacity: 0.75 },
+  abrirTexto: { fontSize: 12.5, fontWeight: '700', color: LC.primary },
+  fichaVazia: { fontSize: 13, color: LC.textMuted, paddingVertical: 20 },
   aluno: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     flexGrow: 1, flexBasis: '46%', minWidth: 150,
     backgroundColor: LC.bg, borderRadius: LC.radius.md, borderWidth: 1, borderColor: LC.border,
     paddingHorizontal: 10, paddingVertical: 9,
   },
+  // Na coluna, o item ocupa a linha toda em vez de dividir espaço
+  alunoLinha: { flexBasis: 'auto', flexGrow: 0, minWidth: 0, width: '100%' },
   alunoPress: { borderColor: LC.primary, backgroundColor: LC.primaryLight },
+  // Quem está com a ficha aberta ao lado
+  alunoSel: { borderColor: LC.primary, borderWidth: 1.5, backgroundColor: LC.primaryLight },
   alunoInerte: { opacity: 0.95 },
   // Quem sobrou da turma anterior fica visivelmente mais apagado, para não
   // ser confundido com a turma de agora numa olhada rápida.

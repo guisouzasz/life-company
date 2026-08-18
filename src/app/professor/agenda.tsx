@@ -11,6 +11,7 @@ import { AlunosAulaModal } from '../../components/professor/alunos-aula-modal';
 import { AulaAgora } from '../../components/professor/aula-agora';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useVagasDia } from '../../services/horarios/horarios.queries';
+import { useIsTablet } from '../../hooks/use-is-desktop';
 import { useMe } from '../../services/auth/auth.queries';
 import type { HorarioVaga } from '../../services/horarios/horarios.types';
 import { formatDate, getDiaSemanaKey, getProximosDiasUteis } from '../../services/date';
@@ -48,10 +49,15 @@ export default function ProfessorAgenda() {
   const me = useMe();
   const porAluno = !usaTreinoDoDia(me.data?.modalidadeProfessor?.nome);
 
+  // No tablet a tela inteira acompanha a largura do cartão da aula; senão o
+  // título e a lista de aulas ficariam numa coluna estreita ao lado dele.
+  const tablet = useIsTablet();
+  const largo = tablet ? s.largo : null;
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
-      <View style={s.header}>
+      <View style={[s.header, largo]}>
         <Text style={s.title}>Agenda{minhaModalidade ? ` — ${nomeModalidade(minhaModalidade)}` : ''}</Text>
         <Text style={s.subtitle}>Olá, {nome?.split(' ')[0] ?? 'Professor'} — toque numa aula para ver os alunos</Text>
       </View>
@@ -59,7 +65,7 @@ export default function ProfessorAgenda() {
       {hojeEhUtil ? <AulaAgora aulasDeHoje={aulasDeHoje} hoje={hoje} porAluno={porAluno} /> : null}
 
       {/* Dias */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.daysScroll} contentContainerStyle={s.daysRow}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[s.daysScroll, largo]} contentContainerStyle={s.daysRow}>
         {dias.map((d) => {
           const sel = diaSel?.data === d.data;
           return (
@@ -77,7 +83,7 @@ export default function ProfessorAgenda() {
       ) : vagas.isError ? (
         <ErrorState onRetry={() => vagas.refetch()} />
       ) : (
-        <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={s.list} contentContainerStyle={[s.listContent, largo]} showsVerticalScrollIndicator={false}>
           {aulasDoDia.length === 0 ? (
             <EmptyState icon="calendar-outline" title="Sem aulas neste dia" description="Escolha outro dia acima." />
           ) : (
@@ -137,6 +143,8 @@ const s = StyleSheet.create({
   daySelText: { color: '#fff' },
   list: { flex: 1, marginTop: 6 },
   listContent: { ...LC.coluna, paddingHorizontal: 16, paddingTop: 6 },
+  /** Mesma largura máxima do cartão da aula de agora. */
+  largo: { maxWidth: 1000 },
   pressed: { opacity: 0.85 },
   aulaCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   aulaIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },

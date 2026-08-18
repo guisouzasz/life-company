@@ -151,5 +151,7 @@ export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
 
 // ─── Breakpoints ──────────────────────────────────────────────────────────────
+// >= tablet: cabe conteúdo lado a lado (iPad em pé já tem ~820pt de largura),
+//            usado na aula do professor para a ficha ficar aberta ao lado da turma.
 // >= desktop: admin vira painel com sidebar (web); abaixo disso, layout mobile.
-export const Breakpoints = { desktop: 1024 } as const;
+export const Breakpoints = { tablet: 760, desktop: 1024 } as const;
