@@ -1,5 +1,8 @@
-/* Tipografia premium (web). Inter — sans-serif limpa e de alta legibilidade. */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Tipografia premium (web). Inter — sans-serif limpa e de alta legibilidade.
+   A fonte é carregada por <link> em app/+html.tsx, não por @import: o @import
+   só é descoberto depois que este CSS baixa, o que empilha três idas ao
+   servidor antes de o texto aparecer na fonte certa. No celular em rede móvel
+   isso é visível. */
 
 :root {
   --font-display: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -17,7 +20,7 @@ body,
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background-color: #f6f8fa;
+  background-color: #f8fafc;
 }
 
 * {

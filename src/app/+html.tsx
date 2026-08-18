@@ -25,6 +25,16 @@ export default function Root({ children }: PropsWithChildren) {
             antes desta, e o navegador usa a primeira que encontra. */}
         <meta name="description" content="Sistema do Studio Life Company: agenda, treinos e frequência." />
 
+        {/* A fonte vem daqui, e não de um @import no CSS: assim o navegador
+            já a descobre no HTML e baixa em paralelo, em vez de esperar o CSS
+            baixar para só então descobrir que precisa dela. */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        />
+
         {/* Instalável: ícone na área de trabalho e janela sem barra de endereço */}
         <link rel="manifest" href="/manifest.webmanifest" />
         <meta name="theme-color" content="#028E94" />
