@@ -1,6 +1,7 @@
 import '../global.css';
 import { useEffect } from 'react';
 import { Stack, router, usePathname } from 'expo-router';
+import Head from 'expo-router/head';
 import { View, ActivityIndicator, StatusBar } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { LC } from '../constants/theme';
@@ -64,6 +65,14 @@ function RootNavigator() {
 export default function Layout() {
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Nome da aba do navegador. Fica aqui, e não no RootNavigator, porque
+          aquele componente sai pelo caminho do carregamento antes de chegar
+          no conteúdo — e é justamente esse primeiro render que vira o HTML
+          publicado. Também não basta pôr no +html: o expo-router injeta um
+          <title> próprio antes do nosso, e o navegador usa o primeiro. */}
+      <Head>
+        <title>Studio Life Company</title>
+      </Head>
       <RootNavigator />
     </QueryClientProvider>
   );
