@@ -28,7 +28,7 @@ export const PROF_TABS: Tab[] = [
 
 export const ADMIN_TABS: Tab[] = [
   { label: 'Início', route: '/admin/dashboard', icon: 'home-outline', iconActive: 'home', activeRoutes: ['/admin/dashboard'] },
-  { label: 'Alunos', route: '/admin/alunos', icon: 'people-outline', iconActive: 'people', activeRoutes: ['/admin/alunos', '/admin/novo-aluno'] },
+  { label: 'Alunos', route: '/admin/alunos', icon: 'people-outline', iconActive: 'people', activeRoutes: ['/admin/alunos', '/admin/novo-aluno', '/admin/professores'] },
   { label: 'Horários', route: '/admin/horarios', icon: 'calendar-outline', iconActive: 'calendar', activeRoutes: ['/admin/horarios'] },
   { label: 'Financeiro', route: '/admin/financeiro', icon: 'wallet-outline', iconActive: 'wallet', activeRoutes: ['/admin/financeiro'] },
   { label: 'Frequência', route: '/admin/frequencia', icon: 'stats-chart-outline', iconActive: 'stats-chart', activeRoutes: ['/admin/frequencia'] },

@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsuariosService } from './usuarios.service';
 import { CriarUsuarioDto } from './dto/criar-usuario.dto';
 import { AtualizarPlanoDto } from './dto/atualizar-plano.dto';
+import { DefinirSenhaDto } from './dto/definir-senha.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { StaffGuard } from '../auth/guards/staff.guard';
@@ -20,6 +21,10 @@ export class UsuariosController {
   // Professor também lista alunos (para montar treinos) — leitura apenas
   @Get() @UseGuards(StaffGuard) listar(@Query('busca') busca?: string) { return this.service.listar(busca); }
 
+  // Rota fixa ANTES de @Get(':id'), senão "professores" entraria como um id
+  @Get('professores') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Professores do estúdio (admin)' })
+  listarProfessores() { return this.service.listarProfessores(); }
+
   @Get('me/saldo') @ApiOperation({ summary: 'Saldo semanal do aluno logado' })
   saldo(@Request() req) { return this.service.saldoSemanal(req.user.id); }
 
@@ -32,6 +37,9 @@ export class UsuariosController {
 
   @Put(':id/plano') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Trocar plano ativo do aluno (admin)' })
   atualizarPlano(@Param('id') id: string, @Body() dto: AtualizarPlanoDto) { return this.service.atualizarPlano(id, dto); }
+
+  @Put(':id/senha') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Definir a senha de um aluno/professor (admin)' })
+  definirSenha(@Param('id') id: string, @Body() dto: DefinirSenhaDto) { return this.service.definirSenha(id, dto.senha); }
 
   @Delete(':id') @UseGuards(AdminGuard) excluir(@Param('id') id: string) { return this.service.excluir(id); }
 

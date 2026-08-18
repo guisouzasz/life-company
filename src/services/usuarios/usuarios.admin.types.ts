@@ -68,3 +68,22 @@ export interface GerarLinkResposta {
   link: string;
   token: string;
 }
+
+/**
+ * Professor do estúdio (GET /usuarios/professores).
+ *
+ * `ativado` = já tem senha, ou seja, passou pelo primeiro acesso (ou a dona
+ * definiu a senha pelo painel). É diferente de `ativo`, que é o cadastro
+ * ligado/desligado — um professor afastado fica ativado e inativo.
+ */
+export interface ProfessorAdmin {
+  id: string;
+  nome: string;
+  cpf: string;
+  email?: string | null;
+  telefone?: string | null;
+  ativo: boolean;
+  ativado: boolean;
+  createdAt: string;
+  modalidadeProfessor?: { id: string; nome: string } | null;
+}

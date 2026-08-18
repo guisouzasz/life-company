@@ -7,6 +7,7 @@ import type {
   CriarAlunoPayload,
   CriarAlunoResposta,
   GerarLinkResposta,
+  ProfessorAdmin,
 } from './usuarios.admin.types';
 
 export const usuariosService = {
@@ -18,6 +19,17 @@ export const usuariosService = {
   // ── Admin ──────────────────────────────────────────────────────────
   async listar(busca?: string): Promise<AlunoAdmin[]> {
     const { data } = await http.get<AlunoAdmin[]>('/usuarios', { params: busca ? { busca } : {} });
+    return data;
+  },
+
+  async listarProfessores(): Promise<ProfessorAdmin[]> {
+    const { data } = await http.get<ProfessorAdmin[]>('/usuarios/professores');
+    return data;
+  },
+
+  /** Define/redefine a senha de um aluno ou professor (o estúdio não envia e-mail). */
+  async definirSenha(id: string, senha: string): Promise<{ mensagem: string }> {
+    const { data } = await http.put<{ mensagem: string }>(`/usuarios/${id}/senha`, { senha });
     return data;
   },
 

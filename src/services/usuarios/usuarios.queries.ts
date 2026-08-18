@@ -16,3 +16,11 @@ export function useAlunos(busca?: string) {
     queryFn: () => usuariosService.listar(busca),
   });
 }
+
+/** Professores do estúdio (admin). */
+export function useProfessores() {
+  return useQuery({
+    queryKey: ['usuarios', 'professores'],
+    queryFn: usuariosService.listarProfessores,
+  });
+}

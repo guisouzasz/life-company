@@ -15,7 +15,9 @@ export function useAtualizarAluno() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: AtualizarAlunoPayload }) =>
       usuariosService.atualizar(id, payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios', 'alunos'] }),
+    // ['usuarios'] e não ['usuarios','alunos']: a mesma rota edita professor
+    // (ativar/desativar), e a lista deles precisa acompanhar.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
   });
 }
 
@@ -31,5 +33,17 @@ export function useAtualizarPlanoAluno() {
 export function useGerarLink() {
   return useMutation({
     mutationFn: (id: string) => usuariosService.gerarLink(id),
+  });
+}
+
+/**
+ * Define a senha de um aluno/professor. Invalida a lista de professores
+ * porque isso também ativa a conta — o status na tela muda junto.
+ */
+export function useDefinirSenha() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, senha }: { id: string; senha: string }) => usuariosService.definirSenha(id, senha),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
   });
 }

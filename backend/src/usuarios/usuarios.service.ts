@@ -134,6 +134,44 @@ export class UsuariosService {
     });
   }
 
+  /**
+   * Professores do estúdio, com a modalidade de cada um.
+   *
+   * Vive separado de `listar` porque aquela é a lista de alunos, e misturar as
+   * duas colocaria professor no meio da gestão de planos. Sem esta rota, o
+   * professor criado sumia da vista do admin: não havia tela nenhuma onde ele
+   * aparecesse depois de cadastrado.
+   *
+   * `ativado` diz se a conta já tem senha — é o que separa "aguardando
+   * primeiro acesso" de "pronta para usar". O hash em si nunca sai daqui.
+   */
+  async listarProfessores() {
+    const professores = await this.prisma.usuario.findMany({
+      where: {
+        tipoUsuario: "PROFESSOR",
+        NOT: { cpf: { startsWith: "REMOVIDO-" } },
+      },
+      select: {
+        id: true,
+        nome: true,
+        cpf: true,
+        email: true,
+        telefone: true,
+        ativo: true,
+        senhaHash: true,
+        createdAt: true,
+        modalidadeProfessor: { select: { id: true, nome: true } },
+      },
+      orderBy: { nome: "asc" },
+    });
+    return professores.map(({ senhaHash, ...p }) => ({ ...p, ativado: !!senhaHash }));
+  }
+
+  /** Define a senha de um aluno/professor (o estúdio não envia e-mail). */
+  async definirSenha(id: string, senha: string) {
+    return this.authService.definirSenhaPorAdmin(id, senha);
+  }
+
   async buscarPorId(id: string) {
     const u = await this.prisma.usuario.findUnique({
       where: { id },

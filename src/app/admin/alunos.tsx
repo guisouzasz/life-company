@@ -168,8 +168,23 @@ export default function AdminAlunos() {
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
       <View style={s.header}>
-        <Text style={s.title}>Alunos</Text>
-        <Text style={s.subtitle}>{alunos.data?.length ?? 0} cadastrados</Text>
+        <View style={s.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.title}>Alunos</Text>
+            <Text style={s.subtitle}>{alunos.data?.length ?? 0} cadastrados</Text>
+          </View>
+          {/* Professor não aparece nesta lista (ela é só de alunos); a gestão
+              deles fica a um toque daqui, que é onde se procura por pessoas. */}
+          <Pressable
+            style={({ pressed }) => [s.professoresBtn, pressed && s.professoresBtnPress]}
+            onPress={() => router.push('/admin/professores')}
+            accessibilityRole="button"
+            accessibilityLabel="Ver professores"
+          >
+            <Icon name="people-outline" size={15} color={LC.primary} />
+            <Text style={s.professoresTexto}>Professores</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={s.searchWrap}>
@@ -373,8 +388,16 @@ export default function AdminAlunos() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   header: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
+  professoresBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: LC.radius.full,
+    backgroundColor: LC.primaryLight,
+  },
+  professoresBtnPress: { opacity: 0.75 },
+  professoresTexto: { fontSize: 12.5, fontWeight: '700', color: LC.primary },
   searchWrap: { paddingHorizontal: 16, paddingVertical: 10 },
   scroll: { paddingHorizontal: 16, paddingBottom: 16 },
   card: { marginBottom: 10 },

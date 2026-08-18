@@ -173,6 +173,44 @@ export class AuthService {
     return this.gerarTokens(usuario.id, usuario.tipoUsuario, usuario.nome);
   }
 
+  /**
+   * Senha definida pelo admin para um aluno ou professor.
+   *
+   * Existe porque o estúdio não envia e-mail: sem isto, senha perdida é conta
+   * perdida — não há "esqueci minha senha" para o usuário resolver sozinho.
+   * Serve também para deixar a conta pronta para uso já na criação, sem
+   * depender de alguém abrir o link de primeiro acesso.
+   *
+   * Ativa a conta (é o que o primeiro acesso faria), queima qualquer link
+   * pendente e derruba as sessões abertas — se a senha está sendo trocada
+   * porque vazou ou se perdeu, quem estava logado com a antiga tem que sair.
+   */
+  async definirSenhaPorAdmin(usuarioId: string, senha: string) {
+    const usuario = await this.prisma.usuario.findUnique({ where: { id: usuarioId } });
+    if (!usuario) throw new NotFoundException("Usuário não encontrado");
+    if (usuario.tipoUsuario === "ADMIN") {
+      throw new ForbiddenException(
+        "A senha de administrador não é alterada por aqui.",
+      );
+    }
+    const senhaHash = await bcrypt.hash(senha, 12);
+    await this.prisma.$transaction([
+      this.prisma.usuario.update({
+        where: { id: usuarioId },
+        data: { senhaHash, ativo: true },
+      }),
+      this.prisma.primeiroAcesso.updateMany({
+        where: { usuarioId, usado: false },
+        data: { usado: true },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { usuarioId, revogado: false },
+        data: { revogado: true },
+      }),
+    ]);
+    return { mensagem: "Senha definida. A conta está ativa." };
+  }
+
   async refreshToken(token: string) {
     const reg = await this.prisma.refreshToken.findUnique({
       where: { token },
