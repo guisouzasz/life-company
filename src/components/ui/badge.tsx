@@ -6,6 +6,7 @@ export type BadgeVariant =
   | 'primary' // Agendada
   | 'info' // Concluída
   | 'danger' // Cancelada, Falta, Lotada
+  | 'warning' // Encaixe (aluno posto na aula pelo professor)
   | 'neutral'; // 3x por semana, Livre
 
 const COLORS: Record<BadgeVariant, { bg: string; fg: string }> = {
@@ -13,6 +14,7 @@ const COLORS: Record<BadgeVariant, { bg: string; fg: string }> = {
   primary: { bg: LC.primaryLight, fg: LC.primary },
   info: { bg: LC.infoBg, fg: LC.infoFg },
   danger: { bg: LC.dangerBg, fg: LC.dangerFg },
+  warning: { bg: LC.warningBg, fg: LC.warningFg },
   neutral: { bg: LC.neutralBg, fg: LC.textSecondary },
 };
 

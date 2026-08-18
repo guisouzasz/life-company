@@ -8,10 +8,12 @@ import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
 import { Badge } from '../../components/ui/badge';
 import { AlunosAulaModal } from '../../components/professor/alunos-aula-modal';
+import { AulaAgora } from '../../components/professor/aula-agora';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useVagasDia } from '../../services/horarios/horarios.queries';
+import { useMe } from '../../services/auth/auth.queries';
 import type { HorarioVaga } from '../../services/horarios/horarios.types';
-import { getProximosDiasUteis } from '../../services/date';
+import { formatDate, getDiaSemanaKey, getProximosDiasUteis } from '../../services/date';
 
 type Dia = ReturnType<typeof getProximosDiasUteis>[number];
 
@@ -30,6 +32,24 @@ export default function ProfessorAgenda() {
   // O backend já devolve só a modalidade do professor — usamos para o título
   const minhaModalidade = vagas.data?.[0]?.modalidade?.nome;
 
+  // Aula de agora: sempre a de hoje, independente do dia escolhido acima.
+  // No fim de semana `dias[0]` já é a segunda, e aí não há aula de hoje.
+  const hoje = formatDate(new Date(), 'YYYY-MM-DD');
+  const hojeEhUtil = dias[0]?.data === hoje;
+  const vagasHoje = useVagasDia(hojeEhUtil ? hoje : undefined);
+  const aulasDeHoje = useMemo(() => {
+    if (!hojeEhUtil) return [];
+    const chaveHoje = getDiaSemanaKey(new Date());
+    return (vagasHoje.data ?? []).filter((h) => h.diaSemana === chaveHoje);
+  }, [hojeEhUtil, vagasHoje.data]);
+
+  // Funcional monta um treino por dia para a turma toda; as outras
+  // modalidades têm ficha por aluno.
+  const me = useMe();
+  const porAluno = me.data?.modalidadeProfessor
+    ? nomeModalidade(me.data.modalidadeProfessor.nome) !== 'Funcional'
+    : true;
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
@@ -37,6 +57,8 @@ export default function ProfessorAgenda() {
         <Text style={s.title}>Agenda{minhaModalidade ? ` — ${nomeModalidade(minhaModalidade)}` : ''}</Text>
         <Text style={s.subtitle}>Olá, {nome?.split(' ')[0] ?? 'Professor'} — toque numa aula para ver os alunos</Text>
       </View>
+
+      {hojeEhUtil ? <AulaAgora aulasDeHoje={aulasDeHoje} hoje={hoje} porAluno={porAluno} /> : null}
 
       {/* Dias */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.daysScroll} contentContainerStyle={s.daysRow}>

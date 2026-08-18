@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
 
@@ -32,7 +33,11 @@ export class HorariosService {
       });
       modalidadeId = prof?.modalidadeProfessorId ?? '__sem_modalidade__';
     }
-    const data = new Date(dataAula);
+    // `new Date('2026-08-17')` é meia-noite em UTC — 21h do dia anterior no
+    // fuso do estúdio. Como o agendamento é gravado à meia-noite LOCAL, a
+    // comparação nunca batia e toda aula aparecia com 0 agendados e livre,
+    // mesmo lotada. dayjs respeita o fuso do processo, igual ao que grava.
+    const data = dayjs(dataAula).startOf('day').toDate();
     const horarios = await this.prisma.horario.findMany({
       where: { ativo: true, ...(modalidadeId ? { modalidadeId } : {}) },
       include: {

@@ -11,13 +11,25 @@ interface AppModalProps {
   children: React.ReactNode;
   /** Fecha ao tocar no fundo (default true). */
   dismissable?: boolean;
+  /** Largura máxima do card (default 420). Uma ficha de treino pede mais. */
+  larguraMax?: number;
+  /** Conteúdo antes do título — setas de navegação, avatar. */
+  headerLeft?: React.ReactNode;
 }
 
 /**
  * Modal central reutilizável — funciona em web e nativo (ao contrário de Alert).
  * Backdrop com glassmorphism (desfoque + tint translúcido) e card sólido flutuante.
  */
-export function AppModal({ visible, onClose, title, children, dismissable = true }: AppModalProps) {
+export function AppModal({
+  visible,
+  onClose,
+  title,
+  children,
+  dismissable = true,
+  larguraMax,
+  headerLeft,
+}: AppModalProps) {
   return (
     <RNModal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.root}>
@@ -26,10 +38,11 @@ export function AppModal({ visible, onClose, title, children, dismissable = true
         <Pressable style={[StyleSheet.absoluteFill, styles.tint]} onPress={dismissable ? onClose : undefined} />
 
         {/* Card */}
-        <View style={[styles.card, { pointerEvents: 'box-none' }]}>
+        <View style={[styles.card, larguraMax ? { maxWidth: larguraMax } : null, { pointerEvents: 'box-none' }]}>
           <View style={styles.cardInner}>
             {title ? (
               <View style={styles.header}>
+                {headerLeft}
                 <Text style={styles.title}>{title}</Text>
                 <Pressable onPress={onClose} hitSlop={8} style={styles.close}>
                   <Icon name="close" size={20} color={LC.textSecondary} />
@@ -115,7 +128,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.6)',
     ...LC.shadowStrong,
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 14 },
   title: { fontSize: 18, fontWeight: '800', color: LC.textPrimary, flex: 1 },
   close: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: LC.bg },
   message: { fontSize: 14, color: LC.textSecondary, lineHeight: 20, marginBottom: 18 },

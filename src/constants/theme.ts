@@ -38,6 +38,7 @@ export const LC = {
   dangerFg: "#B91C1C",
   warning: "#F59E0B",
   warningBg: "#FEF3C7",
+  warningFg: "#B45309", // âmbar escuro: o #F59E0B some sobre o próprio fundo claro
   info: "#3B82F6",
   infoBg: "#DBEAFE",
   infoFg: "#1D4ED8",
