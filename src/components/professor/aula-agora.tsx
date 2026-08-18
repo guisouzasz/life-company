@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
@@ -39,10 +39,13 @@ interface Props {
 }
 
 export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
-  const foco = useAulaAgora(aulasDeHoje);
+  const { foco, anterior } = useAulaAgora(aulasDeHoje);
   const aula = foco?.aula ?? null;
 
   const agendamentos = useAgendamentosDoHorario(aula?.id, hoje, !!aula);
+  // Turma que acabou de sair, quando a próxima já começou: quem estourou o
+  // horário continua treinando, e o professor precisa da ficha dele.
+  const daAnterior = useAgendamentosDoHorario(anterior?.id, hoje, !!anterior);
   const { extras, adicionar, remover } = useAlunosExtras(hoje, aula?.id);
 
   const [indice, setIndice] = useState<number | null>(null);
@@ -56,10 +59,22 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
     const encaixes = extras
       .filter((e) => !daAgenda.some((a) => a.id === e.id))
       .map((e) => ({ id: e.id, nome: e.nome, extra: true }));
-    return [...daAgenda, ...encaixes];
-  }, [agendamentos.data, extras]);
+    const atuais = [...daAgenda, ...encaixes];
+    // Quem ficou da turma anterior entra por último e sinalizado. Aluno
+    // agendado nas duas aulas conta uma vez só, como aluno da atual.
+    const restantes = anterior
+      ? (daAnterior.data ?? [])
+          .filter((ag) => !atuais.some((a) => a.id === ag.usuario.id))
+          .map((ag) => ({ id: ag.usuario.id, nome: ag.usuario.nome, daTurmaDe: anterior.horaInicio }))
+          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      : [];
+    return [...atuais, ...restantes];
+  }, [agendamentos.data, extras, daAnterior.data, anterior]);
 
   if (!aula || !foco) return null;
+
+  // Índice em que começam os alunos da turma anterior (-1 = não há)
+  const inicioRestantes = alunos.findIndex((a) => a.daTurmaDe);
 
   const rotulo =
     foco.estado === 'agora' ? 'AGORA' : foco.estado === 'proxima' ? 'A SEGUIR' : 'ENCERRANDO';
@@ -88,9 +103,21 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
         ) : (
           <View style={s.grade}>
             {alunos.map((a, i) => (
+              <Fragment key={a.id}>
+                {i === inicioRestantes ? (
+                  <View style={s.separador}>
+                    <Text style={s.separadorTexto}>
+                      Ainda na sala · turma das {a.daTurmaDe}
+                    </Text>
+                  </View>
+                ) : null}
               <Pressable
-                key={a.id}
-                style={({ pressed }) => [s.aluno, pressed && s.alunoPress, !porAluno && s.alunoInerte]}
+                style={({ pressed }) => [
+                  s.aluno,
+                  pressed && s.alunoPress,
+                  !porAluno && s.alunoInerte,
+                  a.daTurmaDe && s.alunoAnterior,
+                ]}
                 onPress={porAluno ? () => setIndice(i) : undefined}
                 disabled={!porAluno}
                 accessibilityRole={porAluno ? 'button' : undefined}
@@ -105,6 +132,8 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
                     <Text style={s.alunoTag}>reposição</Text>
                   ) : a.extra ? (
                     <Text style={[s.alunoTag, { color: LC.warningFg }]}>encaixe</Text>
+                  ) : a.daTurmaDe ? (
+                    <Text style={[s.alunoTag, { color: LC.textMuted }]}>das {a.daTurmaDe}</Text>
                   ) : null}
                 </View>
                 {a.extra ? (
@@ -120,6 +149,7 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
                   <Icon name="chevron-forward" size={16} color={LC.primary} />
                 ) : null}
               </Pressable>
+              </Fragment>
             ))}
           </View>
         )}
@@ -189,6 +219,12 @@ const s = StyleSheet.create({
   },
   alunoPress: { borderColor: LC.primary, backgroundColor: LC.primaryLight },
   alunoInerte: { opacity: 0.95 },
+  // Quem sobrou da turma anterior fica visivelmente mais apagado, para não
+  // ser confundido com a turma de agora numa olhada rápida.
+  alunoAnterior: { backgroundColor: LC.bgCard, borderStyle: 'dashed' },
+  // Ocupa a linha inteira da grade, separando as duas turmas
+  separador: { flexBasis: '100%', paddingTop: 6, paddingBottom: 2 },
+  separadorTexto: { fontSize: 11, fontWeight: '700', color: LC.textMuted, letterSpacing: 0.3 },
   alunoNome: { fontSize: 13.5, fontWeight: '700', color: LC.textPrimary },
   alunoTag: { fontSize: 10.5, fontWeight: '700', color: LC.infoFg, marginTop: 1 },
 

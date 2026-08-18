@@ -32,6 +32,8 @@ export interface AlunoDaAula {
   reposicao?: boolean;
   /** Encaixado pelo professor, fora da agenda oficial. */
   extra?: boolean;
+  /** Hora da turma anterior, quando o aluno estourou o horário e segue na sala. */
+  daTurmaDe?: string;
 }
 
 interface Props {
@@ -115,13 +117,14 @@ export function TreinoAlunoModal({ alunos, indice, onIndice, onClose }: Props) {
         <View style={s.subHeader}>
           {varios ? (
             <Text style={s.contador}>
-              {(indice ?? 0) + 1} de {alunos.length} na aula
+              {(indice ?? 0) + 1} de {alunos.length} na sala
             </Text>
           ) : (
-            <Text style={s.contador}>Único aluno na aula</Text>
+            <Text style={s.contador}>Único aluno na sala</Text>
           )}
           {aluno?.reposicao ? <Badge label="Reposição" variant="info" /> : null}
           {aluno?.extra ? <Badge label="Encaixe" variant="warning" /> : null}
+          {aluno?.daTurmaDe ? <Badge label={`Turma das ${aluno.daTurmaDe}`} variant="neutral" /> : null}
         </View>
 
         {alertas.length > 0 ? (
