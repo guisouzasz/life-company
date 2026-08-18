@@ -14,7 +14,7 @@ import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
-import { AtivarContaDto, DOMINIOS_EMAIL_PERMITIDOS } from "./dto/ativar-conta.dto";
+import { AtivarContaDto, erroDeEmail } from "./dto/ativar-conta.dto";
 
 /** Domínio público do estúdio — destino dos links de primeiro acesso. */
 const APP_URL_PUBLICA = "https://www.academialifecompany.com.br";
@@ -150,11 +150,8 @@ export class AuthService {
       throw new ConflictException("Conta já ativada. Faça login com sua senha.");
 
     const email = dto.email.trim().toLowerCase();
-    const dominio = email.split("@")[1] ?? "";
-    if (!DOMINIOS_EMAIL_PERMITIDOS.includes(dominio))
-      throw new BadRequestException(
-        "Use um e-mail de um provedor conhecido (Gmail, Hotmail, Outlook, iCloud, Yahoo...).",
-      );
+    const erroEmail = erroDeEmail(email);
+    if (erroEmail) throw new BadRequestException(erroEmail);
     const emailEmUso = await this.prisma.usuario.findFirst({
       where: { email: { equals: email, mode: "insensitive" }, id: { not: usuario.id } },
     });

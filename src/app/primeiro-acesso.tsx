@@ -14,7 +14,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LC } from '../constants/theme';
-import { DOMINIOS_EMAIL_PERMITIDOS } from '../constants/app';
+import { erroDeEmail } from '../constants/app';
 import { Button } from '../components/ui/button';
 import { Input, PasswordToggle } from '../components/ui/input';
 import { Icon } from '../components/ui/icon';
@@ -32,7 +32,7 @@ const RULES = [
  * Dois modos de ativação:
  *  - com token (aluno chegou pelo link enviado pelo admin): CPF + senha;
  *  - sem token (aluno abriu "Primeiro acesso" no app): o CPF identifica o
- *    cadastro e o aluno escolhe o próprio e-mail (validado por provedor).
+ *    cadastro e o aluno escolhe o próprio e-mail (qualquer domínio serve).
  */
 function makeSchema(comToken: boolean) {
   return z
@@ -42,10 +42,10 @@ function makeSchema(comToken: boolean) {
         : z
             .string()
             .email('Informe um e-mail válido')
-            .refine(
-              (v) => DOMINIOS_EMAIL_PERMITIDOS.includes(v.trim().toLowerCase().split('@')[1] ?? ''),
-              'Use um e-mail de um provedor conhecido (Gmail, Hotmail, Outlook, iCloud, Yahoo...)',
-            ),
+            .superRefine((v, ctx) => {
+              const erro = erroDeEmail(v);
+              if (erro) ctx.addIssue({ code: z.ZodIssueCode.custom, message: erro });
+            }),
       cpf: z
         .string()
         .transform((v) => v.replace(/\D/g, ''))
