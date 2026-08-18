@@ -60,9 +60,14 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
         </Pressable>
       ) : null}
 
+      {/*
+        Barra de rolagem à mostra de propósito. Com ela escondida, um treino
+        longo terminava numa linha cortada no meio e parecia defeito — o
+        professor não tinha como saber que faltavam dez exercícios abaixo.
+      */}
       <ScrollView
         style={alturaMax ? { maxHeight: alturaMax } : { flex: 1 }}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
       >
         {treinos.isLoading ? (
           <View style={{ height: 120 }}>
@@ -81,6 +86,13 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
             <View key={t.id} style={s.treino}>
               <View style={s.treinoTopo}>
                 <Text style={s.treinoTitulo}>{t.titulo.toUpperCase()}</Text>
+                {/* A contagem avisa que o treino é longo antes de o professor
+                    descobrir rolando — e confirma que ele viu tudo. */}
+                {t.exercicios.length > 0 ? (
+                  <Text style={s.treinoMeta}>
+                    {t.exercicios.length} {t.exercicios.length === 1 ? 'exercício' : 'exercícios'}
+                  </Text>
+                ) : null}
                 {t.frequencia ? <Text style={s.treinoMeta}>{t.frequencia}</Text> : null}
               </View>
               {t.conteudo ? <Text style={s.conteudo}>{t.conteudo}</Text> : null}
