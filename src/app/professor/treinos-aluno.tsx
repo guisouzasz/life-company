@@ -13,6 +13,7 @@ import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { CargaExercicioModal } from '../../components/professor/carga-exercicio-modal';
 import { FichaExercicios } from '../../components/professor/ficha-exercicios';
+import { SeletorExercicio } from '../../components/professor/seletor-exercicio';
 import { Badge } from '../../components/ui/badge';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino } from '../../services/treinos/treinos.mutations';
@@ -115,6 +116,8 @@ export default function TreinosAluno() {
   const [secoes, setSecoes] = useState<Secao[]>([secaoVazia()]);
   const [excluindo, setExcluindo] = useState<Treino | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // Qual exercício está com o seletor aberto (índice da seção e do item)
+  const [escolhendo, setEscolhendo] = useState<{ si: number; ii: number; grupo: string } | null>(null);
   // Metadados da ficha (opcionais)
   const [frequencia, setFrequencia] = useState('');
   const [vencimento, setVencimento] = useState(''); // YYYY-MM-DD
@@ -366,7 +369,24 @@ export default function TreinosAluno() {
                       </Pressable>
                     ) : null}
                   </View>
-                  <Input placeholder="Nome (ex: Supino reto)" value={e.nome} onChangeText={(v) => setItem(si, ii, 'nome', v)} />
+                  {/* Com o grupo escolhido, o nome vem do catálogo daquele
+                      grupo — mantém a grafia estável, que é o que casa a
+                      evolução de carga do aluno. Sem grupo, segue texto livre. */}
+                  {secao.grupo ? (
+                    <Pressable
+                      style={({ pressed }) => [s.seletorCampo, pressed && s.seletorCampoPress]}
+                      onPress={() => setEscolhendo({ si, ii, grupo: secao.grupo })}
+                      accessibilityRole="button"
+                      accessibilityLabel={e.nome ? `Trocar exercício ${e.nome}` : `Escolher exercício de ${secao.grupo}`}
+                    >
+                      <Text style={e.nome ? s.seletorValor : s.seletorPlaceholder} numberOfLines={1}>
+                        {e.nome || `Escolher exercício de ${secao.grupo}`}
+                      </Text>
+                      <Icon name="chevron-down" size={18} color={LC.textMuted} />
+                    </Pressable>
+                  ) : (
+                    <Input placeholder="Nome (ex: Supino reto)" value={e.nome} onChangeText={(v) => setItem(si, ii, 'nome', v)} />
+                  )}
                   <View style={s.exRow}>
                     <View style={{ flex: 1 }}>
                       <Input placeholder="Séries" keyboardType="number-pad" maxLength={2} value={e.seriesTexto} onChangeText={(v) => setItem(si, ii, 'seriesTexto', v)} />
@@ -402,6 +422,15 @@ export default function TreinosAluno() {
           <Button title="Salvar treino" size="lg" loading={criar.isPending || atualizar.isPending} onPress={salvar} />
           <View style={{ height: 24 }} />
         </ScrollView>
+
+        <SeletorExercicio
+          grupo={escolhendo?.grupo ?? null}
+          selecionado={escolhendo ? secoes[escolhendo.si]?.itens[escolhendo.ii]?.nome : undefined}
+          onSelecionar={(nome) => {
+            if (escolhendo) setItem(escolhendo.si, escolhendo.ii, 'nome', nome);
+          }}
+          onFechar={() => setEscolhendo(null)}
+        />
 
         <InfoModal visible={!!erro} title="Atenção" message={erro ?? ''} onClose={() => setErro(null)} />
       </View>
@@ -595,6 +624,15 @@ const s = StyleSheet.create({
     paddingVertical: 13, borderRadius: LC.radius.md, backgroundColor: LC.primary, marginTop: 4,
   },
   addGrupoText: { fontSize: 14, fontWeight: '800', color: '#fff' },
+  // Campo que abre o catálogo: mesma aparência do Input, mas é um botão
+  seletorCampo: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 54,
+    backgroundColor: LC.bgCard, borderWidth: 1.5, borderColor: LC.borderStrong,
+    borderRadius: LC.radius.md, paddingHorizontal: 14,
+  },
+  seletorCampoPress: { borderColor: LC.primary },
+  seletorValor: { flex: 1, fontSize: 15, color: LC.textPrimary },
+  seletorPlaceholder: { flex: 1, fontSize: 15, color: LC.textMuted },
   exCard: { marginBottom: 12, gap: 10 },
   exHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   exNum: { fontSize: 12, fontWeight: '800', color: LC.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
