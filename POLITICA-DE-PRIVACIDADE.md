@@ -1,4 +1,4 @@
-# Política de Privacidade — Studio Life Company
+# Política de Privacidade — Academia Life Company
 
 **Última atualização:** 19 de julho de 2026
 

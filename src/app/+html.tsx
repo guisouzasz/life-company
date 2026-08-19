@@ -23,7 +23,7 @@ export default function Root({ children }: PropsWithChildren) {
         />
         {/* O <title> sai de app/_layout.tsx: o expo-router injeta a tag dele
             antes desta, e o navegador usa a primeira que encontra. */}
-        <meta name="description" content="Sistema do Studio Life Company: agenda, treinos e frequência." />
+        <meta name="description" content="Sistema da Academia Life Company: agenda, treinos e frequência." />
 
         {/* A fonte vem daqui, e não de um @import no CSS: assim o navegador
             já a descobre no HTML e baixa em paralelo, em vez de esperar o CSS

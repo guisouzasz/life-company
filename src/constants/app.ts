@@ -1,5 +1,13 @@
 /** Constantes de marca/configuração do app (não vêm da API). */
-export const STUDIO_NOME = 'Studio Life Company';
+
+/**
+ * Nome do estúdio como ele aparece para o aluno e na barra do painel.
+ *
+ * O nome é feminino ("a Academia"), e as mensagens de cobrança do WhatsApp
+ * dizem "da ${STUDIO_NOME}" — se um dia isto virar um nome masculino, os
+ * artigos em services/whatsapp.ts precisam mudar junto.
+ */
+export const STUDIO_NOME = 'Academia Life Company';
 
 /**
  * Prazo para usar um crédito de reposição, em dias. Usado nos textos que

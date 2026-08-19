@@ -49,13 +49,13 @@ export function mensagemVencimento(params: {
   if (atrasado) {
     return (
       `Oi, ${primeiroNome(nome)}! Tudo bem? ` +
-      `Passando para avisar que a sua mensalidade${quanto} do ${STUDIO_NOME} venceu no dia ${dia}. ` +
+      `Passando para avisar que a sua mensalidade${quanto} da ${STUDIO_NOME} venceu no dia ${dia}. ` +
       `Se você já pagou, me manda um retorno que eu registro por aqui. Obrigada!`
     );
   }
   return (
     `Oi, ${primeiroNome(nome)}! Tudo bem? ` +
-    `Passando para lembrar que a sua mensalidade${quanto} do ${STUDIO_NOME} vence no dia ${dia}. ` +
+    `Passando para lembrar que a sua mensalidade${quanto} da ${STUDIO_NOME} vence no dia ${dia}. ` +
     `Qualquer dúvida, é só me chamar por aqui!`
   );
 }
