@@ -84,7 +84,7 @@ export default function Login() {
         >
           {/* Hero */}
           <LinearGradient colors={LC.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
-            <Image source={Assets.logoColor} style={s.logo} tintColor="#FFFFFF" resizeMode="contain" />
+            <Image source={Assets.logoColor} style={s.logo} resizeMode="contain" />
             <Text style={s.welcome}>Bem-vindo de volta!</Text>
             <Text style={s.welcomeSub}>Faça login para continuar</Text>
           </LinearGradient>

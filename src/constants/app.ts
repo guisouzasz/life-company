@@ -3,11 +3,11 @@
 /**
  * Nome do estúdio como ele aparece para o aluno e na barra do painel.
  *
- * O nome é feminino ("a Academia"), e as mensagens de cobrança do WhatsApp
- * dizem "da ${STUDIO_NOME}" — se um dia isto virar um nome masculino, os
+ * O nome é masculino ("o Pro Treine"), e as mensagens de cobrança do WhatsApp
+ * dizem "do ${STUDIO_NOME}" — se um dia isto virar um nome feminino, os
  * artigos em services/whatsapp.ts precisam mudar junto.
  */
-export const STUDIO_NOME = 'Academia Life Company';
+export const STUDIO_NOME = 'Pro Treine';
 
 /**
  * Prazo para usar um crédito de reposição, em dias. Usado nos textos que

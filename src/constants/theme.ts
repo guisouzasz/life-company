@@ -1,59 +1,60 @@
 //import '@/global.css';
 import { Platform } from "react-native";
 
-// ─── Life Company Design System ───────────────────────────────────────────────
-// Tema único (claro). O modo escuro foi removido a pedido do estúdio.
+// ─── Pro Treine Design System (BRANCH DE DEMONSTRAÇÃO) ───────────────────────
+// Mesma estrutura do tema do Life Company, repintada em escuro + laranja para
+// a gravação do vídeo de vendas do Pro Treine. Não vai para a main.
 export const LC = {
   // ── Brand ─────────────────────────────────────────────────────────
-  brand: "#028E94", // teal oficial extraído do logo
-  primary: "#0E9488", // ação primária (botões, ativos)
-  primaryDark: "#0B6F66", // secondary / pressed
-  primaryLight: "#E6F4F1", // fundo suave verde
-  primaryMid: "#16B8A7", // variante clara
-  primarySoft: "#D2ECE7", // chip/avatar bg
+  brand: "#F26B1D", // laranja da marca Pro Treine
+  primary: "#F26B1D", // ação primária (botões, ativos)
+  primaryDark: "#C2540F", // secondary / pressed
+  primaryLight: "#2A1A0E", // fundo suave (laranja rebaixado no escuro)
+  primaryMid: "#FF8F45", // variante clara
+  primarySoft: "#3A2413", // chip/avatar bg
 
   // Gradiente do hero (login / splash)
-  gradientHero: ["#063A3D", "#055F63", "#028E94"] as const,
-  gradientCard: ["#0E9488", "#0B6F66"] as const,
+  gradientHero: ["#0A0A0A", "#1C120A", "#3A1F0B"] as const,
+  gradientCard: ["#F26B1D", "#B8480A"] as const,
 
   // ── Neutrals ──────────────────────────────────────────────────────
-  bg: "#F8FAFC", // background geral (mockup)
-  bgCard: "#FFFFFF", // card
-  bgDark: "#0F172A", // fundo hero login (dark)
-  bgDarkCard: "#1E293B",
+  bg: "#121212", // background geral
+  bgCard: "#1E1E1E", // card
+  bgDark: "#0A0A0A", // fundo hero login
+  bgDarkCard: "#1A1A1A",
 
   // ── Text ──────────────────────────────────────────────────────────
-  textPrimary: "#111827", // dark text
-  textSecondary: "#6B7280", // secondary
-  textMuted: "#9CA3AF", // placeholder / muted
+  textPrimary: "#FFFFFF", // texto principal no escuro
+  textSecondary: "#A9A9A9", // secondary
+  textMuted: "#7C7C7C", // placeholder / muted
   textWhite: "#FFFFFF",
   textOnPrimary: "#FFFFFF",
 
   // ── Status ────────────────────────────────────────────────────────
   success: "#22C55E",
-  successBg: "#DCFCE7",
-  successFg: "#15803D",
+  successBg: "#122E1B",
+  successFg: "#4ADE80",
   danger: "#EF4444",
-  dangerBg: "#FEE2E2",
-  dangerFg: "#B91C1C",
+  dangerBg: "#361517",
+  dangerFg: "#F87171",
   warning: "#F59E0B",
-  warningBg: "#FEF3C7",
-  warningFg: "#B45309", // âmbar escuro: o #F59E0B some sobre o próprio fundo claro
+  warningBg: "#33240B",
+  warningFg: "#FBBF24", // âmbar claro: no fundo escuro o tom escuro sumia
   info: "#3B82F6",
-  infoBg: "#DBEAFE",
-  infoFg: "#1D4ED8",
-  neutralBg: "#F1F5F9",
+  infoBg: "#12233D",
+  infoFg: "#60A5FA",
+  neutralBg: "#242424",
 
   // ── Border ────────────────────────────────────────────────────────
-  border: "#EEF1F4", // hairline sutil (premium, quase invisível)
-  borderStrong: "#E2E8F0",
-  borderFocus: "#0E9488",
+  border: "#2C2C2C", // hairline no escuro
+  borderStrong: "#3A3A3A",
+  borderFocus: "#F26B1D",
 
   // ── Shadows (tom slate, difusas e "flutuantes") ───────────────────
   // No web usamos boxShadow (shadow* está deprecado no react-native-web);
   // no nativo mantemos shadow* (iOS) + elevation (Android).
   shadow: Platform.select({
-    web: { boxShadow: "0px 2px 8px rgba(15, 23, 42, 0.04)" },
+    web: { boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.45)" },
     default: {
       shadowColor: "#0F172A",
       shadowOffset: { width: 0, height: 2 },
@@ -64,7 +65,7 @@ export const LC = {
   }) as object,
   // Sombra padrão dos cards flutuantes
   shadowCard: Platform.select({
-    web: { boxShadow: "0px 8px 20px rgba(15, 23, 42, 0.06)" },
+    web: { boxShadow: "0px 8px 20px rgba(0, 0, 0, 0.55)" },
     default: {
       shadowColor: "#0F172A",
       shadowOffset: { width: 0, height: 8 },
@@ -74,7 +75,7 @@ export const LC = {
     },
   }) as object,
   shadowStrong: Platform.select({
-    web: { boxShadow: "0px 16px 32px rgba(15, 23, 42, 0.14)" },
+    web: { boxShadow: "0px 16px 32px rgba(0, 0, 0, 0.7)" },
     default: {
       shadowColor: "#0F172A",
       shadowOffset: { width: 0, height: 16 },

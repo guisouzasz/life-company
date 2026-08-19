@@ -72,7 +72,7 @@ export default function Layout() {
           publicado. Também não basta pôr no +html: o expo-router injeta um
           <title> próprio antes do nosso, e o navegador usa o primeiro. */}
       <Head>
-        <title>Academia Life Company</title>
+        <title>Pro Treine</title>
       </Head>
       {/* Erro em qualquer tela vira mensagem com botão, e não tela branca. */}
       <LimiteDeErro>

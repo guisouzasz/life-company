@@ -17,9 +17,9 @@ export default function BoasVindas() {
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={LC.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.flex}>
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} bounces={false}>
-          <Image source={Assets.logoColor} style={s.logo} tintColor="#FFFFFF" resizeMode="contain" />
+          <Image source={Assets.logoColor} style={s.logo} resizeMode="contain" />
 
-          <Text style={s.eyebrow}>BEM-VINDO · LIFE COMPANY</Text>
+          <Text style={s.eyebrow}>BEM-VINDO · PRO TREINE</Text>
           <Text style={s.titulo}>Bora treinar?</Text>
           <Text style={s.sub}>
             Antes de começar, conta pra gente: você já tem conta aqui ou é o seu primeiro acesso?
@@ -73,8 +73,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 24, paddingTop: 48, paddingBottom: 40,
   },
 
-  logo: { width: 120, height: 74, marginBottom: 34 },
-  eyebrow: { color: '#7FD8D0', fontSize: 11.5, fontWeight: '800', letterSpacing: 2 },
+  logo: { width: 168, height: 82, marginBottom: 34 },
+  eyebrow: { color: '#FFA766', fontSize: 11.5, fontWeight: '800', letterSpacing: 2 },
   titulo: { color: '#fff', fontSize: 42, fontWeight: '800', letterSpacing: -1.2, marginTop: 12 },
   sub: { color: 'rgba(255,255,255,0.78)', fontSize: 15.5, lineHeight: 23, marginTop: 14, maxWidth: 420 },
 
@@ -85,10 +85,10 @@ const s = StyleSheet.create({
   portaEscura: { backgroundColor: 'rgba(255,255,255,0.12)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.26)' },
 
   tagClara: { color: LC.primary, fontSize: 10.5, fontWeight: '800', letterSpacing: 1.6 },
-  tagEscura: { color: '#7FD8D0', fontSize: 10.5, fontWeight: '800', letterSpacing: 1.6 },
-  portaTituloClaro: { color: LC.textPrimary, fontSize: 22, fontWeight: '800', letterSpacing: -0.5, marginTop: 8 },
+  tagEscura: { color: '#FFA766', fontSize: 10.5, fontWeight: '800', letterSpacing: 1.6 },
+  portaTituloClaro: { color: '#141414', fontSize: 22, fontWeight: '800', letterSpacing: -0.5, marginTop: 8 },
   portaTituloEscuro: { color: '#fff', fontSize: 22, fontWeight: '800', letterSpacing: -0.5, marginTop: 8 },
-  portaTextoClaro: { color: LC.textSecondary, fontSize: 14, lineHeight: 20, marginTop: 6 },
+  portaTextoClaro: { color: '#5C5C5C', fontSize: 14, lineHeight: 20, marginTop: 6 },
   portaTextoEscuro: { color: 'rgba(255,255,255,0.75)', fontSize: 14, lineHeight: 20, marginTop: 6 },
 
   acao: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 },

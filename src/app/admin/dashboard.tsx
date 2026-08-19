@@ -25,10 +25,10 @@ type StatDef = { label: string; value: number | string; icon: IconName; color: s
 type AcaoDef = { label: string; desc: string; icon: IconName; route: string; color: string; bg: string };
 
 const ACOES: AcaoDef[] = [
-  { label: 'Alunos', desc: 'Gerenciar cadastros', icon: 'people-outline', route: '/admin/alunos', color: '#4F46E5', bg: '#EEF2FF' },
+  { label: 'Alunos', desc: 'Gerenciar cadastros', icon: 'people-outline', route: '/admin/alunos', color: '#4F46E5', bg: '#1B1F3A' },
   { label: 'Horários', desc: 'Grade de aulas', icon: 'calendar-outline', route: '/admin/horarios', color: LC.primary, bg: LC.primaryLight },
   { label: 'Financeiro', desc: 'Mensalidades e recebimentos', icon: 'wallet-outline', route: '/admin/financeiro', color: '#15803D', bg: LC.successBg },
-  { label: 'Frequência', desc: 'Presenças e faltas', icon: 'stats-chart-outline', route: '/admin/frequencia', color: '#F59E0B', bg: '#FEF3C7' },
+  { label: 'Frequência', desc: 'Presenças e faltas', icon: 'stats-chart-outline', route: '/admin/frequencia', color: '#F59E0B', bg: '#33240B' },
   { label: 'Novo aluno', desc: 'Cadastrar e gerar link', icon: 'person-add-outline', route: '/admin/novo-aluno', color: LC.info, bg: LC.infoBg },
 ];
 
@@ -424,16 +424,16 @@ export default function AdminDashboard() {
   const d = relatorio.data;
 
   const statsMobile: StatDef[] = [
-    { label: 'Total de alunos', value: d?.totalAlunos ?? 0, icon: 'people', color: '#4F46E5', bg: '#EEF2FF' },
+    { label: 'Total de alunos', value: d?.totalAlunos ?? 0, icon: 'people', color: '#4F46E5', bg: '#1B1F3A' },
     { label: 'Alunos ativos', value: d?.alunosAtivos ?? 0, icon: 'checkmark-circle', color: '#15803D', bg: LC.successBg },
-    { label: 'Aulas na semana', value: d?.aulasSemana ?? 0, icon: 'calendar', color: '#B45309', bg: '#FEF3C7' },
+    { label: 'Aulas na semana', value: d?.aulasSemana ?? 0, icon: 'calendar', color: '#FBBF24', bg: '#33240B' },
     { label: 'Presenças', value: d?.presencas ?? 0, icon: 'hand-left', color: '#1D4ED8', bg: LC.infoBg },
     { label: 'Faltas', value: d?.faltas ?? 0, icon: 'close-circle', color: '#B91C1C', bg: LC.dangerBg },
   ];
 
   const statsDesktop: StatDef[] = [
-    { label: 'Alunos ativos', value: d?.alunosAtivos ?? 0, icon: 'people', color: '#4F46E5', bg: '#EEF2FF' },
-    { label: 'Aulas na semana', value: d?.aulasSemana ?? 0, icon: 'calendar', color: '#B45309', bg: '#FEF3C7' },
+    { label: 'Alunos ativos', value: d?.alunosAtivos ?? 0, icon: 'people', color: '#4F46E5', bg: '#1B1F3A' },
+    { label: 'Aulas na semana', value: d?.aulasSemana ?? 0, icon: 'calendar', color: '#FBBF24', bg: '#33240B' },
     { label: 'Presenças', value: d?.presencas ?? 0, icon: 'checkmark-circle', color: '#15803D', bg: LC.successBg },
     { label: 'Faltas', value: d?.faltas ?? 0, icon: 'close-circle', color: '#B91C1C', bg: LC.dangerBg },
     { label: 'Ocupação', value: `${d?.ocupacao ?? 0}%`, icon: 'trending-up', color: LC.primary, bg: LC.primaryLight },

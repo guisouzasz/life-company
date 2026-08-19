@@ -5,7 +5,7 @@
  * substituídos por gradientes/ícones nos componentes até estarem presentes.
  */
 export const Assets = {
-  logoColor: require('../../assets/images/logo-life-color.png.png'),
+  logoColor: require('../../assets/images/logo-pro-treine.png'),
 };
 
 /** Ícone (Ionicons) por modalidade, com fallback genérico. */
