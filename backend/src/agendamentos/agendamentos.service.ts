@@ -64,12 +64,35 @@ export class AgendamentosService {
       await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${dto.horarioId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
 
-      // Validações comuns aos dois fluxos (vaga/duplicidade)
-      const jaAgendado = await tx.agendamento.findFirst({ where: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
-      if (jaAgendado) throw new ConflictException('Você já possui agendamento neste horário');
+      /**
+       * Validações comuns aos dois fluxos (vaga/duplicidade).
+       *
+       * Procura QUALQUER agendamento do aluno nesta aula, não só o confirmado:
+       * o banco tem índice único em (usuário, horário, data) e o cancelado
+       * continua ocupando essa chave. Enquanto isto olhava só o CONFIRMADO, o
+       * aluno que cancelasse e mudasse de ideia levava erro 500 ao tentar
+       * marcar de novo a MESMA aula — o insert esbarrava no índice. Agora a
+       * linha cancelada é reaproveitada.
+       */
+      const anterior = await tx.agendamento.findFirst({ where: { usuarioId, horarioId: dto.horarioId, dataAula } });
+      if (anterior?.status === 'CONFIRMADO') throw new ConflictException('Você já possui agendamento neste horário');
 
       const ocupacao = await tx.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
       if (ocupacao >= horario.capacidadeMaxima) throw new BadRequestException('Horário lotado');
+
+      /**
+       * Grava o agendamento: revive a linha cancelada, se existir, ou cria uma
+       * nova. `reposicao` e `creditoId` vão sempre explícitos para a marcação
+       * anterior não vazar na nova (quem repôs e cancelou pode voltar a marcar
+       * a aula pelo plano, e aí não é mais reposição).
+       */
+      const gravar = (extra: { reposicao: boolean; creditoId: string | null }) => {
+        const include = { horario: { include: { modalidade: true } } };
+        const dados = { status: 'CONFIRMADO' as const, ...extra };
+        return anterior
+          ? tx.agendamento.update({ where: { id: anterior.id }, data: dados, include })
+          : tx.agendamento.create({ data: { usuarioId, horarioId: dto.horarioId, dataAula, ...dados }, include });
+      };
 
       // ── Fluxo por CRÉDITO de reposição (não consome vaga semanal) ──────
       if (dto.usarCredito === true) {
@@ -78,10 +101,7 @@ export class AgendamentosService {
           orderBy: { expiraEm: 'asc' },
         });
         if (!credito) throw new ForbiddenException('Você não possui crédito de reposição válido');
-        const agendamento = await tx.agendamento.create({
-          data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO', reposicao: true, creditoId: credito.id },
-          include: { horario: { include: { modalidade: true } } },
-        });
+        const agendamento = await gravar({ reposicao: true, creditoId: credito.id });
         await tx.creditoReposicao.update({
           where: { id: credito.id },
           data: { usado: true, usadoEm: new Date(), usadoAgendamentoId: agendamento.id },
@@ -109,10 +129,7 @@ export class AgendamentosService {
         usuarioPlano.aulasUsadasSemana = 0;
       }
 
-      const agendamento = await tx.agendamento.create({
-        data: { usuarioId, horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' },
-        include: { horario: { include: { modalidade: true } } },
-      });
+      const agendamento = await gravar({ reposicao: false, creditoId: null });
       if (aulaNaSemanaAtual) {
         await tx.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { increment: 1 } } });
       }
