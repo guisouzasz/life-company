@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
 import { nomeModalidade } from '../../constants/assets';
@@ -60,6 +60,22 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
   const [cargaDe, setCargaDe] = useState<{ nome: string; reps: string } | null>(null);
   const [verFicha, setVerFicha] = useState(false);
   const tablet = useIsTablet();
+
+  /**
+   * Altura do treino no painel do tablet.
+   *
+   * Era fixa em 360px, e num iPad em pé sobravam 596px de tela vazia embaixo
+   * enquanto o professor via só um terço de um treino de 16 exercícios. Como
+   * o tablet apoiado na sala é o uso principal da musculação, o painel passa
+   * a tomar o espaço que existe.
+   *
+   * O desconto de 544px é o que precisa continuar cabendo: o cabeçalho do
+   * cartão, a régua de dias, um pedaço da lista de aulas e a barra de abas.
+   * O piso de 360 protege o tablet deitado, onde a altura é curta e crescer
+   * espremeria a lista até sumir.
+   */
+  const { height: alturaJanela } = useWindowDimensions();
+  const alturaDoTreino = Math.min(Math.max(alturaJanela - 544, 360), 700);
 
   const alunos: AlunoDaAula[] = useMemo(() => {
     const daAgenda = (agendamentos.data ?? [])
@@ -232,7 +248,7 @@ export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
                   <FichaDoAluno
                     alunoId={alunoEmFoco.id}
                     ativo
-                    alturaMax={360}
+                    alturaMax={alturaDoTreino}
                     onAbrirCarga={setCargaDe}
                     onVerFicha={() => setVerFicha(true)}
                   />
