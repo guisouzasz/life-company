@@ -32,12 +32,21 @@ export class RelatoriosController {
     const [totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, agsSemana, horariosHoje, canceladosOntemRaw, creditosValidos, aguardandoAcessoRaw] = await Promise.all([
       this.prisma.usuario.count({ where: { tipoUsuario: 'ALUNO' } }),
       this.prisma.usuario.count({ where: { tipoUsuario: 'ALUNO', ativo: true } }),
-      this.prisma.agendamento.count({ where: { status: 'CONFIRMADO', dataAula: { gte: inicioSemana, lte: fimSemana } } }),
+      /**
+       * A aula dada continua sendo aula da semana.
+       *
+       * Contar só CONFIRMADO fazia o número MINGUAR conforme a semana
+       * acontecia — na sexta a dona via menos aulas do que na segunda, porque
+       * cada presença registrada muda o agendamento para REALIZADO. E como a
+       * ocupação divide as presenças por este total, ela passava de 100%
+       * (chegou a 255% com três semanas de histórico).
+       */
+      this.prisma.agendamento.count({ where: { status: { in: ['CONFIRMADO', 'REALIZADO'] }, dataAula: { gte: inicioSemana, lte: fimSemana } } }),
       this.prisma.presenca.count({ where: { compareceu: true, registradoEm: { gte: inicioSemana } } }),
       this.prisma.presenca.count({ where: { compareceu: false, registradoEm: { gte: inicioSemana } } }),
       // Agrupamos pelo diaSemana do horário (evita ambiguidade de fuso do dataAula)
       this.prisma.agendamento.findMany({
-        where: { status: 'CONFIRMADO', dataAula: { gte: inicioSemana, lte: fimSemana } },
+        where: { status: { in: ['CONFIRMADO', 'REALIZADO'] }, dataAula: { gte: inicioSemana, lte: fimSemana } },
         select: { horario: { select: { diaSemana: true } } },
       }),
       diaHoje
