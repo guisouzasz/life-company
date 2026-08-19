@@ -46,3 +46,7 @@ example
 /android
 
 .vercel
+
+# Segredos do backend — os valores vivem nas Variables do Railway
+backend/.env
+backend/.env.local
