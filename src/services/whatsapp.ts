@@ -60,6 +60,36 @@ export function mensagemVencimento(params: {
   );
 }
 
+/**
+ * Convite do primeiro acesso, com o link já no meio do texto.
+ *
+ * O link é o que dá acesso à conta: quem o abrir cria a senha. Por isso o
+ * texto pede para não repassar — a dona manda para o número do cadastro, e
+ * o aluno precisa saber que aquilo não é para circular no grupo da turma.
+ */
+export function mensagemPrimeiroAcesso(params: {
+  nome: string;
+  link: string;
+  /** Professor recebe outro texto: ele não marca aula, ele monta treino. */
+  professor?: boolean;
+}): string {
+  const { nome, link, professor = false } = params;
+  if (professor) {
+    return (
+      `Oi, ${primeiroNome(nome)}! Tudo bem? ` +
+      `Criei o seu acesso ao sistema da ${STUDIO_NOME} — é por ele que você vê a agenda das suas aulas ` +
+      `e monta os treinos dos alunos. Abra o link abaixo para criar a sua senha:\n\n${link}\n\n` +
+      `O link é só seu, não precisa repassar.`
+    );
+  }
+  return (
+    `Oi, ${primeiroNome(nome)}! Tudo bem? ` +
+    `Criei o seu acesso ao app da ${STUDIO_NOME} — é por ele que você marca e cancela as suas aulas. ` +
+    `Abra o link abaixo para criar a sua senha:\n\n${link}\n\n` +
+    `O link é só seu, não precisa repassar. Qualquer dúvida, é só me chamar por aqui!`
+  );
+}
+
 /** Link que abre a conversa com o aluno e o texto já escrito. */
 export function linkWhatsapp(numeroComDdi: string, mensagem: string): string {
   return `https://wa.me/${numeroComDdi}?text=${encodeURIComponent(mensagem)}`;

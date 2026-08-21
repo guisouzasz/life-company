@@ -20,6 +20,8 @@ import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { ApiError } from '../../services/http';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, dataParaIso, isoParaData, soDigitos } from '../../services/mascaras';
+import { openBrowserAsync } from 'expo-web-browser';
+import { linkWhatsapp, mensagemPrimeiroAcesso, telefoneParaWhatsapp } from '../../services/whatsapp';
 
 /**
  * Ficha cadastral no card do aluno. Some inteira quando o cadastro é antigo e
@@ -68,6 +70,8 @@ export default function AdminAlunos() {
 
   // Modal de link gerado
   const [link, setLink] = useState<string | null>(null);
+  /** De quem é o link aberto: o botão do WhatsApp precisa do nome e do telefone. */
+  const [alunoDoLink, setAlunoDoLink] = useState<AlunoAdmin | null>(null);
   const [copiado, setCopiado] = useState(false);
 
   // Modal de créditos
@@ -145,17 +149,32 @@ export default function AdminAlunos() {
     );
   };
 
-  const gerar = (id: string) => {
-    gerarLink.mutate(id, {
+  const gerar = (aluno: AlunoAdmin) => {
+    gerarLink.mutate(aluno.id, {
       onSuccess: (data) => {
         setCopiado(false);
+        setAlunoDoLink(aluno);
         setLink(data.link);
       },
       onError: (e) => {
         setCopiado(false);
+        setAlunoDoLink(null);
         setLink(`Erro: ${e instanceof ApiError ? e.message : 'tente novamente.'}`);
       },
     });
+  };
+
+  /**
+   * Manda o convite pelo número que já está no cadastro. Some quando a
+   * geração falhou (aí o "link" é uma mensagem de erro) ou quando o telefone
+   * não forma um número que o WhatsApp abra.
+   */
+  const numeroWhatsapp = telefoneParaWhatsapp(alunoDoLink?.telefone);
+  const podeMandarWhatsapp = !!link && link.startsWith('http') && !!numeroWhatsapp && !!alunoDoLink;
+  const enviarWhatsapp = async () => {
+    if (!podeMandarWhatsapp || !link || !numeroWhatsapp || !alunoDoLink) return;
+    const texto = mensagemPrimeiroAcesso({ nome: alunoDoLink.nome, link });
+    await openBrowserAsync(linkWhatsapp(numeroWhatsapp, texto)).catch(() => {});
   };
 
   const copiar = async () => {
@@ -246,7 +265,7 @@ export default function AdminAlunos() {
                         <Icon name="ticket-outline" size={15} color={LC.primary} />
                         <Text style={s.tAcaoText}>Créditos</Text>
                       </Pressable>
-                      <Pressable style={s.tAcao} onPress={() => gerar(aluno.id)} accessibilityLabel="Gerar link de acesso">
+                      <Pressable style={s.tAcao} onPress={() => gerar(aluno)} accessibilityLabel="Gerar link de acesso">
                         <Icon name="link-outline" size={15} color={LC.primary} />
                         <Text style={s.tAcaoText}>Link</Text>
                       </Pressable>
@@ -291,7 +310,7 @@ export default function AdminAlunos() {
                     <Button
                       title="Gerar link"
                       size="sm"
-                      onPress={() => gerar(aluno.id)}
+                      onPress={() => gerar(aluno)}
                       loading={gerarLink.isPending && gerarLink.variables === aluno.id}
                       leftIcon={<Icon name="link-outline" size={16} color="#fff" />}
                       style={s.actionBtn}
@@ -323,13 +342,31 @@ export default function AdminAlunos() {
       <TabBar isAdmin />
 
       {/* Modal: link de primeiro acesso */}
-      <AppModal visible={!!link} onClose={() => setLink(null)} title="Link de primeiro acesso">
+      <AppModal
+        visible={!!link}
+        onClose={() => { setLink(null); setAlunoDoLink(null); }}
+        title="Link de primeiro acesso"
+      >
         <Text style={s.modalHint}>Envie este link ao aluno para ele criar a senha:</Text>
         <View style={s.linkBox}>
           <Text style={s.linkText} selectable>{link}</Text>
         </View>
+        {podeMandarWhatsapp ? (
+          <Button
+            title="Enviar pelo WhatsApp"
+            onPress={enviarWhatsapp}
+            leftIcon={<Icon name="logo-whatsapp" size={17} color="#fff" />}
+            style={s.whatsBtn}
+          />
+        ) : link?.startsWith('http') ? (
+          <Text style={s.semTelefone}>
+            {alunoDoLink?.telefone
+              ? 'O telefone do cadastro não forma um número válido — confira o DDD em Editar para enviar pelo WhatsApp.'
+              : 'Este aluno não tem telefone no cadastro. Informe o número em Editar para enviar pelo WhatsApp.'}
+          </Text>
+        ) : null}
         <View style={s.modalActions}>
-          <Button title="Fechar" variant="outline" onPress={() => setLink(null)} style={{ flex: 1 }} />
+          <Button title="Fechar" variant="outline" onPress={() => { setLink(null); setAlunoDoLink(null); }} style={{ flex: 1 }} />
           <Button
             title={copiado ? 'Copiado!' : 'Copiar'}
             onPress={copiar}
@@ -420,6 +457,8 @@ const s = StyleSheet.create({
   modalHint: { fontSize: 13, color: LC.textSecondary, marginBottom: 10 },
   linkBox: { backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, borderRadius: LC.radius.md, padding: 12, marginBottom: 16 },
   linkText: { fontSize: 13, color: LC.textPrimary },
+  whatsBtn: { marginBottom: 10 },
+  semTelefone: { fontSize: 12.5, color: LC.textMuted, lineHeight: 18, marginBottom: 12 },
   modalActions: { flexDirection: 'row', gap: 10 },
   editScroll: { maxHeight: 440, marginBottom: 18 },
   editForm: { gap: 14 },

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
+import { openBrowserAsync } from 'expo-web-browser';
 import { LC } from '../../constants/theme';
 import { iconePorModalidade, nomeModalidade } from '../../constants/assets';
 import { Header } from '../../components/ui/header';
@@ -15,6 +16,7 @@ import { useModalidades } from '../../services/modalidades/modalidades.queries';
 import { useCriarAluno } from '../../services/usuarios/usuarios.mutations';
 import { ApiError } from '../../services/http';
 import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, mascaraReal, realParaNumero, dataParaIso, soDigitos } from '../../services/mascaras';
+import { linkWhatsapp, mensagemPrimeiroAcesso, telefoneParaWhatsapp } from '../../services/whatsapp';
 
 export default function NovoAluno() {
   const [tipo, setTipo] = useState<'ALUNO' | 'PROFESSOR'>('ALUNO');
@@ -129,6 +131,22 @@ export default function NovoAluno() {
     if (!linkCriado) return;
     await Clipboard.setStringAsync(linkCriado);
     setCopiado(true);
+  };
+
+  /**
+   * O telefone já foi digitado neste formulário — não faz sentido copiar o
+   * link, sair do sistema, procurar o aluno na agenda e colar. O botão abre a
+   * conversa com o número do cadastro e o texto pronto.
+   */
+  const numeroWhatsapp = telefoneParaWhatsapp(telefone);
+  const enviarWhatsapp = async () => {
+    if (!linkCriado || !numeroWhatsapp) return;
+    const texto = mensagemPrimeiroAcesso({ nome, link: linkCriado, professor: ehProfessor });
+    try {
+      await openBrowserAsync(linkWhatsapp(numeroWhatsapp, texto));
+    } catch {
+      setErro('Não foi possível abrir o WhatsApp neste aparelho. Copie o link e envie do seu jeito.');
+    }
   };
 
   return (
@@ -303,6 +321,20 @@ export default function NovoAluno() {
         <View style={s.linkBox}>
           <Text style={s.linkText} selectable>{linkCriado}</Text>
         </View>
+        {numeroWhatsapp ? (
+          <Button
+            title="Enviar pelo WhatsApp"
+            onPress={enviarWhatsapp}
+            leftIcon={<Icon name="logo-whatsapp" size={17} color="#fff" />}
+            style={s.whatsBtn}
+          />
+        ) : (
+          <Text style={s.semTelefone}>
+            {telefone.trim()
+              ? 'O telefone informado não forma um número válido — confira o DDD para poder enviar pelo WhatsApp.'
+              : 'Sem telefone no cadastro não dá para enviar pelo WhatsApp: copie o link e mande do seu jeito.'}
+          </Text>
+        )}
         <View style={s.modalActions}>
           <Button
             title="Concluir"
@@ -347,5 +379,7 @@ const s = StyleSheet.create({
   modalHint: { fontSize: 13, color: LC.textSecondary, marginBottom: 10 },
   linkBox: { backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border, borderRadius: LC.radius.md, padding: 12, marginBottom: 16 },
   linkText: { fontSize: 13, color: LC.textPrimary },
+  whatsBtn: { marginBottom: 10 },
+  semTelefone: { fontSize: 12.5, color: LC.textMuted, lineHeight: 18, marginBottom: 12 },
   modalActions: { flexDirection: 'row', gap: 10 },
 });
