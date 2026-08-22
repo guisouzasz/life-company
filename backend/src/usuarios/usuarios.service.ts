@@ -11,6 +11,40 @@ import { CriarUsuarioDto } from "./dto/criar-usuario.dto";
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
+/**
+ * Campos do cadastro que podem sair da API.
+ *
+ * Existe porque consultar sem `select` devolve a linha inteira do banco — e a
+ * linha inteira inclui `senhaHash`. A rota de listagem é liberada para
+ * PROFESSOR, então o hash da senha de todos os alunos estava indo para
+ * qualquer conta de professor (e as do estúdio são compartilhadas por
+ * modalidade). Hash de senha se quebra offline, sem limite de tentativas.
+ *
+ * `fcmToken` também fica de fora: é o endereço de notificação do aparelho do
+ * aluno, não serve para nenhuma tela.
+ *
+ * Ao adicionar coluna nova no schema, decida aqui se ela sai ou não — o
+ * padrão passa a ser NÃO sair.
+ */
+const CAMPOS_DO_CADASTRO = {
+  id: true,
+  nome: true,
+  cpf: true,
+  email: true,
+  telefone: true,
+  rg: true,
+  endereco: true,
+  cep: true,
+  dataNascimento: true,
+  ativo: true,
+  tipoUsuario: true,
+  valorMensalidade: true,
+  diaVencimento: true,
+  modalidadeProfessorId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 @Injectable()
 export class UsuariosService {
   constructor(
@@ -78,6 +112,7 @@ export class UsuariosService {
     });
     if (existe) throw new ConflictException("CPF ou e-mail já cadastrado");
     const usuario = await this.prisma.usuario.create({
+      select: CAMPOS_DO_CADASTRO,
       data: {
         nome: dto.nome,
         cpf: cpfNorm,
@@ -119,6 +154,14 @@ export class UsuariosService {
 
   async listar(busca?: string) {
     return this.prisma.usuario.findMany({
+      select: {
+        ...CAMPOS_DO_CADASTRO,
+        // Só o plano vigente: o histórico de planos encerrados não é da lista.
+        usuarioPlanos: {
+          select: { plano: true, modalidade: true },
+          where: { vigenciaFim: null },
+        },
+      },
       where: {
         tipoUsuario: "ALUNO",
         // Esconde contas excluídas (anonimizadas) da gestão
@@ -132,12 +175,6 @@ export class UsuariosService {
               ],
             }
           : {}),
-      },
-      include: {
-        usuarioPlanos: {
-          include: { plano: true, modalidade: true },
-          where: { vigenciaFim: null },
-        },
       },
       orderBy: { nome: "asc" },
     });
@@ -184,7 +221,8 @@ export class UsuariosService {
   async buscarPorId(id: string) {
     const u = await this.prisma.usuario.findUnique({
       where: { id },
-      include: {
+      select: {
+        ...CAMPOS_DO_CADASTRO,
         usuarioPlanos: { include: { plano: true, modalidade: true } },
       },
     });
@@ -233,6 +271,7 @@ export class UsuariosService {
 
     return this.prisma.usuario.update({
       where: { id },
+      select: CAMPOS_DO_CADASTRO,
       data: {
         nome: data.nome,
         cpf: cpfNorm,

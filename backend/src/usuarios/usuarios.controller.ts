@@ -2,6 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Requ
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsuariosService } from './usuarios.service';
 import { CriarUsuarioDto } from './dto/criar-usuario.dto';
+import { AtualizarUsuarioDto } from './dto/atualizar-usuario.dto';
 import { AtualizarPlanoDto } from './dto/atualizar-plano.dto';
 import { DefinirSenhaDto } from './dto/definir-senha.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,7 +34,7 @@ export class UsuariosController {
 
   @Get(':id') @UseGuards(AdminGuard) buscar(@Param('id') id: string) { return this.service.buscarPorId(id); }
 
-  @Put(':id') @UseGuards(AdminGuard) atualizar(@Param('id') id: string, @Body() dto: Partial<CriarUsuarioDto>) { return this.service.atualizar(id, dto); }
+  @Put(':id') @UseGuards(AdminGuard) atualizar(@Param('id') id: string, @Body() dto: AtualizarUsuarioDto) { return this.service.atualizar(id, dto); }
 
   @Put(':id/plano') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Trocar plano ativo do aluno (admin)' })
   atualizarPlano(@Param('id') id: string, @Body() dto: AtualizarPlanoDto) { return this.service.atualizarPlano(id, dto); }
