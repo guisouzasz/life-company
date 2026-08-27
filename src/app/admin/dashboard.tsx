@@ -186,13 +186,22 @@ function ProximasAulasHero({ d }: { d?: RelatorioDashboard }) {
   );
 }
 
+/** "sexta-feira, 28/08" — o formatador devolve o dia em minúscula. */
+const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+
 /**
- * Aniversariantes do dia. Some da tela quando não há ninguém fazendo
- * aniversário — que é a maioria dos dias — em vez de ocupar espaço vazio.
+ * Aniversariantes da semana, com quem é hoje em destaque.
+ *
+ * Some da tela quando não há ninguém na semana, em vez de ocupar espaço com
+ * uma lista vazia. Antes mostrava só o dia: o card quase nunca aparecia, e
+ * quando aparecia já era em cima da hora para preparar qualquer coisa.
  */
 function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
-  const aniversariantes = d?.aniversariantes ?? [];
-  if (aniversariantes.length === 0) return null;
+  const todos = d?.aniversariantes ?? [];
+  if (todos.length === 0) return null;
+
+  const deHoje = todos.filter((a) => a.hoje);
+  const restante = todos.filter((a) => !a.hoje);
 
   return (
     <Card style={s.aniversarioCard} padding={16}>
@@ -201,22 +210,40 @@ function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
           <Icon name="gift" size={20} color="#fff" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={s.blockTitle}>
-            {aniversariantes.length === 1 ? 'Aniversariante do dia' : 'Aniversariantes do dia'}
-          </Text>
+          <Text style={s.blockTitle}>Aniversariantes da semana</Text>
           <Text style={s.aniversarioSub}>
-            {aniversariantes.length === 1
-              ? 'Não esqueça de dar os parabéns!'
-              : `${aniversariantes.length} alunos fazem aniversário hoje`}
+            {deHoje.length > 0
+              ? deHoje.length === 1
+                ? 'Tem alguém de aniversário hoje!'
+                : `${deHoje.length} alunos fazem aniversário hoje!`
+              : todos.length === 1
+                ? '1 aluno faz aniversário nesta semana'
+                : `${todos.length} alunos fazem aniversário nesta semana`}
           </Text>
         </View>
       </View>
 
-      {aniversariantes.map((a) => (
+      {/* Quem é hoje vem primeiro e com fundo próprio: é o que precisa de
+          ação agora, e some no meio da lista se ficar em ordem de data. */}
+      {deHoje.map((a) => (
+        <View key={a.id} style={[s.aniversarioLinha, s.aniversarioHoje]}>
+          <Avatar nome={a.nome} size={34} />
+          <View style={{ flex: 1 }}>
+            <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
+            <Text style={s.aniversarioHojeTag}>HOJE · não esqueça os parabéns</Text>
+          </View>
+          <Text style={s.aniversarioIdade}>{a.idade} anos</Text>
+        </View>
+      ))}
+
+      {restante.map((a) => (
         <View key={a.id} style={s.aniversarioLinha}>
           <Avatar nome={a.nome} size={34} />
-          <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
-          <Text style={s.aniversarioIdade}>{a.idade} anos</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
+            <Text style={s.aniversarioDia}>{capitalize(formatDate(a.data, 'dddd, DD/MM'))}</Text>
+          </View>
+          <Text style={s.aniversarioIdadeFraca}>{a.idade} anos</Text>
         </View>
       ))}
     </Card>
@@ -667,6 +694,16 @@ const s = StyleSheet.create({
   },
   aniversarioNome: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary },
   aniversarioIdade: { fontSize: 13, fontWeight: '700', color: LC.primary },
+  aniversarioHoje: {
+    backgroundColor: LC.primaryLight, borderRadius: LC.radius.md,
+    paddingHorizontal: 10, marginHorizontal: -4,
+  },
+  aniversarioHojeTag: {
+    fontSize: 10.5, fontWeight: '800', color: LC.primary,
+    letterSpacing: 0.6, marginTop: 2,
+  },
+  aniversarioDia: { fontSize: 12, color: LC.textMuted, marginTop: 2 },
+  aniversarioIdadeFraca: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
 
   atCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   // Listas abertas pelos cards de "Precisa de atenção"

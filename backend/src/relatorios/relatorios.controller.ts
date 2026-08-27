@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import * as dayjs from 'dayjs';
+import { Prisma } from '@prisma/client';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
@@ -116,44 +117,84 @@ export class RelatoriosController {
     return {
       totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, ocupacao, aulasPorDia, aulasHoje,
       canceladosOntem, reposicoesPendentes, aguardandoAcesso,
-      aniversariantes: await this.aniversariantesDeHoje(),
+      aniversariantes: await this.aniversariantesDaSemana(),
     };
   }
 
   /**
-   * Alunos que fazem aniversário hoje. Lista vazia quando não há ninguém —
-   * é o que faz o card sumir da tela em vez de aparecer vazio.
+   * Alunos que fazem aniversário na semana corrente. Lista vazia quando não
+   * há ninguém — é o que faz o card sumir da tela em vez de aparecer vazio.
    *
-   * O dia vem do Node, que roda no fuso do estúdio (ver timezone.ts), e NÃO
-   * de CURRENT_DATE: o Postgres da Railway está em UTC e depois das 21h já
-   * teria virado o dia, mostrando os aniversariantes de amanhã.
+   * As datas vêm do Node, que roda no fuso do estúdio (ver timezone.ts), e
+   * NÃO de CURRENT_DATE: o Postgres da Railway está em UTC e depois das 21h
+   * já teria virado o dia, marcando como "hoje" quem é de amanhã.
    *
    * Só entram alunos ativos: quem foi desativado não deve mais aparecer no
    * painel.
    */
-  private async aniversariantesDeHoje() {
-    const agora = dayjs();
-    const mes = agora.month() + 1;
-    const dia = agora.date();
-    const ano = agora.year();
+  private async aniversariantesDaSemana() {
+    /**
+     * A semana inteira, de segunda a domingo, marcando quem é do dia.
+     *
+     * Antes só mostrava o dia: na maioria dos dias o card sumia, e quando
+     * aparecia já era em cima da hora. Com a semana à vista, a dona consegue
+     * preparar o parabéns antes — e continua vendo em destaque quem é hoje.
+     */
+    const hoje = dayjs().startOf('day');
+    const inicio = hoje.startOf('isoWeek');
 
-    // Quem nasceu em 29/02 só faz aniversário em ano bissexto; nos demais
-    // anos entra no dia 28, senão passaria três anos sem aparecer aqui.
-    const bissexto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0;
-    const diaExtra = !bissexto && mes === 2 && dia === 28 ? 29 : dia;
+    // Um par (mês, dia) por data da semana. Montado em JS de propósito: a
+    // semana atravessa mês (e às vezes ano), e comparar por intervalo de data
+    // não funciona para aniversário, que ignora o ano.
+    const diasDaSemana = Array.from({ length: 7 }, (_, i) => inicio.add(i, 'day'));
+    const pares = diasDaSemana.map((d) => {
+      const ano = d.year();
+      const bissexto = (ano % 4 === 0 && ano % 100 !== 0) || ano % 400 === 0;
+      // Quem nasceu em 29/02 comemora no dia 28 nos anos não bissextos,
+      // senão passaria três anos sem aparecer.
+      const dias = !bissexto && d.month() + 1 === 2 && d.date() === 28 ? [28, 29] : [d.date()];
+      return { data: d, mes: d.month() + 1, dias };
+    });
 
-    const linhas = await this.prisma.$queryRaw<{ id: string; nome: string; ano: number }[]>`
-      SELECT id, nome, EXTRACT(YEAR FROM data_nascimento)::int AS ano
+    const condicoes = Prisma.join(
+      pares.map(
+        (p) => Prisma.sql`(EXTRACT(MONTH FROM data_nascimento) = ${p.mes}
+                       AND EXTRACT(DAY FROM data_nascimento) IN (${Prisma.join(p.dias)}))`,
+      ),
+      ' OR ',
+    );
+
+    const linhas = await this.prisma.$queryRaw<
+      { id: string; nome: string; ano: number; mes: number; dia: number }[]
+    >`
+      SELECT id, nome,
+             EXTRACT(YEAR FROM data_nascimento)::int  AS ano,
+             EXTRACT(MONTH FROM data_nascimento)::int AS mes,
+             EXTRACT(DAY FROM data_nascimento)::int   AS dia
       FROM usuarios
       WHERE tipo_usuario = 'ALUNO'
         AND ativo = true
         AND cpf NOT LIKE 'REMOVIDO-%'
         AND data_nascimento IS NOT NULL
-        AND EXTRACT(MONTH FROM data_nascimento) = ${mes}
-        AND EXTRACT(DAY FROM data_nascimento) IN (${dia}, ${diaExtra})
+        AND (${condicoes})
       ORDER BY nome
     `;
-    return linhas.map((l) => ({ id: l.id, nome: l.nome, idade: ano - l.ano }));
+
+    return linhas
+      .map((l) => {
+        // A qual dia da semana este aniversário corresponde (o 29/02 cai no
+        // 28 quando o ano não é bissexto, por isso a busca é pelo par).
+        const alvo =
+          pares.find((p) => p.mes === l.mes && p.dias.includes(l.dia)) ?? pares[0];
+        return {
+          id: l.id,
+          nome: l.nome,
+          idade: alvo.data.year() - l.ano,
+          data: alvo.data.format('YYYY-MM-DD'),
+          hoje: alvo.data.isSame(hoje, 'day'),
+        };
+      })
+      .sort((a, b) => (a.data === b.data ? a.nome.localeCompare(b.nome) : a.data.localeCompare(b.data)));
   }
 
   @Get('frequencia')
