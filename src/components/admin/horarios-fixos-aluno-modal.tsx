@@ -54,8 +54,8 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
   const fixos = useHorariosFixosDoAluno(aluno?.id, !!aluno);
   const atualizarPlano = useAtualizarPlanoAluno();
   const criarFixo = useCriarHorarioFixo();
-  /** Aviso quando o fixo foi salvo mas as aulas não entraram. */
-  const [avisoGeracao, setAvisoGeracao] = useState<string | null>(null);
+  /** Recado depois de mexer no horário fixo (aulas que não entraram, ou que foram canceladas). */
+  const [aviso, setAviso] = useState<{ titulo: string; texto: string } | null>(null);
   const removerFixo = useRemoverHorarioFixo();
 
   const planoSelecionado = planoSel ?? planoAtual?.plano?.id;
@@ -120,16 +120,20 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
           const g = resposta?.geracao;
           if (!g) return;
           if (g.criados === 0 && g.erros > 0) {
-            setAvisoGeracao(
-              `O horário fixo foi salvo, mas nenhuma aula foi marcada para ${aluno.nome.split(' ')[0]}: ` +
+            setAviso({
+              titulo: 'Horário salvo, aulas não',
+              texto:
+                `O horário fixo foi salvo, mas nenhuma aula foi marcada para ${aluno.nome.split(' ')[0]}: ` +
                 (g.motivos?.join(' ') || 'não foi possível gerar as aulas.') +
                 ' Resolva isso e adicione o horário de novo.',
-            );
+            });
           } else if (g.erros > 0) {
-            setAvisoGeracao(
-              `${g.criados} aula(s) marcada(s), mas outras não: ` +
+            setAviso({
+              titulo: 'Parte das aulas não entrou',
+              texto:
+                `${g.criados} aula(s) marcada(s), mas outras não: ` +
                 (g.motivos?.join(' ') || 'não foi possível gerar todas.'),
-            );
+            });
           }
         },
       },
@@ -244,10 +248,10 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
           style={{ marginTop: 16 }}
         />
       <InfoModal
-        visible={!!avisoGeracao}
-        title="Horário salvo, aulas não"
-        message={avisoGeracao ?? ''}
-        onClose={() => setAvisoGeracao(null)}
+        visible={!!aviso}
+        title={aviso?.titulo ?? ''}
+        message={aviso?.texto ?? ''}
+        onClose={() => setAviso(null)}
       />
       </AppModal>
     );
@@ -329,7 +333,20 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
                 <Pressable
                   style={s.removeBtn}
                   hitSlop={6}
-                  onPress={() => removerFixo.mutate(f.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remover ${DIAS_PT[f.horario.diaSemana]} ${f.horario.horaInicio} deste aluno`}
+                  onPress={() =>
+                    removerFixo.mutate(f.id, {
+                      onSuccess: (r) => {
+                        // Tirar o horário fixo também desmarca as aulas que
+                        // ele já tinha criado — a dona precisa ver isso, senão
+                        // fica sem saber se o aluno saiu da turma de verdade.
+                        if (r?.aulasCanceladas) {
+                          setAviso({ titulo: 'Horário removido', texto: r.mensagem });
+                        }
+                      },
+                    })
+                  }
                 >
                   <Icon name="trash-outline" size={15} color={LC.danger} />
                 </Pressable>
@@ -355,10 +372,10 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
         )}
       </ScrollView>
       <InfoModal
-        visible={!!avisoGeracao}
-        title="Horário salvo, aulas não"
-        message={avisoGeracao ?? ''}
-        onClose={() => setAvisoGeracao(null)}
+        visible={!!aviso}
+        title={aviso?.titulo ?? ''}
+        message={aviso?.texto ?? ''}
+        onClose={() => setAviso(null)}
       />
     </AppModal>
   );

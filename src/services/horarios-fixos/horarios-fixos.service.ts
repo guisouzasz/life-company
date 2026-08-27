@@ -12,8 +12,8 @@ export const horariosFixosService = {
     return data;
   },
 
-  async remover(id: string): Promise<{ mensagem: string }> {
-    const { data } = await http.delete<{ mensagem: string }>(`/horarios-fixos/${id}`);
+  async remover(id: string): Promise<{ mensagem: string; aulasCanceladas?: number }> {
+    const { data } = await http.delete<{ mensagem: string; aulasCanceladas?: number }>(`/horarios-fixos/${id}`);
     return data;
   },
 };

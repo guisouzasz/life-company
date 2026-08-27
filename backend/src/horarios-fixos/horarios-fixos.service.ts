@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
 import { CriarHorarioFixoDto } from './dto/criar-horario-fixo.dto';
@@ -69,10 +70,39 @@ export class HorariosFixosService {
     return { ...fixo, geracao };
   }
 
+  /**
+   * Remove o horário fixo E cancela as aulas futuras que ele já tinha criado.
+   *
+   * Antes só desligava o fixo. As aulas geradas continuavam de pé por até
+   * duas semanas: o cadastro do aluno mostrava a combinação nova e a agenda
+   * mostrava a antiga, com ele ocupando vaga numa turma de onde tinha
+   * saído. Foi assim que um aluno remanejado para a sexta às 17h continuou
+   * aparecendo na quinta às 19h.
+   *
+   * Só as futuras: aula que já aconteceu é histórico e não se apaga. E não
+   * gera crédito — quem está remanejando é o estúdio, não o aluno desmarcando.
+   */
   async remover(id: string) {
     const hf = await this.prisma.horarioFixo.findUnique({ where: { id } });
     if (!hf) throw new NotFoundException('Horário fixo não encontrado');
+
+    const { count } = await this.prisma.agendamento.updateMany({
+      where: {
+        usuarioId: hf.usuarioId,
+        horarioId: hf.horarioId,
+        status: 'CONFIRMADO',
+        dataAula: { gte: dayjs().startOf('day').toDate() },
+      },
+      data: { status: 'CANCELADO' },
+    });
+
     await this.prisma.horarioFixo.update({ where: { id }, data: { ativo: false } });
-    return { mensagem: 'Horário fixo removido' };
+    return {
+      mensagem:
+        count > 0
+          ? `Horário fixo removido e ${count} aula(s) futura(s) cancelada(s).`
+          : 'Horário fixo removido.',
+      aulasCanceladas: count,
+    };
   }
 }
