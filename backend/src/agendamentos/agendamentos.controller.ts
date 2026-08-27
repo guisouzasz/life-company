@@ -2,6 +2,7 @@ import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request } 
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AgendamentosService } from './agendamentos.service';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
+import { CriarAgendamentoAdminDto } from './dto/criar-agendamento-admin.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { StaffGuard } from '../auth/guards/staff.guard';
@@ -15,6 +16,19 @@ export class AgendamentosController {
 
   @Post() @ApiOperation({ summary: 'Criar agendamento' })
   criar(@Request() req, @Body() dto: CriarAgendamentoDto) { return this.service.criar(req.user.id, dto); }
+
+  /**
+   * Colocar um aluno na aula, pelo painel.
+   *
+   * O aluno se agenda pelo POST acima, com o id vindo do token. Aqui quem
+   * escolhe é o estúdio, então o aluno vai no corpo — e por isso a rota é
+   * separada e fica atrás do AdminGuard, em vez de aceitar um usuarioId
+   * opcional na rota de todo mundo.
+   */
+  @Post('admin')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Colocar um aluno numa aula (admin)' })
+  criarComoAdmin(@Body() dto: CriarAgendamentoAdminDto) { return this.service.criarComoAdmin(dto); }
 
   @Get('meus') @ApiOperation({ summary: 'Meus agendamentos futuros' })
   meus(@Request() req) { return this.service.listarMeus(req.user.id); }

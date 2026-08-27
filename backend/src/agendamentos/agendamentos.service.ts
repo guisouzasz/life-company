@@ -3,6 +3,7 @@ import * as dayjs from 'dayjs';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
+import { CriarAgendamentoAdminDto } from './dto/criar-agendamento-admin.dto';
 import { DIAS_VALIDADE_CREDITO } from '../creditos/creditos.constantes';
 import { capacidadeEfetiva } from '../horarios/capacidade';
 
@@ -10,11 +11,61 @@ import { capacidadeEfetiva } from '../horarios/capacidade';
 
 const DIA_MAP: Record<number, string> = { 1: 'SEGUNDA', 2: 'TERCA', 3: 'QUARTA', 4: 'QUINTA', 5: 'SEXTA' };
 
+/** "CARLOS EDUARDO RAVAGLI" → "Carlos": aviso de tela fala do aluno pelo nome. */
+function primeiroNome(nome: string): string {
+  const primeiro = nome.trim().split(/\s+/)[0] ?? '';
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
+}
+
 @Injectable()
 export class AgendamentosService {
   constructor(private prisma: PrismaService) {}
 
   async criar(usuarioId: string, dto: CriarAgendamentoDto) {
+    return this.agendar(usuarioId, dto, { admin: false });
+  }
+
+  /**
+   * O estúdio coloca o aluno direto na aula.
+   *
+   * O caminho normal para fixar alguém numa turma é o horário fixo, que gera
+   * as aulas sozinho. Quando essa geração não consegue — turma cheia, semana
+   * do plano já ocupada, aula sobrando de um fixo antigo — a dona ficava sem
+   * saída: o fixo aparecia salvo e o aluno não estava na turma, e não havia
+   * nenhuma tela onde ela pudesse simplesmente colocá-lo lá.
+   */
+  async criarComoAdmin(dto: CriarAgendamentoAdminDto) {
+    const aluno = await this.prisma.usuario.findUnique({
+      where: { id: dto.usuarioId },
+      select: { id: true, nome: true, ativo: true, tipoUsuario: true },
+    });
+    if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
+
+    /**
+     * `ativo` não barra aqui de propósito. O cadastro novo nasce inativo e só
+     * vira ativo quando o aluno faz o primeiro acesso — barrar por isso
+     * quebraria justamente o caminho mais comum: cadastrar o aluno e já
+     * colocar na turma dele, antes de ele abrir o app. O horário fixo também
+     * marca aula de aluno inativo; a tela mostra o selo para a dona ver.
+     */
+    return this.agendar(dto.usuarioId, dto, {
+      admin: true,
+      nome: primeiroNome(aluno.nome),
+      substituirAgendamentoId: dto.substituirAgendamentoId,
+    });
+  }
+
+  /**
+   * Marca a aula. `ctx.admin` só muda de quem é a voz das mensagens e o que o
+   * estúdio pode fazer a mais (entrar numa aula do dia que já começou, e
+   * trocar uma aula da semana por outra) — lotação e plano valem para os dois.
+   */
+  private async agendar(
+    usuarioId: string,
+    dto: CriarAgendamentoDto,
+    ctx: { admin: boolean; nome?: string; substituirAgendamentoId?: string },
+  ) {
+    const quem = ctx.admin ? (ctx.nome ?? 'O aluno') : 'Você';
     const dataAula = dayjs(dto.dataAula).startOf('day').toDate();
     const dow = dayjs(dto.dataAula).isoWeekday();
     if (dow > 5) throw new BadRequestException('Apenas de segunda a sexta');
@@ -33,10 +84,18 @@ export class AgendamentosService {
      * da semana passada — e cada uma dessas consumia uma aula da cota semanal
      * do aluno, por uma aula que ele não teve. Ele descobriria só ao tentar
      * marcar a próxima e ouvir que o limite acabou.
+     *
+     * Para o estúdio a régua é o dia, não a hora: quem aparece na recepção com
+     * a aula já rolando ainda precisa entrar na lista de quem está lá. Dia
+     * passado continua barrado para os dois — aquilo só distorceria a cota.
      */
     const [hora, minuto] = horario.horaInicio.split(':').map(Number);
     const inicioAula = dayjs(dto.dataAula).startOf('day').hour(hora).minute(minuto);
-    if (!inicioAula.isAfter(dayjs())) {
+    if (ctx.admin) {
+      if (dayjs(dataAula).isBefore(dayjs().startOf('day'))) {
+        throw new BadRequestException('Esta aula já passou. Só dá para marcar de hoje em diante.');
+      }
+    } else if (!inicioAula.isAfter(dayjs())) {
       throw new BadRequestException(
         'Esta aula já começou. Escolha um horário que ainda vai acontecer.',
       );
@@ -44,7 +103,11 @@ export class AgendamentosService {
 
     // Plano dá N aulas/semana para QUALQUER modalidade (não trava por categoria)
     const usuarioPlano = await this.prisma.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null }, include: { plano: true } });
-    if (!usuarioPlano) throw new ForbiddenException('Você não possui um plano ativo');
+    if (!usuarioPlano) {
+      throw new ForbiddenException(
+        ctx.admin ? `${quem} não tem plano ativo. Defina o plano no cadastro antes de marcar aula.` : 'Você não possui um plano ativo',
+      );
+    }
 
     const inicioSemanaAula = dayjs(dto.dataAula).startOf('isoWeek').toDate();
     const fimSemanaAula = dayjs(dto.dataAula).endOf('isoWeek').toDate();
@@ -76,7 +139,28 @@ export class AgendamentosService {
        * linha cancelada é reaproveitada.
        */
       const anterior = await tx.agendamento.findFirst({ where: { usuarioId, horarioId: dto.horarioId, dataAula } });
-      if (anterior?.status === 'CONFIRMADO') throw new ConflictException('Você já possui agendamento neste horário');
+      if (anterior?.status === 'CONFIRMADO') {
+        throw new ConflictException(ctx.admin ? `${quem} já está nesta aula.` : 'Você já possui agendamento neste horário');
+      }
+
+      /**
+       * Remanejamento: a aula que sai, para esta entrar.
+       *
+       * Sai sem crédito de propósito — o aluno não perdeu aula nenhuma, ele
+       * mudou de turma. Só aceita aula da MESMA semana, que é a única que
+       * libera cota para a aula nova; trocar por uma de outra semana daria a
+       * impressão de ter resolvido sem ter liberado nada.
+       */
+      if (ctx.substituirAgendamentoId) {
+        const sai = await tx.agendamento.findUnique({ where: { id: ctx.substituirAgendamentoId } });
+        if (!sai || sai.usuarioId !== usuarioId) throw new NotFoundException('A aula que sairia não é deste aluno');
+        if (sai.status !== 'CONFIRMADO') throw new BadRequestException('A aula que sairia já não está marcada');
+        if (!dayjs(sai.dataAula).startOf('isoWeek').isSame(dayjs(dataAula).startOf('isoWeek'))) {
+          throw new BadRequestException('Só dá para trocar por uma aula da mesma semana');
+        }
+        if (sai.id === anterior?.id) throw new BadRequestException('Essa é a própria aula que você está marcando');
+        await tx.agendamento.update({ where: { id: sai.id }, data: { status: 'CANCELADO' } });
+      }
 
       /**
        * Quantos cabem: o menor entre a capacidade gravada no horário e o teto
@@ -86,7 +170,9 @@ export class AgendamentosService {
        */
       const cabem = capacidadeEfetiva(horario.capacidadeMaxima, horario.modalidade?.nome);
       const ocupacao = await tx.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
-      if (ocupacao >= cabem) throw new BadRequestException('Horário lotado');
+      if (ocupacao >= cabem) {
+        throw new BadRequestException(ctx.admin ? `Turma lotada (${ocupacao}/${cabem}). Tire alguém antes de colocar ${quem}.` : 'Horário lotado');
+      }
 
       /**
        * Grava o agendamento: revive a linha cancelada, se existir, ou cria uma
@@ -128,7 +214,42 @@ export class AgendamentosService {
           reposicao: false, // aulas por crédito não consomem a cota semanal
         },
       });
-      if (usadasNaSemana >= usuarioPlano.plano.aulasSemanais) throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
+      if (usadasNaSemana >= usuarioPlano.plano.aulasSemanais) {
+        /**
+         * Para o aluno, "acabou a cota" encerra o assunto. Para o estúdio não:
+         * quase sempre a dona está remanejando, e a aula que ocupa a cota é
+         * justamente a que ela quer tirar. Devolver QUAIS aulas ocupam a semana
+         * deixa a tela oferecer a troca ali mesmo, em vez de mandá-la caçar a
+         * aula velha em outra tela sem saber qual é.
+         */
+        if (ctx.admin) {
+          const daSemana = await tx.agendamento.findMany({
+            where: {
+              usuarioId,
+              dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
+              status: { in: ['CONFIRMADO', 'REALIZADO'] },
+              reposicao: false,
+            },
+            include: { horario: { include: { modalidade: true } } },
+            orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
+          });
+          throw new ForbiddenException({
+            statusCode: 403,
+            codigo: 'LIMITE_SEMANAL',
+            message:
+              `${quem} já tem ${usadasNaSemana} aula${usadasNaSemana > 1 ? 's' : ''} nesta semana e o plano é ${usuarioPlano.plano.aulasSemanais}x/semana. ` +
+              'Escolha qual sai para esta entrar.',
+            aulasDaSemana: daSemana.map((a) => ({
+              id: a.id,
+              dataAula: a.dataAula,
+              horaInicio: a.horario.horaInicio,
+              modalidade: a.horario.modalidade?.nome ?? '',
+              podeTrocar: a.status === 'CONFIRMADO',
+            })),
+          });
+        }
+        throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
+      }
 
       // aulasUsadasSemana/semanaReferencia seguem existindo só para relatórios:
       // incrementa apenas quando a aula pertence à semana corrente.

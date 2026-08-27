@@ -128,6 +128,7 @@ function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
                   diaSemana: hoje,
                   horaInicio: a.horaInicio,
                   modalidade: { nome: a.modalidade },
+                  capacidadeMaxima: a.capacidade,
                 })
               }
             >

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { agendamentosService } from './agendamentos.service';
 import { queryKeys } from '../../lib/query-keys';
-import type { CriarAgendamentoPayload } from './agendamentos.types';
+import type { CriarAgendamentoAdminPayload, CriarAgendamentoPayload } from './agendamentos.types';
 
 /** Revalida agenda, saldo e vagas após qualquer mudança em agendamentos. */
 function useInvalidarAgenda() {
@@ -28,6 +28,19 @@ export function useCancelarAgendamento() {
   return useMutation({
     mutationFn: (id: string) => agendamentosService.cancelar(id),
     onSuccess: invalidar,
+  });
+}
+
+/** Coloca um aluno na aula pelo painel (admin). */
+export function useAdicionarAlunoNaAula() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CriarAgendamentoAdminPayload) => agendamentosService.criarComoAdmin(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agendamentos'] });
+      qc.invalidateQueries({ queryKey: ['horarios'] });
+      qc.invalidateQueries({ queryKey: ['relatorios'] });
+    },
   });
 }
 

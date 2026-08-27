@@ -1,5 +1,10 @@
 import { http } from '../http';
-import type { Agendamento, AgendamentoDoHorario, CriarAgendamentoPayload } from './agendamentos.types';
+import type {
+  Agendamento,
+  AgendamentoDoHorario,
+  CriarAgendamentoAdminPayload,
+  CriarAgendamentoPayload,
+} from './agendamentos.types';
 
 export const agendamentosService = {
   async meus(): Promise<Agendamento[]> {
@@ -27,6 +32,18 @@ export const agendamentosService = {
   async listarPorHorario(horarioId: string, data: string): Promise<AgendamentoDoHorario[]> {
     const res = await http.get<AgendamentoDoHorario[]>(`/agendamentos/horario/${horarioId}`, { params: { data } });
     return res.data;
+  },
+
+  /**
+   * Coloca um aluno na aula, pelo painel.
+   *
+   * Em 403 com `codigo: 'LIMITE_SEMANAL'` o corpo traz as aulas que ocupam a
+   * semana do aluno — reenviar com `substituirAgendamentoId` troca uma pela
+   * outra numa transação só.
+   */
+  async criarComoAdmin(payload: CriarAgendamentoAdminPayload): Promise<Agendamento> {
+    const { data } = await http.post<Agendamento>('/agendamentos/admin', payload);
+    return data;
   },
 
   /** Próximas aulas de um aluno (admin) — para achar e desmarcar aula sobrando. */

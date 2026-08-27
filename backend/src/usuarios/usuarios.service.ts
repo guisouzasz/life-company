@@ -153,9 +153,12 @@ export class UsuariosService {
   }
 
   async listar(busca?: string) {
-    return this.prisma.usuario.findMany({
+    const alunos = await this.prisma.usuario.findMany({
       select: {
         ...CAMPOS_DO_CADASTRO,
+        // Entra só para virar o booleano `ativado` logo abaixo — o hash em si
+        // nunca sai daqui (mesmo cuidado de `listarProfessores`).
+        senhaHash: true,
         // Só o plano vigente: o histórico de planos encerrados não é da lista.
         usuarioPlanos: {
           select: { plano: true, modalidade: true },
@@ -178,6 +181,15 @@ export class UsuariosService {
       },
       orderBy: { nome: "asc" },
     });
+
+    /**
+     * `ativado` = já tem senha, ou seja, passou pelo primeiro acesso.
+     *
+     * É diferente de `ativo`: o cadastro novo nasce inativo e só liga quando o
+     * aluno abre o app. Sem separar os dois, quem a dona acabou de cadastrar
+     * aparece como "Inativo" — que na tela dela quer dizer aluno desligado.
+     */
+    return alunos.map(({ senhaHash, ...a }) => ({ ...a, ativado: !!senhaHash }));
   }
 
   /**

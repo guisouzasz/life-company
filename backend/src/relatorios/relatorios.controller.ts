@@ -6,6 +6,7 @@ import { AdminGuard } from '../auth/guards/admin.guard';
 import * as dayjs from 'dayjs';
 import { Prisma } from '@prisma/client';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
+import { capacidadeEfetiva } from '../horarios/capacidade';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -92,7 +93,9 @@ export class RelatoriosController {
       horaFim: h.horaFim,
       modalidade: h.modalidade.nome,
       agendados: h._count.agendamentos,
-      capacidade: h.capacidadeMaxima,
+      // O teto da modalidade, não só o número gravado: turma de Pilates salva
+      // com 4 mostraria "3/4" no painel e pareceria ter vaga que a API recusa.
+      capacidade: capacidadeEfetiva(h.capacidadeMaxima, h.modalidade.nome),
     }));
 
     const canceladosOntem = canceladosOntemRaw.map((a) => ({

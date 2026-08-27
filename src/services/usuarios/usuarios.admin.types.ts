@@ -10,6 +10,11 @@ export interface AlunoAdmin {
   cpf: string;
   telefone?: string | null;
   ativo: boolean;
+  /**
+   * Já fez o primeiro acesso (tem senha). Diferente de `ativo`: cadastro novo
+   * nasce inativo e só liga quando o aluno abre o app pela primeira vez.
+   */
+  ativado?: boolean;
   // Ficha cadastral preenchida pelo admin. Vem null nos cadastros feitos
   // antes destes campos existirem.
   rg?: string | null;
