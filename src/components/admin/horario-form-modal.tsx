@@ -9,6 +9,7 @@ import { Input } from '../ui/input';
 import { Icon } from '../ui/icon';
 import { useModalidades } from '../../services/modalidades/modalidades.queries';
 import { useCriarHorario, useAtualizarHorario } from '../../services/horarios/horarios.mutations';
+import { tetoDaModalidade } from '../../constants/app';
 import type { HorarioAdmin } from '../../services/horarios/horarios.types';
 import type { DiaSemana } from '../../services/agendamentos/agendamentos.types';
 import { ApiError } from '../../services/http';
@@ -45,6 +46,12 @@ export function HorarioFormModal({ visible, horario, modalidadeIdPadrao, onClose
   const [ativo, setAtivo] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  /**
+   * A API recusa mudar dia/hora de turma que já tem aluno agendado, porque
+   * isso arrasta todo mundo junto. Aqui guardamos o aviso dela para perguntar
+   * à dona antes de repetir a chamada confirmando.
+   */
+  const [confirmarMudanca, setConfirmarMudanca] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -55,9 +62,17 @@ export function HorarioFormModal({ visible, horario, modalidadeIdPadrao, onClose
       setCapacidade(String(horario?.capacidadeMaxima ?? 4));
       setAtivo(horario?.ativo ?? true);
       setErro(null);
+      setConfirmarMudanca(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, horario?.id]);
+
+  const nomeDaModalidade = nomeModalidade(
+    modalidades.data?.find((m) => m.id === modalidadeId)?.nome ?? '',
+  );
+  const tetoDaTurma = tetoDaModalidade(
+    modalidades.data?.find((m) => m.id === modalidadeId)?.nome,
+  );
 
   const alternarDia = (dia: DiaSemana) => {
     if (editando) {
@@ -75,10 +90,15 @@ export function HorarioFormModal({ visible, horario, modalidadeIdPadrao, onClose
     if (horaFim <= horaInicio) return 'O término deve ser depois do início';
     const cap = parseInt(capacidade, 10);
     if (!Number.isFinite(cap) || cap < 1 || cap > 20) return 'Capacidade deve ser entre 1 e 20';
+    // O backend corta o excesso de qualquer jeito; avisar aqui evita a dona
+    // salvar 6 e descobrir depois, na agenda, que virou 3.
+    if (cap > tetoDaTurma) {
+      return `${nomeDaModalidade} comporta no máximo ${tetoDaTurma} alunos por turma.`;
+    }
     return null;
   };
 
-  const salvar = async () => {
+  const salvar = async (confirmando = false) => {
     const problema = validar();
     if (problema) {
       setErro(problema);
@@ -91,7 +111,10 @@ export function HorarioFormModal({ visible, horario, modalidadeIdPadrao, onClose
       if (editando && horario) {
         await atualizar.mutateAsync({
           id: horario.id,
-          payload: { modalidadeId, diaSemana: dias[0], horaInicio, horaFim, capacidadeMaxima: cap, ativo },
+          payload: {
+            modalidadeId, diaSemana: dias[0], horaInicio, horaFim, capacidadeMaxima: cap, ativo,
+            ...(confirmando ? { confirmarMudancaDeHorario: true } : {}),
+          },
         });
       } else {
         for (const dia of dias) {
@@ -100,7 +123,13 @@ export function HorarioFormModal({ visible, horario, modalidadeIdPadrao, onClose
       }
       onClose();
     } catch (e) {
-      setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar.');
+      // 409 aqui é sempre o aviso de que a mudança levaria alunos junto:
+      // vira pergunta, não erro seco.
+      if (e instanceof ApiError && e.status === 409 && !confirmando) {
+        setConfirmarMudanca(e.message);
+      } else {
+        setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar.');
+      }
     } finally {
       setSalvando(false);
     }
@@ -170,17 +199,41 @@ export function HorarioFormModal({ visible, horario, modalidadeIdPadrao, onClose
         </Pressable>
       </View>
 
+      <Text style={s.dica}>
+        {nomeDaModalidade || 'Esta modalidade'} comporta no máximo {tetoDaTurma} alunos por turma.
+      </Text>
+
       {erro ? <Text style={s.erro}>{erro}</Text> : null}
 
-      <View style={s.actions}>
-        <Button title="Cancelar" variant="outline" onPress={onClose} style={{ flex: 1 }} />
-        <Button
-          title={editando ? 'Salvar' : dias.length > 1 ? `Criar ${dias.length} horários` : 'Salvar'}
-          loading={salvando}
-          onPress={salvar}
-          style={{ flex: 1 }}
-        />
-      </View>
+      {confirmarMudanca ? (
+        <View style={s.aviso}>
+          <Text style={s.avisoTexto}>{confirmarMudanca}</Text>
+          <View style={s.actions}>
+            <Button
+              title="Não mudar"
+              variant="outline"
+              onPress={() => setConfirmarMudanca(null)}
+              style={{ flex: 1 }}
+            />
+            <Button
+              title="Mudar mesmo assim"
+              loading={salvando}
+              onPress={() => { setConfirmarMudanca(null); salvar(true); }}
+              style={{ flex: 1 }}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={s.actions}>
+          <Button title="Cancelar" variant="outline" onPress={onClose} style={{ flex: 1 }} />
+          <Button
+            title={editando ? 'Salvar' : dias.length > 1 ? `Criar ${dias.length} horários` : 'Salvar'}
+            loading={salvando}
+            onPress={() => salvar()}
+            style={{ flex: 1 }}
+          />
+        </View>
+      )}
     </AppModal>
   );
 }
@@ -201,5 +254,11 @@ const s = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   horaRow: { flexDirection: 'row', gap: 10 },
   erro: { fontSize: 12, color: LC.danger, marginTop: 10 },
+  dica: { fontSize: 11.5, color: LC.textMuted, marginTop: 8 },
+  aviso: {
+    marginTop: 14, backgroundColor: LC.warningBg,
+    borderRadius: LC.radius.md, padding: 12,
+  },
+  avisoTexto: { fontSize: 13, color: LC.warningFg, lineHeight: 19, fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
 });

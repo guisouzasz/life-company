@@ -4,6 +4,7 @@ import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
 import { DIAS_VALIDADE_CREDITO } from '../creditos/creditos.constantes';
+import { capacidadeEfetiva } from '../horarios/capacidade';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -77,8 +78,15 @@ export class AgendamentosService {
       const anterior = await tx.agendamento.findFirst({ where: { usuarioId, horarioId: dto.horarioId, dataAula } });
       if (anterior?.status === 'CONFIRMADO') throw new ConflictException('Você já possui agendamento neste horário');
 
+      /**
+       * Quantos cabem: o menor entre a capacidade gravada no horário e o teto
+       * da modalidade. Sem o teto aqui, as turmas criadas antes desta regra —
+       * Pilates salvo com 4, por exemplo — continuariam aceitando gente a
+       * mais, porque a checagem olhava só o número do banco.
+       */
+      const cabem = capacidadeEfetiva(horario.capacidadeMaxima, horario.modalidade?.nome);
       const ocupacao = await tx.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
-      if (ocupacao >= horario.capacidadeMaxima) throw new BadRequestException('Horário lotado');
+      if (ocupacao >= cabem) throw new BadRequestException('Horário lotado');
 
       /**
        * Grava o agendamento: revive a linha cancelada, se existir, ou cria uma

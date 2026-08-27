@@ -71,3 +71,25 @@ export function erroDeEmail(email: string): string | null {
   const certo = DOMINIOS_COM_ERRO_DE_DIGITACAO[dominio];
   return certo ? `Parece engano de digitação: você quis dizer @${certo}?` : null;
 }
+
+/**
+ * Quantos alunos cabem numa turma, por modalidade.
+ *
+ * Espelha TETO_POR_MODALIDADE em backend/src/horarios/capacidade.ts — quem
+ * manda é o backend, que corta o excesso ao salvar. Isto existe só para o
+ * formulário avisar antes, em vez de a dona digitar 6 e o sistema gravar 3
+ * sem explicar por quê.
+ */
+const TETO_POR_MODALIDADE: Record<string, number> = {
+  musculacao: 4,
+  funcional: 4,
+  pilates: 3,
+};
+
+export const TETO_PADRAO_DA_TURMA = 4;
+
+export function tetoDaModalidade(nome?: string | null): number {
+  if (!nome) return TETO_PADRAO_DA_TURMA;
+  const chave = nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  return TETO_POR_MODALIDADE[chave] ?? TETO_PADRAO_DA_TURMA;
+}

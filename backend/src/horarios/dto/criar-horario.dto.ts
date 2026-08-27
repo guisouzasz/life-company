@@ -17,4 +17,11 @@ export class AtualizarHorarioDto {
   @ApiProperty({ example: '08:00', required: false }) @IsOptional() @IsString() horaFim?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsInt() @Min(1) @Max(20) capacidadeMaxima?: number;
   @ApiProperty({ required: false }) @IsOptional() @IsBoolean() ativo?: boolean;
+
+  /**
+   * Assume que mudar o dia/hora leva junto quem já está agendado nesta turma.
+   * Sem isto, a API recusa a mudança e informa quantos alunos seriam movidos.
+   */
+  @ApiProperty({ required: false })
+  @IsOptional() @IsBoolean() confirmarMudancaDeHorario?: boolean;
 }

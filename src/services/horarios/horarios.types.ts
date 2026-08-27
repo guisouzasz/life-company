@@ -36,4 +36,11 @@ export interface CriarHorarioPayload {
   ativo?: boolean;
 }
 
-export type AtualizarHorarioPayload = Partial<CriarHorarioPayload>;
+export type AtualizarHorarioPayload = Partial<CriarHorarioPayload> & {
+  /**
+   * Assume mudar o dia/hora de uma turma que já tem aluno agendado — todos
+   * eles vão junto para o novo horário. Sem isto a API recusa e diz quantos
+   * seriam movidos, para a mudança nunca acontecer por descuido.
+   */
+  confirmarMudancaDeHorario?: boolean;
+};

@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
+import { capacidadeEfetiva, tetoDaModalidade } from './capacidade';
 
 @Injectable()
 export class HorariosService {
@@ -46,34 +47,99 @@ export class HorariosService {
       },
       orderBy: { horaInicio: 'asc' },
     });
-    return horarios.map(h => ({
-      id: h.id, horaInicio: h.horaInicio, horaFim: h.horaFim, diaSemana: h.diaSemana,
-      modalidade: h.modalidade, capacidadeMaxima: h.capacidadeMaxima,
-      agendados: h.agendamentos.length, vagas: h.capacidadeMaxima - h.agendamentos.length,
-      disponivel: h.agendamentos.length < h.capacidadeMaxima,
-    }));
+    return horarios.map((h) => {
+      // O que vale é o teto da modalidade, não só o que está gravado no
+      // horário: turma antiga salva com capacidade maior continuaria
+      // oferecendo vaga que a API recusaria na hora de confirmar.
+      const cabem = capacidadeEfetiva(h.capacidadeMaxima, h.modalidade?.nome);
+      return {
+        id: h.id, horaInicio: h.horaInicio, horaFim: h.horaFim, diaSemana: h.diaSemana,
+        modalidade: h.modalidade, capacidadeMaxima: cabem,
+        agendados: h.agendamentos.length, vagas: Math.max(cabem - h.agendamentos.length, 0),
+        disponivel: h.agendamentos.length < cabem,
+      };
+    });
   }
 
   async criar(dto: CriarHorarioDto) {
-  return this.prisma.horario.create({
-    data: {
-      modalidadeId: dto.modalidadeId,
-      diaSemana: dto.diaSemana as any,
-      horaInicio: dto.horaInicio,
-      horaFim: dto.horaFim,
-      capacidadeMaxima: dto.capacidadeMaxima ?? 4,
-      ativo: dto.ativo ?? true,
-    },
-    include: {
-      modalidade: true,
-    },
-  });
-}
+    // O painel deixa digitar de 1 a 20; a sala é que manda. Pilates aceita 3,
+    // e antes toda turma nova nascia com o padrão 4 — uma pessoa a mais do
+    // que cabe, toda vez.
+    const modalidade = await this.prisma.modalidade.findUnique({
+      where: { id: dto.modalidadeId },
+      select: { nome: true },
+    });
+    if (!modalidade) throw new NotFoundException('Modalidade não encontrada');
+    const teto = tetoDaModalidade(modalidade.nome);
+
+    return this.prisma.horario.create({
+      data: {
+        modalidadeId: dto.modalidadeId,
+        diaSemana: dto.diaSemana as any,
+        horaInicio: dto.horaInicio,
+        horaFim: dto.horaFim,
+        capacidadeMaxima: Math.min(dto.capacidadeMaxima ?? teto, teto),
+        ativo: dto.ativo ?? true,
+      },
+      include: {
+        modalidade: true,
+      },
+    });
+  }
 
   /** Edição de campos do horário (admin) — não mexe em agendamentos existentes. */
   async atualizar(id: string, dto: AtualizarHorarioDto) {
-    const h = await this.prisma.horario.findUnique({ where: { id } });
+    const h = await this.prisma.horario.findUnique({
+      where: { id },
+      include: { modalidade: { select: { nome: true } } },
+    });
     if (!h) throw new NotFoundException('Horário não encontrado');
+
+    /**
+     * Mudar dia ou hora de uma turma MOVE junto quem já está agendado: o
+     * agendamento aponta para a turma, não para o relógio. Foi assim que uma
+     * aluna marcada na sexta às 17:00 amanheceu às 19:00 — ninguém mexeu nela,
+     * mexeram na turma.
+     *
+     * Não dá para proibir (estúdio remaneja aula mesmo), mas tem que ser
+     * decisão consciente: sem `confirmarMudancaDeHorario`, a API recusa e diz
+     * quantos alunos seriam levados junto.
+     */
+    const mudaQuando =
+      (dto.diaSemana !== undefined && dto.diaSemana !== h.diaSemana) ||
+      (dto.horaInicio !== undefined && dto.horaInicio !== h.horaInicio) ||
+      (dto.horaFim !== undefined && dto.horaFim !== h.horaFim);
+
+    if (mudaQuando && !dto.confirmarMudancaDeHorario) {
+      const afetados = await this.prisma.agendamento.count({
+        where: {
+          horarioId: id,
+          status: 'CONFIRMADO',
+          dataAula: { gte: dayjs().startOf('day').toDate() },
+        },
+      });
+      if (afetados > 0) {
+        throw new ConflictException(
+          `Esta turma tem ${afetados} aluno(s) já agendado(s). Mudar o dia ou a hora leva ` +
+            `todos eles junto para o novo horário. Se é isso mesmo, confirme a alteração; ` +
+            `se não, crie uma turma nova no horário desejado.`,
+        );
+      }
+    }
+
+    // A modalidade pode estar mudando no mesmo update — o teto é o da
+    // modalidade que a turma vai ter depois, não a de antes.
+    let nomeModalidade = h.modalidade?.nome;
+    if (dto.modalidadeId !== undefined && dto.modalidadeId !== h.modalidadeId) {
+      const nova = await this.prisma.modalidade.findUnique({
+        where: { id: dto.modalidadeId },
+        select: { nome: true },
+      });
+      if (!nova) throw new NotFoundException('Modalidade não encontrada');
+      nomeModalidade = nova.nome;
+    }
+    const teto = tetoDaModalidade(nomeModalidade);
+
     return this.prisma.horario.update({
       where: { id },
       data: {
@@ -81,7 +147,9 @@ export class HorariosService {
         ...(dto.diaSemana !== undefined ? { diaSemana: dto.diaSemana as any } : {}),
         ...(dto.horaInicio !== undefined ? { horaInicio: dto.horaInicio } : {}),
         ...(dto.horaFim !== undefined ? { horaFim: dto.horaFim } : {}),
-        ...(dto.capacidadeMaxima !== undefined ? { capacidadeMaxima: dto.capacidadeMaxima } : {}),
+        // Vale também quando só a modalidade muda: turma que virou Pilates
+        // precisa cair para 3, mesmo sem ninguém mexer na capacidade.
+        capacidadeMaxima: Math.min(dto.capacidadeMaxima ?? h.capacidadeMaxima, teto),
         ...(dto.ativo !== undefined ? { ativo: dto.ativo } : {}),
       },
       include: { modalidade: true },
