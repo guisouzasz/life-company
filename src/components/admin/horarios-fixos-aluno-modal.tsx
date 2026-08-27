@@ -12,6 +12,8 @@ import { usePlanos } from '../../services/planos/planos.queries';
 import { useModalidades } from '../../services/modalidades/modalidades.queries';
 import { useHorarios } from '../../services/horarios/horarios.queries';
 import { useHorariosFixosDoAluno } from '../../services/horarios-fixos/horarios-fixos.queries';
+import { useAgendamentosDoAluno } from '../../services/agendamentos/agendamentos.queries';
+import { useDesmarcarAgendamento } from '../../services/agendamentos/agendamentos.mutations';
 import { useCriarHorarioFixo, useRemoverHorarioFixo } from '../../services/horarios-fixos/horarios-fixos.mutations';
 import { useAtualizarPlanoAluno } from '../../services/usuarios/usuarios.mutations';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
@@ -57,6 +59,8 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
   /** Recado depois de mexer no horário fixo (aulas que não entraram, ou que foram canceladas). */
   const [aviso, setAviso] = useState<{ titulo: string; texto: string } | null>(null);
   const removerFixo = useRemoverHorarioFixo();
+  const aulas = useAgendamentosDoAluno(aluno?.id, !!aluno);
+  const cancelarAula = useDesmarcarAgendamento();
 
   const planoSelecionado = planoSel ?? planoAtual?.plano?.id;
   const aulasSemanais = planos.data?.find((p) => p.id === planoSelecionado)?.aulasSemanais ?? planoAtual?.plano?.aulasSemanais ?? 0;
@@ -370,6 +374,56 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
             <Text style={s.addHorarioText}>Adicionar horário</Text>
           </Pressable>
         )}
+
+        {/* ── Aulas já marcadas ────────────────────────────────── */}
+        {/*
+          O horário fixo é a combinação; isto aqui é o que está realmente
+          marcado. Sem esta lista a dona não tinha como achar aula que sobrou
+          de um horário fixo antigo — e aula sobrando consome a cota da semana,
+          fazendo o horário novo falhar com "Limite semanal atingido" sem que
+          desse para ver a causa em lugar nenhum.
+        */}
+        <Text style={s.sectionLabel}>Próximas aulas marcadas</Text>
+        {aulas.isLoading ? (
+          <View style={{ height: 50 }}><Loading /></View>
+        ) : !aulas.data || aulas.data.length === 0 ? (
+          <Text style={s.empty}>Nenhuma aula marcada daqui para frente.</Text>
+        ) : (
+          aulas.data.map((ag) => (
+            <View key={ag.id} style={s.aulaLinha}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.aulaTitulo}>
+                  {nomeModalidade(ag.horario.modalidade.nome)} • {ag.horario.horaInicio}
+                </Text>
+                <Text style={s.aulaDetalhe}>
+                  {formatDate(ag.dataAula, 'ddd, DD/MM')}
+                  {ag.reposicao ? ' · reposição' : ''}
+                </Text>
+              </View>
+              <Pressable
+                style={s.removeBtn}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`Desmarcar aula de ${formatDate(ag.dataAula, 'DD/MM')} às ${ag.horario.horaInicio}`}
+                disabled={cancelarAula.isPending}
+                onPress={() =>
+                  cancelarAula.mutate(ag.id, {
+                    onSuccess: () =>
+                      setAviso({
+                        titulo: 'Aula desmarcada',
+                        texto:
+                          `${formatDate(ag.dataAula, 'DD/MM')} às ${ag.horario.horaInicio} foi desmarcada. ` +
+                          'A vaga voltou para a turma e a semana do aluno ficou livre. ' +
+                          'Não gerou crédito de reposição — isto é arrumação de agenda.',
+                      }),
+                  })
+                }
+              >
+                <Icon name="close" size={16} color={LC.danger} />
+              </Pressable>
+            </View>
+          ))
+        )}
       </ScrollView>
       <InfoModal
         visible={!!aviso}
@@ -389,6 +443,12 @@ function corPorModalidade(nome?: string): string {
 }
 
 const s = StyleSheet.create({
+  aulaLinha: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: LC.border,
+  },
+  aulaTitulo: { fontSize: 13.5, fontWeight: '700', color: LC.textPrimary },
+  aulaDetalhe: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   scroll: { maxHeight: 480 },
   sectionLabel: {
     fontSize: 11,

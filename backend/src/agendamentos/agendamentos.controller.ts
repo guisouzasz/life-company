@@ -27,8 +27,28 @@ export class AgendamentosController {
   @UseGuards(StaffGuard)
   porHorario(@Request() req, @Param('horarioId') horarioId: string, @Query('data') data: string) { return this.service.listarPorHorario(horarioId, data, req.user); }
 
+  /**
+   * Próximas aulas de UM aluno (admin).
+   *
+   * A dona só enxergava os horários fixos, que são a combinação — não as
+   * aulas de fato marcadas. Quando sobrava aula de um horário fixo removido,
+   * ela não tinha tela nenhuma para achar e desmarcar: o aluno seguia
+   * ocupando vaga e estourando a cota da semana dele, e o horário fixo novo
+   * não conseguia gerar aula ("Limite semanal atingido").
+   */
+  @Get('aluno/:usuarioId')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Próximas aulas de um aluno (admin)' })
+  doAluno(@Param('usuarioId') usuarioId: string) { return this.service.listarMeus(usuarioId); }
+
   @Patch(':id/cancelar')
   cancelar(@Request() req, @Param('id') id: string) { return this.service.cancelar(id, req.user.id); }
+
+  /** Tira o aluno da aula sem gerar crédito — arrumação de agenda, não cancelamento de aula. */
+  @Patch(':id/desmarcar')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Desmarcar aula de um aluno, sem crédito (admin)' })
+  desmarcar(@Param('id') id: string) { return this.service.desmarcarSemCredito(id); }
 
   @Patch(':id/cancelar-admin')
   @UseGuards(AdminGuard)

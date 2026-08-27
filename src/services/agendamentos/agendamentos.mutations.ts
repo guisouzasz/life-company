@@ -32,6 +32,18 @@ export function useCancelarAgendamento() {
 }
 
 /** Cancelamento pelo admin — o aluno recebe crédito de reposição. */
+/** Desmarca sem crédito — usado na arrumação da agenda do aluno. */
+export function useDesmarcarAgendamento() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => agendamentosService.desmarcar(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agendamentos'] });
+      qc.invalidateQueries({ queryKey: ['horarios'] });
+    },
+  });
+}
+
 export function useCancelarAgendamentoAdmin() {
   const qc = useQueryClient();
   return useMutation({

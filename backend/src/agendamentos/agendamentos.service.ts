@@ -225,6 +225,31 @@ export class AgendamentosService {
     });
   }
 
+  /**
+   * Tira o aluno da aula SEM gerar crédito.
+   *
+   * É diferente de `adminCancelar`: lá o estúdio desmarcou uma aula que ia
+   * acontecer, e compensar com crédito é justo. Aqui a dona está arrumando a
+   * agenda dele — tirando aula que sobrou de horário fixo antigo, ou
+   * remanejando de turma. Dar crédito nesse caso inflaria o saldo do aluno a
+   * cada correção de cadastro.
+   */
+  async desmarcarSemCredito(agendamentoId: string) {
+    const ag = await this.prisma.agendamento.findUnique({
+      where: { id: agendamentoId },
+      include: { horario: { include: { modalidade: true } } },
+    });
+    if (!ag) throw new NotFoundException('Agendamento não encontrado');
+    if (ag.status !== 'CONFIRMADO') {
+      throw new BadRequestException('Esta aula já não está marcada');
+    }
+    await this.prisma.agendamento.update({
+      where: { id: agendamentoId },
+      data: { status: 'CANCELADO' },
+    });
+    return { mensagem: 'Aula desmarcada. A vaga voltou para a turma.' };
+  }
+
   async adminCancelar(agendamentoId: string) {
     const ag = await this.prisma.agendamento.findUnique({ where: { id: agendamentoId } });
     if (!ag) throw new NotFoundException('Agendamento não encontrado');

@@ -42,6 +42,15 @@ export function useHistorico(page = 1) {
 }
 
 /** Alunos agendados num horário em uma data (admin). */
+/** Próximas aulas de um aluno (admin). */
+export function useAgendamentosDoAluno(usuarioId?: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.agendamentosDoAluno(usuarioId ?? ''),
+    queryFn: () => agendamentosService.listarDoAluno(usuarioId!),
+    enabled: enabled && !!usuarioId,
+  });
+}
+
 export function useAgendamentosDoHorario(horarioId?: string, data?: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.agendamentosDoHorario(horarioId ?? '', data ?? ''),
