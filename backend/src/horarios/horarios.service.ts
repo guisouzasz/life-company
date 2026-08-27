@@ -2,20 +2,70 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
+import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { capacidadeEfetiva, tetoDaModalidade } from './capacidade';
+
+(dayjs as any).extend((isoWeek as any).default || isoWeek);
+
+const DIA_PARA_NUMERO: Record<string, number> = {
+  SEGUNDA: 1, TERCA: 2, QUARTA: 3, QUINTA: 4, SEXTA: 5,
+};
 
 @Injectable()
 export class HorariosService {
   constructor(private prisma: PrismaService) {}
 
+  /** Próxima vez que este dia da semana acontece (hoje conta). */
+  private proximaDataDo(diaSemana: string): Date {
+    const alvo = DIA_PARA_NUMERO[diaSemana] ?? 1;
+    const hoje = dayjs().startOf('day');
+    return hoje.add((alvo - hoje.isoWeekday() + 7) % 7, 'day').toDate();
+  }
+
   /** `incluirInativos` (admin): lista também horários desativados, para gestão. */
   async listar(modalidadeId?: string, diaSemana?: string, incluirInativos = false) {
     const horarios = await this.prisma.horario.findMany({
       where: { ...(incluirInativos ? {} : { ativo: true }), ...(modalidadeId && { modalidadeId }), ...(diaSemana && { diaSemana: diaSemana as any }) },
-      include: { modalidade: true, _count: { select: { agendamentos: { where: { status: 'CONFIRMADO', dataAula: { gte: new Date(new Date().setHours(0,0,0,0)) } } } } } },
+      include: { modalidade: true },
       orderBy: [{ diaSemana: 'asc' }, { horaInicio: 'asc' }],
     });
-    return horarios.map(h => ({ ...h, agendados: h._count.agendamentos, vagas: h.capacidadeMaxima - h._count.agendamentos }));
+
+    /**
+     * Quantos alunos tem a turma NA PRÓXIMA AULA dela.
+     *
+     * Antes isto contava todo agendamento confirmado de hoje em diante, sem
+     * separar por data: como o horário fixo gera várias semanas de uma vez,
+     * três alunos em três sextas viravam "9" numa turma de 4. A dona via
+     * "9/4" e achava que o sistema tinha deixado entrar gente demais — não
+     * tinha; era a mesma gente, contada uma vez por semana.
+     *
+     * A data de cada turma é a próxima vez que aquele dia da semana acontece,
+     * igual ao que a tela de detalhe mostra ("Aula de sexta, 28/08").
+     */
+    const datas = new Map(horarios.map((h) => [h.id, this.proximaDataDo(h.diaSemana)]));
+    const contagens = horarios.length
+      ? await this.prisma.agendamento.groupBy({
+          by: ['horarioId'],
+          where: {
+            status: 'CONFIRMADO',
+            OR: horarios.map((h) => ({ horarioId: h.id, dataAula: datas.get(h.id)! })),
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const porHorario = new Map(contagens.map((c) => [c.horarioId, c._count._all]));
+
+    return horarios.map((h) => {
+      const cabem = capacidadeEfetiva(h.capacidadeMaxima, h.modalidade?.nome);
+      const agendados = porHorario.get(h.id) ?? 0;
+      return {
+        ...h,
+        capacidadeMaxima: cabem,
+        agendados,
+        vagas: Math.max(cabem - agendados, 0),
+        proximaData: datas.get(h.id),
+      };
+    });
   }
 
   /**

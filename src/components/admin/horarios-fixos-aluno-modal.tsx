@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
 import { DIAS_PT } from '../../constants/app';
 import { iconePorModalidade, nomeModalidade } from '../../constants/assets';
-import { AppModal } from '../ui/modal';
+import { AppModal, InfoModal } from '../ui/modal';
 import { Button } from '../ui/button';
 import { Icon } from '../ui/icon';
 import { Card } from '../ui/card';
@@ -54,6 +54,8 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
   const fixos = useHorariosFixosDoAluno(aluno?.id, !!aluno);
   const atualizarPlano = useAtualizarPlanoAluno();
   const criarFixo = useCriarHorarioFixo();
+  /** Aviso quando o fixo foi salvo mas as aulas não entraram. */
+  const [avisoGeracao, setAvisoGeracao] = useState<string | null>(null);
   const removerFixo = useRemoverHorarioFixo();
 
   const planoSelecionado = planoSel ?? planoAtual?.plano?.id;
@@ -105,7 +107,32 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
     if (!aluno) return;
     criarFixo.mutate(
       { usuarioId: aluno.id, payload: { horarioId, dataFim: dataFimDe(duracaoSel) } },
-      { onSuccess: () => setModo('ver') },
+      {
+        onSuccess: (resposta) => {
+          setModo('ver');
+          /**
+           * O horário fixo é só a combinação; quem coloca o aluno na aula é a
+           * geração que roda em seguida. Quando ela não consegue (turma cheia,
+           * semana do plano no limite), o fixo aparecia criado e o aluno não
+           * entrava em aula nenhuma — sem ninguém avisar. Era assim que a dona
+           * marcava alguém na sexta às 17h e depois não achava ele na turma.
+           */
+          const g = resposta?.geracao;
+          if (!g) return;
+          if (g.criados === 0 && g.erros > 0) {
+            setAvisoGeracao(
+              `O horário fixo foi salvo, mas nenhuma aula foi marcada para ${aluno.nome.split(' ')[0]}: ` +
+                (g.motivos?.join(' ') || 'não foi possível gerar as aulas.') +
+                ' Resolva isso e adicione o horário de novo.',
+            );
+          } else if (g.erros > 0) {
+            setAvisoGeracao(
+              `${g.criados} aula(s) marcada(s), mas outras não: ` +
+                (g.motivos?.join(' ') || 'não foi possível gerar todas.'),
+            );
+          }
+        },
+      },
     );
   };
 
@@ -175,6 +202,8 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
                           style={s.addBtn}
                           disabled={!podeAdicionar || criarFixo.isPending}
                           onPress={() => adicionarHorario(h.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Fixar ${h.horaInicio} para este aluno`}
                           hitSlop={6}
                         >
                           <Icon name="add" size={18} color={LC.primary} />
@@ -214,6 +243,12 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
           onPress={() => setModo('ver')}
           style={{ marginTop: 16 }}
         />
+      <InfoModal
+        visible={!!avisoGeracao}
+        title="Horário salvo, aulas não"
+        message={avisoGeracao ?? ''}
+        onClose={() => setAvisoGeracao(null)}
+      />
       </AppModal>
     );
   }
@@ -319,6 +354,12 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
           </Pressable>
         )}
       </ScrollView>
+      <InfoModal
+        visible={!!avisoGeracao}
+        title="Horário salvo, aulas não"
+        message={avisoGeracao ?? ''}
+        onClose={() => setAvisoGeracao(null)}
+      />
     </AppModal>
   );
 }

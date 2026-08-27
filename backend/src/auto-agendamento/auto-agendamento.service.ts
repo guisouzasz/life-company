@@ -51,7 +51,7 @@ export class AutoAgendamentoService {
       where: { id: horarioFixoId },
       include: { horario: true },
     });
-    if (!fixo || !fixo.ativo) return { criados: 0, ignorados: 0, erros: 0 };
+    if (!fixo || !fixo.ativo) return { criados: 0, ignorados: 0, erros: 0, motivos: [] as string[] };
     return this.gerarParaFixo(fixo);
   }
 
@@ -66,6 +66,14 @@ export class AutoAgendamentoService {
     let criados = 0;
     let ignorados = 0;
     let erros = 0;
+    /**
+     * Por que não deu para marcar. Sem isto, a falha virava só um número e a
+     * dona via o horário fixo criado achando que o aluno estava agendado —
+     * quando na verdade a turma estava cheia ou a semana dele já tinha
+     * acabado. Guardamos o motivo uma vez só: repetir "Horário lotado"
+     * quatro vezes não ajuda ninguém.
+     */
+    const motivos: string[] = [];
 
     for (let d = 0; d <= JANELA_DIAS; d++) {
       const dia = hoje.add(d, 'day');
@@ -86,11 +94,12 @@ export class AutoAgendamentoService {
           continue;
         }
         erros++;
+        if (e?.message && !motivos.includes(e.message)) motivos.push(e.message);
         this.logger.warn(
           `Falha ao auto-agendar usuario=${fixo.usuarioId} horario=${fixo.horarioId} data=${dia.format('YYYY-MM-DD')}: ${e.message}`,
         );
       }
     }
-    return { criados, ignorados, erros };
+    return { criados, ignorados, erros, motivos };
   }
 }

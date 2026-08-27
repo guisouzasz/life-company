@@ -1,5 +1,5 @@
 import { http } from '../http';
-import type { CriarHorarioFixoPayload, HorarioFixo } from './horarios-fixos.types';
+import type { CriarHorarioFixoPayload, HorarioFixo, HorarioFixoCriado } from './horarios-fixos.types';
 
 export const horariosFixosService = {
   async listarDoAluno(usuarioId: string): Promise<HorarioFixo[]> {
@@ -7,8 +7,8 @@ export const horariosFixosService = {
     return data;
   },
 
-  async criar(usuarioId: string, payload: CriarHorarioFixoPayload): Promise<HorarioFixo> {
-    const { data } = await http.post<HorarioFixo>(`/horarios-fixos/${usuarioId}`, payload);
+  async criar(usuarioId: string, payload: CriarHorarioFixoPayload): Promise<HorarioFixoCriado> {
+    const { data } = await http.post<HorarioFixoCriado>(`/horarios-fixos/${usuarioId}`, payload);
     return data;
   },
 

@@ -57,7 +57,9 @@ export class HorariosFixosService {
 
     // Gera as próximas aulas na hora — sem esperar o cron das 3h. Falha na
     // geração (ex: sem saldo na semana) não desfaz o horário fixo criado.
-    let geracao = { criados: 0, ignorados: 0, erros: 0 };
+    let geracao: { criados: number; ignorados: number; erros: number; motivos: string[] } = {
+      criados: 0, ignorados: 0, erros: 0, motivos: [],
+    };
     try {
       geracao = await this.autoAgendamento.gerarParaHorarioFixoId(fixo.id);
     } catch {
