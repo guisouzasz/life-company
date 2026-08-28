@@ -36,45 +36,64 @@ enum FormaPagamento {
 }
 
 model Usuario {
-  id          String      @id @default(uuid())
-  nome        String
-  cpf         String      @unique
-  email       String?     @unique
-  telefone    String?
+  id                    String      @id @default(uuid())
+  nome                  String
+  cpf                   String      @unique
+  email                 String?     @unique
+  telefone              String?
   // Ficha cadastral preenchida pelo admin. Opcionais no banco porque os
   // cadastros anteriores a este campo não os têm; o service exige no ALUNO.
-  rg             String?
-  endereco       String?
-  cep            String?
-  dataNascimento DateTime? @map("data_nascimento")
-  senhaHash   String?     @map("senha_hash")
-  tipoUsuario TipoUsuario @default(ALUNO) @map("tipo_usuario")
-  ativo       Boolean     @default(true)
-  fcmToken    String?     @map("fcm_token")
+  rg                    String?
+  endereco              String?
+  cep                   String?
+  dataNascimento        DateTime?   @map("data_nascimento")
+  senhaHash             String?     @map("senha_hash")
+  tipoUsuario           TipoUsuario @default(ALUNO) @map("tipo_usuario")
+  ativo                 Boolean     @default(true)
+  fcmToken              String?     @map("fcm_token")
   // Financeiro: valor personalizado (override do preço do plano) e dia do vencimento
-  valorMensalidade Decimal? @map("valor_mensalidade") @db.Decimal(10, 2)
-  diaVencimento    Int      @default(5) @map("dia_vencimento")
+  valorMensalidade      Decimal?    @map("valor_mensalidade") @db.Decimal(10, 2)
+  diaVencimento         Int         @default(5) @map("dia_vencimento")
   // Modalidade do PROFESSOR: limita a agenda e os treinos que ele gerencia
-  modalidadeProfessorId String? @map("modalidade_professor_id")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  modalidadeProfessorId String?     @map("modalidade_professor_id")
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
 
-  agendamentos      Agendamento[]
-  usuarioPlanos     UsuarioPlano[]
-  primeiroAcesso    PrimeiroAcesso?
-  refreshTokens     RefreshToken[]
-  creditosReposicao CreditoReposicao[]
-  horariosFixos     HorarioFixo[]
-  pagamentos        Pagamento[]
-  treinosRecebidos  Treino[] @relation("TreinosDoAluno")
-  treinosCriados    Treino[] @relation("TreinosDoProfessor")
-  cargasRecebidas   RegistroCarga[] @relation("CargasDoAluno")
-  cargasRegistradas RegistroCarga[] @relation("CargasDoProfessor")
-  treinosDia        TreinoDia[] @relation("TreinosDiaDoProfessor")
-  anamnese          Anamnese?
-  modalidadeProfessor Modalidade? @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
+  agendamentos        Agendamento[]
+  usuarioPlanos       UsuarioPlano[]
+  primeiroAcesso      PrimeiroAcesso?
+  refreshTokens       RefreshToken[]
+  creditosReposicao   CreditoReposicao[]
+  horariosFixos       HorarioFixo[]
+  pagamentos          Pagamento[]
+  treinosRecebidos    Treino[]           @relation("TreinosDoAluno")
+  treinosCriados      Treino[]           @relation("TreinosDoProfessor")
+  cargasRecebidas     RegistroCarga[]    @relation("CargasDoAluno")
+  cargasRegistradas   RegistroCarga[]    @relation("CargasDoProfessor")
+  treinosDia          TreinoDia[]        @relation("TreinosDiaDoProfessor")
+  anamnese            Anamnese?
+  aceitesTermo        AceiteTermo[]
+  modalidadeProfessor Modalidade?        @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
 
   @@map("usuarios")
+}
+
+/// Aceite do termo de normas, gravado no primeiro acesso do aluno.
+///
+/// Guarda a VERSÃO aceita, não só a data: o texto muda com o tempo, e sem a
+/// versão não dá para dizer qual redação a pessoa leu. Uma linha por versão —
+/// se o estúdio publicar um termo novo e pedir aceite de novo, o histórico
+/// anterior continua de pé.
+model AceiteTermo {
+  id        String   @id @default(uuid())
+  usuarioId String   @map("usuario_id")
+  versao    String
+  aceitoEm  DateTime @default(now()) @map("aceito_em")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, versao])
+  @@map("aceites_termo")
 }
 
 /// Ficha de anamnese do aluno: uma por pessoa, preenchida por ela mesma no
@@ -83,17 +102,17 @@ model Anamnese {
   id        String @id @default(uuid())
   usuarioId String @unique @map("usuario_id")
 
-  objetivo         String? // Emagrecimento, Hipertrofia, Condicionamento...
-  nivelAtividade   String? // Sedentário, Já treinei, Treino regularmente
-  problemasSaude   String? // hipertensão, diabetes, cardíaco... (texto livre)
-  lesoes           String? // lesões e cirurgias
-  dores            String? // dores articulares / coluna
-  medicamentos     String?
-  alergias         String?
-  gestante         Boolean @default(false)
-  fumante          Boolean @default(false)
-  liberacaoMedica  Boolean @default(false) // tem atestado/liberação médica
-  observacoes      String?
+  objetivo        String? // Emagrecimento, Hipertrofia, Condicionamento...
+  nivelAtividade  String? // Sedentário, Já treinei, Treino regularmente
+  problemasSaude  String? // hipertensão, diabetes, cardíaco... (texto livre)
+  lesoes          String? // lesões e cirurgias
+  dores           String? // dores articulares / coluna
+  medicamentos    String?
+  alergias        String?
+  gestante        Boolean @default(false)
+  fumante         Boolean @default(false)
+  liberacaoMedica Boolean @default(false) // tem atestado/liberação médica
+  observacoes     String?
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -105,10 +124,10 @@ model Anamnese {
 
 // Treino montado pelo professor para um aluno (área do professor).
 model Treino {
-  id           String   @id @default(uuid())
-  alunoId      String   @map("aluno_id")
-  professorId  String   @map("professor_id")
-  modalidadeId String?  @map("modalidade_id") // modalidade do professor que montou
+  id           String    @id @default(uuid())
+  alunoId      String    @map("aluno_id")
+  professorId  String    @map("professor_id")
+  modalidadeId String?   @map("modalidade_id") // modalidade do professor que montou
   titulo       String // ex: "Treino A — Superiores"
   // Treino em texto livre (Funcional/Pilates): blocos de tempo/intervalo
   // escritos como o professor preferir. Musculação usa exercicios[] + carga.
@@ -121,10 +140,10 @@ model Treino {
   // não migrar o banco em produção.
   pausaSeries  String?
   velocidade   String?
-  concluido    Boolean  @default(false) // ficha arquivada (Concluída)
-  ativo        Boolean  @default(true) // soft-delete
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  concluido    Boolean   @default(false) // ficha arquivada (Concluída)
+  ativo        Boolean   @default(true) // soft-delete
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   aluno      Usuario           @relation("TreinosDoAluno", fields: [alunoId], references: [id])
   professor  Usuario           @relation("TreinosDoProfessor", fields: [professorId], references: [id])
@@ -227,7 +246,7 @@ model Modalidade {
 
   horarios      Horario[]
   usuariosPlano UsuarioPlano[]
-  professores   Usuario[] @relation("ProfessorModalidade")
+  professores   Usuario[]       @relation("ProfessorModalidade")
   treinos       Treino[]
   cargas        RegistroCarga[]
   treinosDia    TreinoDia[]
@@ -268,14 +287,14 @@ model HorarioFixo {
 }
 
 model UsuarioPlano {
-  id                String     @id @default(uuid())
-  usuarioId         String     @map("usuario_id")
-  planoId           String     @map("plano_id")
-  modalidadeId      String     @map("modalidade_id")
-  vigenciaInicio    DateTime   @map("vigencia_inicio")
-  vigenciaFim       DateTime?  @map("vigencia_fim")
-  aulasUsadasSemana Int        @default(0) @map("aulas_usadas_semana")
-  semanaReferencia  DateTime   @map("semana_referencia")
+  id                String    @id @default(uuid())
+  usuarioId         String    @map("usuario_id")
+  planoId           String    @map("plano_id")
+  modalidadeId      String    @map("modalidade_id")
+  vigenciaInicio    DateTime  @map("vigencia_inicio")
+  vigenciaFim       DateTime? @map("vigencia_fim")
+  aulasUsadasSemana Int       @default(0) @map("aulas_usadas_semana")
+  semanaReferencia  DateTime  @map("semana_referencia")
 
   usuario    Usuario    @relation(fields: [usuarioId], references: [id])
   plano      Plano      @relation(fields: [planoId], references: [id])
@@ -320,10 +339,10 @@ model CreditoReposicao {
 }
 
 model Presenca {
-  id            String      @id @default(uuid())
-  agendamentoId String      @unique @map("agendamento_id")
-  compareceu    Boolean     @default(false)
-  registradoEm  DateTime    @default(now()) @map("registrado_em")
+  id            String   @id @default(uuid())
+  agendamentoId String   @unique @map("agendamento_id")
+  compareceu    Boolean  @default(false)
+  registradoEm  DateTime @default(now()) @map("registrado_em")
 
   agendamento Agendamento @relation(fields: [agendamentoId], references: [id])
 

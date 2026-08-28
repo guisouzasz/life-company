@@ -19,6 +19,8 @@ import { Button } from '../components/ui/button';
 import { Input, PasswordToggle } from '../components/ui/input';
 import { Icon } from '../components/ui/icon';
 import { useAtivarConta, usePrimeiroAcesso } from '../services/auth/auth.mutations';
+import { TermoModal } from '../components/termo-modal';
+import { useTermo } from '../services/termos/termos.queries';
 import { ApiError } from '../services/http';
 
 const RULES = [
@@ -79,6 +81,18 @@ export default function PrimeiroAcesso() {
   const ativarConta = useAtivarConta();
   const pendente = comToken ? primeiroAcesso.isPending : ativarConta.isPending;
 
+  /**
+   * Aceite do termo do estúdio.
+   *
+   * Guarda a VERSÃO aceita, não um booleano: é ela que vai no pedido e fica
+   * gravada no cadastro, dizendo qual redação a pessoa leu. Se o estúdio
+   * publicar um texto novo com a tela aberta, a API recusa a versão velha.
+   */
+  const termo = useTermo();
+  const [termoAberto, setTermoAberto] = useState(false);
+  const [versaoAceita, setVersaoAceita] = useState<string | null>(null);
+  const [faltaAceitar, setFaltaAceitar] = useState(false);
+
   const {
     control,
     handleSubmit,
@@ -101,11 +115,23 @@ export default function PrimeiroAcesso() {
   };
 
   const onSubmit = handleSubmit((values) => {
+    // Sem aceite não conclui. A API recusa do mesmo jeito; aqui é só para o
+    // aluno ver o motivo na hora, em vez de levar um erro do servidor.
+    if (!versaoAceita) {
+      setFaltaAceitar(true);
+      return;
+    }
     const cpf = values.cpf.replace(/\D/g, '');
     if (comToken) {
-      primeiroAcesso.mutate({ token: tokenFromLink, cpf, senha: values.senha }, { onSuccess: irParaApp });
+      primeiroAcesso.mutate(
+        { token: tokenFromLink, cpf, senha: values.senha, termoVersao: versaoAceita },
+        { onSuccess: irParaApp },
+      );
     } else {
-      ativarConta.mutate({ cpf, email: (values.email ?? '').trim(), senha: values.senha }, { onSuccess: irParaApp });
+      ativarConta.mutate(
+        { cpf, email: (values.email ?? '').trim(), senha: values.senha, termoVersao: versaoAceita },
+        { onSuccess: irParaApp },
+      );
     }
   });
 
@@ -235,10 +261,63 @@ export default function PrimeiroAcesso() {
               })}
             </View>
 
+            {/* ── Termo do estúdio ─────────────────────────────────── */}
+            <View style={[s.termoBox, faltaAceitar && !versaoAceita && s.termoBoxErro]}>
+              <Pressable
+                style={s.termoLinha}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: !!versaoAceita }}
+                accessibilityLabel="Li e concordo com o Termo de Normas do estúdio"
+                onPress={() => {
+                  // Desmarcar é direto; marcar passa pela leitura do texto.
+                  if (versaoAceita) return setVersaoAceita(null);
+                  setTermoAberto(true);
+                }}
+              >
+                <Icon
+                  name={versaoAceita ? 'checkbox' : 'square-outline'}
+                  size={22}
+                  color={versaoAceita ? LC.primary : LC.textMuted}
+                />
+                <Text style={s.termoTexto}>
+                  Li e concordo com o{' '}
+                  <Text style={s.termoLink} onPress={() => setTermoAberto(true)}>
+                    Termo de Normas, Políticas de Agendamento e Pagamento
+                  </Text>
+                  .
+                </Text>
+              </Pressable>
+              <Pressable onPress={() => setTermoAberto(true)} hitSlop={6}>
+                <Text style={s.termoAbrir}>
+                  {versaoAceita ? 'Reler o termo' : 'Abrir e ler o termo'}
+                </Text>
+              </Pressable>
+              {faltaAceitar && !versaoAceita ? (
+                <Text style={s.termoErro}>
+                  É preciso aceitar o termo para concluir o primeiro acesso.
+                </Text>
+              ) : null}
+              {termo.isError ? (
+                <Text style={s.termoErro}>
+                  Não consegui carregar o termo. Verifique a conexão e tente de novo.
+                </Text>
+              ) : null}
+            </View>
+
             <Button title={comToken ? 'Criar senha' : 'Ativar conta'} size="lg" loading={pendente} onPress={onSubmit} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <TermoModal
+        visible={termoAberto}
+        onFechar={() => setTermoAberto(false)}
+        onAceitar={(versao) => {
+          setVersaoAceita(versao);
+          setFaltaAceitar(false);
+          setTermoAberto(false);
+        }}
+      />
     </View>
   );
 }
@@ -277,6 +356,16 @@ const s = StyleSheet.create({
   errorText: { color: LC.danger, fontSize: 13, fontWeight: '500', flex: 1 },
   form: { gap: 16 },
   rules: { backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border, borderRadius: LC.radius.md, padding: 14, gap: 10 },
+  termoBox: {
+    backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border,
+    borderRadius: LC.radius.md, padding: 14, gap: 8,
+  },
+  termoBoxErro: { borderColor: LC.danger, backgroundColor: LC.dangerBg },
+  termoLinha: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  termoTexto: { flex: 1, fontSize: 13.5, color: LC.textSecondary, lineHeight: 20 },
+  termoLink: { color: LC.primary, fontWeight: '700', textDecorationLine: 'underline' },
+  termoAbrir: { fontSize: 13, fontWeight: '700', color: LC.primary, marginLeft: 32 },
+  termoErro: { fontSize: 12.5, color: LC.danger, lineHeight: 18, marginLeft: 32 },
   rulesTitle: { fontSize: 13, fontWeight: '600', color: LC.textSecondary, marginBottom: 2 },
   ruleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ruleText: { fontSize: 13, color: LC.textMuted },

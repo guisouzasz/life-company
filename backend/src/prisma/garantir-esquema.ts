@@ -34,6 +34,35 @@ const AJUSTES: { descricao: string; sql: string }[] = [
             ADD COLUMN IF NOT EXISTS "cep" TEXT,
             ADD COLUMN IF NOT EXISTS "data_nascimento" TIMESTAMP(3)`,
   },
+  {
+    // Sem esta tabela o primeiro acesso quebraria: ele grava o aceite do termo
+    // na mesma transação que cria a senha do aluno.
+    descricao: 'aceites_termo: aceite do termo de normas no primeiro acesso',
+    sql: `CREATE TABLE IF NOT EXISTS "aceites_termo" (
+            "id" TEXT NOT NULL,
+            "usuario_id" TEXT NOT NULL,
+            "versao" TEXT NOT NULL,
+            "aceito_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "aceites_termo_pkey" PRIMARY KEY ("id")
+          )`,
+  },
+  {
+    descricao: 'aceites_termo: um aceite por versão, por aluno',
+    sql: `CREATE UNIQUE INDEX IF NOT EXISTS "aceites_termo_usuario_id_versao_key"
+            ON "aceites_termo" ("usuario_id", "versao")`,
+  },
+  {
+    // Mesma chave estrangeira que o `db push` cria, para a tabela nascer aqui
+    // idêntica à que o Prisma espera. Postgres não tem ADD CONSTRAINT IF NOT
+    // EXISTS, daí o bloco que engole o erro de constraint repetida.
+    descricao: 'aceites_termo: chave estrangeira para usuarios',
+    sql: `DO $$ BEGIN
+            ALTER TABLE "aceites_termo"
+              ADD CONSTRAINT "aceites_termo_usuario_id_fkey"
+              FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id")
+              ON DELETE RESTRICT ON UPDATE CASCADE;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+  },
 ];
 
 /**

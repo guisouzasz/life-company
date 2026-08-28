@@ -16,6 +16,7 @@ import { LoginDto } from "./dto/login.dto";
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
 import { AtivarContaDto, erroDeEmail } from "./dto/ativar-conta.dto";
 import { segredoJwt } from "./jwt.config";
+import { VERSAO_TERMO } from "../termos/termo";
 
 /** Domínio público do estúdio — destino dos links de primeiro acesso. */
 const APP_URL_PUBLICA = "https://www.academialifecompany.com.br";
@@ -114,6 +115,7 @@ export class AuthService {
       throw new UnauthorizedException("CPF não corresponde");
     if (registro.usuario.senhaHash)
       throw new ConflictException("Conta já ativada");
+    this.conferirAceiteDoTermo(registro.usuario.tipoUsuario, dto.termoVersao);
     const senhaHash = await bcrypt.hash(dto.senha, 12);
     await this.prisma.$transaction([
       this.prisma.usuario.update({
@@ -124,6 +126,7 @@ export class AuthService {
         where: { id: registro.id },
         data: { usado: true },
       }),
+      ...this.gravarAceiteDoTermo(registro.usuarioId, registro.usuario.tipoUsuario),
     ]);
     return this.gerarTokens(
       registro.usuarioId,
@@ -159,6 +162,7 @@ export class AuthService {
     if (emailEmUso)
       throw new ConflictException("Este e-mail já está em uso por outra conta.");
 
+    this.conferirAceiteDoTermo(usuario.tipoUsuario, dto.termoVersao);
     const senhaHash = await bcrypt.hash(dto.senha, 12);
     await this.prisma.$transaction([
       this.prisma.usuario.update({
@@ -170,8 +174,49 @@ export class AuthService {
         where: { usuarioId: usuario.id, usado: false },
         data: { usado: true },
       }),
+      ...this.gravarAceiteDoTermo(usuario.id, usuario.tipoUsuario),
     ]);
     return this.gerarTokens(usuario.id, usuario.tipoUsuario, usuario.nome);
+  }
+
+  /**
+   * O aceite do termo é condição para o aluno concluir o primeiro acesso.
+   *
+   * Fica no serviço, e não só no app: a checagem tem de valer para qualquer
+   * chamada da rota, senão bastaria montar o pedido fora da tela para criar a
+   * senha sem ter aceitado nada — e o aceite perderia o sentido.
+   *
+   * Só vale para ALUNO. Professor e admin ativam a conta pelas mesmas rotas e
+   * não assinam um termo que fala de mensalidade e reposição de aula.
+   */
+  private conferirAceiteDoTermo(tipoUsuario: string, versaoAceita?: string) {
+    if (tipoUsuario !== "ALUNO") return;
+    if (!versaoAceita) {
+      throw new BadRequestException(
+        "É preciso aceitar o Termo de Normas para concluir o primeiro acesso.",
+      );
+    }
+    if (versaoAceita !== VERSAO_TERMO) {
+      // Acontece quando o estúdio publica um termo novo com a tela aberta: o
+      // aluno leu a redação antiga, e registrar esse aceite como se fosse do
+      // texto novo seria falso.
+      throw new BadRequestException(
+        "O termo foi atualizado enquanto você lia. Recarregue a página e leia a versão nova.",
+      );
+    }
+  }
+
+  /**
+   * A linha do aceite, para entrar na MESMA transação que cria a senha: ou o
+   * aluno é ativado e o aceite fica registrado, ou nada acontece.
+   */
+  private gravarAceiteDoTermo(usuarioId: string, tipoUsuario: string) {
+    if (tipoUsuario !== "ALUNO") return [];
+    return [
+      this.prisma.aceiteTermo.create({
+        data: { usuarioId, versao: VERSAO_TERMO },
+      }),
+    ];
   }
 
   /**

@@ -4,6 +4,7 @@ export const queryKeys = {
   meusAgendamentos: ['agendamentos', 'meus'] as const,
   historico: ['agendamentos', 'historico'] as const,
   modalidades: ['modalidades'] as const,
+  termo: ['termos', 'vigente'] as const,
   planos: ['planos'] as const,
   vagas: (modalidadeId: string, data: string) => ['horarios', 'vagas', modalidadeId, data] as const,
   horarios: ['horarios'] as const,

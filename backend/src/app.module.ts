@@ -19,6 +19,7 @@ import { FinanceiroModule } from './financeiro/financeiro.module';
 import { TreinosModule } from './treinos/treinos.module';
 import { CargasModule } from './cargas/cargas.module';
 import { AnamneseModule } from './anamnese/anamnese.module';
+import { TermosModule } from './termos/termos.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { AnamneseModule } from './anamnese/anamnese.module';
     TreinosModule,
     CargasModule,
     AnamneseModule,
+    TermosModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

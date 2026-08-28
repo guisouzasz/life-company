@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -62,4 +62,16 @@ export class AtivarContaDto {
   @IsString()
   @MinLength(6)
   senha: string;
+
+  /**
+   * Versão do termo que o aluno declarou aceitar.
+   *
+   * Opcional no DTO, obrigatório no serviço quando quem ativa é ALUNO:
+   * professor e admin ativam pela mesma rota e não assinam o termo do aluno.
+   * A versão precisa bater com a vigente — aceite de texto antigo não vale.
+   */
+  @ApiProperty({ required: false, example: '2026-08-27', description: 'Versão do termo aceito (obrigatória para ALUNO)' })
+  @IsOptional()
+  @IsString()
+  termoVersao?: string;
 }

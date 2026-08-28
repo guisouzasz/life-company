@@ -9,6 +9,12 @@ export interface PrimeiroAcessoPayload {
   token: string;
   cpf: string;
   senha: string;
+  /**
+   * Versão do termo aceito. A API recusa a ativação de ALUNO sem ela — o
+   * aceite é condição para concluir o primeiro acesso, não só um visto na
+   * tela. Professor e admin ativam pela mesma rota e não assinam o termo.
+   */
+  termoVersao?: string;
 }
 
 /** POST /auth/ativar-conta — ativação sem link, com CPF + e-mail. */
@@ -16,6 +22,8 @@ export interface AtivarContaPayload {
   cpf: string;
   email: string;
   senha: string;
+  /** Idem: obrigatória para ALUNO. */
+  termoVersao?: string;
 }
 
 /** Resposta de /auth/login e /auth/primeiro-acesso. */
