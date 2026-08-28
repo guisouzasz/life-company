@@ -16,3 +16,10 @@ export interface Termo {
   secoes: SecaoDoTermo[];
   declaracao: string;
 }
+
+/** GET /termos/meu — se o aluno logado ainda deve o aceite. */
+export interface SituacaoDoTermo {
+  precisaAceitar: boolean;
+  versao: string;
+  aceitoEm: string | null;
+}

@@ -1,8 +1,13 @@
 /**
  * Regras de prazo de cancelamento por período da aula (espelha o backend).
- *  - Manhã  (06:30–11:30): até 20:00 do dia anterior
- *  - Tarde  (13:00–17:00): até 09:00 do próprio dia
+ *  - Manhã  (05:30–11:30): até 20:00 do dia anterior
+ *  - Tarde  (13:00–17:00): até 10:00 do próprio dia
  *  - Noite  (18:00–22:00): até 14:00 do próprio dia
+ *
+ * São os prazos do Termo de Normas que o aluno aceita no primeiro acesso
+ * (backend/src/termos/termo.ts, seção 2). Mudar aqui sem mudar lá — e sem
+ * mudar o backend, que é quem decide — deixa o app prometendo um prazo que
+ * a API não cumpre.
  */
 import { formatDate } from './date';
 
@@ -26,7 +31,7 @@ export function limiteCancelamento(dataAula: string, horaInicio: string): Date {
       d.setHours(20, 0, 0, 0);
       break;
     case 'tarde':
-      d.setHours(9, 0, 0, 0);
+      d.setHours(10, 0, 0, 0);
       break;
     case 'noite':
       d.setHours(14, 0, 0, 0);

@@ -55,7 +55,9 @@ export default function MinhasAulas() {
         >
           {meus.data && meus.data.length > 0 ? (
             meus.data.map((ag) => {
-              const liberado = podeCancelar(ag.dataAula, ag.horario.horaInicio);
+              // Reposição não se cancela (Termo de Normas, seção 3) — mostrar
+              // o botão só levaria o aluno a um erro vindo da API.
+              const liberado = !ag.reposicao && podeCancelar(ag.dataAula, ag.horario.horaInicio);
               return (
                 <Card key={ag.id} style={s.card} padding={16}>
                   <View style={s.dateBubble}>
@@ -90,7 +92,9 @@ export default function MinhasAulas() {
                     />
                   ) : (
                     <View style={s.prazoTag}>
-                      <Text style={s.prazoText}>Prazo encerrado</Text>
+                      <Text style={s.prazoText}>
+                        {ag.reposicao ? 'Confirmada' : 'Prazo encerrado'}
+                      </Text>
                     </View>
                   )}
                 </Card>
@@ -115,11 +119,7 @@ export default function MinhasAulas() {
         title="Cancelar aula"
         message={
           alvo
-            ? `${nomeModalidade(alvo.horario.modalidade.nome)} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.\n\n${
-                alvo.reposicao
-                  ? '⚠️ Esta é uma aula de reposição: ao cancelar, o crédito usado NÃO é devolvido.'
-                  : `Cancelando dentro do prazo, você recebe 1 crédito de reposição (válido por ${DIAS_VALIDADE_CREDITO} dias).`
-              }`
+            ? `${nomeModalidade(alvo.horario.modalidade.nome)} • ${formatDate(alvo.dataAula, 'DD/MM')} às ${alvo.horario.horaInicio}.\n${prazoLabel(alvo.dataAula, alvo.horario.horaInicio)}.\n\nCancelando dentro do prazo, você recebe 1 crédito de reposição (válido por ${DIAS_VALIDADE_CREDITO} dias).`
             : ''
         }
         confirmLabel="Cancelar aula"

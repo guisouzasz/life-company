@@ -162,7 +162,9 @@ export default function Dashboard() {
               <Text style={s.sectionTitle}>Minhas aulas agendadas</Text>
             </View>
             {meus.data.slice(0, 4).map((ag) => {
-              const liberado = podeCancelar(ag.dataAula, ag.horario.horaInicio);
+              // Reposição não se cancela (Termo de Normas, seção 3) — mostrar
+              // o botão só levaria o aluno a um erro vindo da API.
+              const liberado = !ag.reposicao && podeCancelar(ag.dataAula, ag.horario.horaInicio);
               return (
                 <Card key={ag.id} style={s.aulaCard} padding={14}>
                   <View style={s.aulaIcon}>
@@ -187,7 +189,7 @@ export default function Dashboard() {
                     />
                   ) : (
                     <View style={s.prazoTag}>
-                      <Text style={s.prazoText}>Prazo encerrado</Text>
+                      <Text style={s.prazoText}>{ag.reposicao ? 'Reposição' : 'Prazo encerrado'}</Text>
                     </View>
                   )}
                 </Card>

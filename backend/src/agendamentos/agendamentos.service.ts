@@ -4,7 +4,11 @@ import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
 import { CriarAgendamentoAdminDto } from './dto/criar-agendamento-admin.dto';
-import { DIAS_VALIDADE_CREDITO } from '../creditos/creditos.constantes';
+import {
+  DIAS_PERIODO_REPOSICOES,
+  DIAS_VALIDADE_CREDITO,
+  MAX_REPOSICOES_POR_PERIODO,
+} from '../creditos/creditos.constantes';
 import { capacidadeEfetiva } from '../horarios/capacidade';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
@@ -195,6 +199,39 @@ export class AgendamentosService {
           orderBy: { expiraEm: 'asc' },
         });
         if (!credito) throw new ForbiddenException('Você não possui crédito de reposição válido');
+
+        /**
+         * Teto de reposições da janela (Termo de Normas, seção 3).
+         *
+         * Conta pela data em que a reposição foi MARCADA, não pela data da
+         * aula: o termo fala em "agendar até 5 a cada 30 dias", e é o ato de
+         * marcar que ocupa a vaga de outra pessoa. Reposição cancelada não
+         * conta — o crédito já se perdeu ali, cobrar de novo na cota seria
+         * punir duas vezes pelo mesmo cancelamento.
+         */
+        const desde = dayjs().subtract(DIAS_PERIODO_REPOSICOES, 'day').toDate();
+        const marcadasNaJanela = await tx.agendamento.findMany({
+          where: {
+            usuarioId,
+            reposicao: true,
+            status: { not: 'CANCELADO' },
+            createdAt: { gte: desde },
+          },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        });
+        if (marcadasNaJanela.length >= MAX_REPOSICOES_POR_PERIODO) {
+          // Quando a mais antiga sair da janela, abre uma vaga de novo — dizer
+          // a data evita o aluno ficar tentando todo dia sem saber o porquê.
+          const liberaEm = dayjs(marcadasNaJanela[0].createdAt)
+            .add(DIAS_PERIODO_REPOSICOES, 'day')
+            .format('DD/MM');
+          throw new ForbiddenException(
+            `Você já agendou ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
+              `que é o limite. A próxima vaga abre em ${liberaEm}.`,
+          );
+        }
+
         const agendamento = await gravar({ reposicao: true, creditoId: credito.id });
         await tx.creditoReposicao.update({
           where: { id: credito.id },
@@ -271,17 +308,36 @@ export class AgendamentosService {
     if (!ag) throw new NotFoundException('Agendamento não encontrado');
     if (ag.status !== 'CONFIRMADO') throw new BadRequestException('Agendamento não pode ser cancelado');
 
-    // Prazo de cancelamento por período da aula:
-    //  - Manhã  (06:30–11:30): até 20:00 do dia anterior
-    //  - Tarde  (13:00–17:00): até 09:00 do próprio dia
+    /**
+     * Reposição marcada não se desmarca (Termo de Normas, seção 3:
+     * "uma vez agendada no sistema, a reposição é confirmada e não permite
+     * novo cancelamento ou reagendamento").
+     *
+     * Antes daqui o cancelamento passava e o aluno só perdia o crédito. O
+     * efeito para ele era parecido, mas a vaga voltava para a turma tarde
+     * demais para outra pessoa aproveitar — e o texto que ele assinou diz o
+     * contrário. Quem precisa desfazer é o estúdio, pelo painel.
+     */
+    if (ag.reposicao) {
+      throw new ForbiddenException(
+        'Aula de reposição não pode ser cancelada — uma vez agendada, ela é confirmada. ' +
+          'Fale com o estúdio pelo WhatsApp se houver algum imprevisto.',
+      );
+    }
+
+    // Prazo de cancelamento por período da aula — os prazos do Termo de
+    // Normas que o aluno aceita no primeiro acesso (termos/termo.ts, seção 2):
+    //  - Manhã  (05:30–11:30): até 20:00 do dia anterior
+    //  - Tarde  (13:00–17:00): até 10:00 do próprio dia
     //  - Noite  (18:00–22:00): até 14:00 do próprio dia
+    // O espelho no app é src/services/cancelamento.ts; os três andam juntos.
     const [hIni, mIni] = ag.horario.horaInicio.split(':').map((n) => parseInt(n, 10));
     const inicioMin = hIni * 60 + mIni;
     let limite: dayjs.Dayjs;
     if (inicioMin < 720) {
       limite = dayjs(ag.dataAula).subtract(1, 'day').hour(20).minute(0).second(0).millisecond(0);
     } else if (inicioMin < 1080) {
-      limite = dayjs(ag.dataAula).hour(9).minute(0).second(0).millisecond(0);
+      limite = dayjs(ag.dataAula).hour(10).minute(0).second(0).millisecond(0);
     } else {
       limite = dayjs(ag.dataAula).hour(14).minute(0).second(0).millisecond(0);
     }
@@ -289,13 +345,8 @@ export class AgendamentosService {
       throw new ForbiddenException('O prazo de cancelamento deste horário já encerrou. A aula será contabilizada.');
     }
 
-    // Aula de reposição: cancelar NÃO gera novo crédito — o crédito é perdido.
-    if (ag.reposicao) {
-      await this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } });
-      return { mensagem: 'Aula de reposição cancelada. O crédito foi perdido e não gera novo crédito.' };
-    }
-
     // Aula normal cancelada no prazo → convertida em 1 crédito de reposição
+    // (a de reposição já saiu lá em cima: ela não é cancelável pelo aluno).
     const expiraEm = dayjs(ag.dataAula).add(DIAS_VALIDADE_CREDITO, 'day').endOf('day').toDate();
     await this.prisma.$transaction([
       this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),

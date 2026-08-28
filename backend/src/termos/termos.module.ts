@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TermosController } from './termos.controller';
+import { TermosService } from './termos.service';
 
-@Module({ controllers: [TermosController] })
+@Module({ controllers: [TermosController], providers: [TermosService] })
 export class TermosModule {}

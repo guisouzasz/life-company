@@ -2,7 +2,7 @@ import { ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LC } from '../constants/theme';
 import { formatarReal, valorOuNulo } from '../services/mascaras';
-import { DIAS_VALIDADE_CREDITO } from '../constants/app';
+import { DIAS_PERIODO_REPOSICOES, DIAS_VALIDADE_CREDITO, MAX_REPOSICOES_POR_PERIODO } from '../constants/app';
 import { TabBar } from '../components/tab-bar';
 import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
@@ -124,6 +124,16 @@ export default function MeuPlano() {
                 Cancelamentos dentro do prazo viram crédito (válido por {DIAS_VALIDADE_CREDITO} dias) para você repor a aula quando quiser.
               </Text>
             )}
+            {/*
+              As duas regras do termo que o aluno esbarra na hora de repor:
+              o teto da janela e o compromisso de presença. Ficam aqui porque
+              é onde ele olha os créditos antes de marcar — descobrir o limite
+              só no erro da tela de agendamento seria tarde.
+            */}
+            <Text style={s.credHint}>
+              Você pode agendar até {MAX_REPOSICOES_POR_PERIODO} reposições a cada {DIAS_PERIODO_REPOSICOES} dias.
+              Depois de marcada, a reposição é confirmada e não pode ser cancelada.
+            </Text>
           </Card>
 
           {/* Detalhes */}

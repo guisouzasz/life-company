@@ -20,6 +20,16 @@ export const STUDIO_NOME = 'Academia Life Company';
  */
 export const DIAS_VALIDADE_CREDITO = 30;
 
+/**
+ * Teto de reposições por janela, para os textos que explicam a regra.
+ *
+ * Quem barra de verdade é o backend; isto existe só para o app dizer o mesmo
+ * número. Espelha MAX_REPOSICOES_POR_PERIODO e DIAS_PERIODO_REPOSICOES em
+ * backend/src/creditos/creditos.constantes.ts — manter em sincronia.
+ */
+export const MAX_REPOSICOES_POR_PERIODO = 5;
+export const DIAS_PERIODO_REPOSICOES = 30;
+
 export const DIAS_PT: Record<string, string> = {
   SEGUNDA: 'Segunda',
   TERCA: 'Terça',

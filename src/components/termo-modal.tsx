@@ -31,10 +31,23 @@ export function TermoModal({
   visible,
   onFechar,
   onAceitar,
+  /**
+   * Aceite obrigatório: some o X e o "Fechar", porque não há como usar o app
+   * sem aceitar. No lugar entra a saída da conta — travar alguém dentro de
+   * uma tela sem porta nenhuma seria pior do que a regra que ela protege.
+   */
+  obrigatorio = false,
+  aviso,
+  aceitando = false,
+  erro,
 }: {
   visible: boolean;
   onFechar: () => void;
   onAceitar: (versao: string) => void;
+  obrigatorio?: boolean;
+  aviso?: string;
+  aceitando?: boolean;
+  erro?: string | null;
 }) {
   const termo = useTermo();
   const [alturaVisivel, setAlturaVisivel] = useState(0);
@@ -55,19 +68,28 @@ export function TermoModal({
     <RNModal visible={visible} animationType="slide" onRequestClose={onFechar} statusBarTranslucent>
       <View style={s.root}>
         <View style={s.header}>
-          <Pressable
-            onPress={onFechar}
-            hitSlop={10}
-            style={s.fechar}
-            accessibilityRole="button"
-            accessibilityLabel="Fechar o termo"
-          >
-            <Icon name="close" size={22} color={LC.textSecondary} />
-          </Pressable>
+          {obrigatorio ? null : (
+            <Pressable
+              onPress={onFechar}
+              hitSlop={10}
+              style={s.fechar}
+              accessibilityRole="button"
+              accessibilityLabel="Fechar o termo"
+            >
+              <Icon name="close" size={22} color={LC.textSecondary} />
+            </Pressable>
+          )}
           <Text style={s.headerTitulo} numberOfLines={2}>
             {termo.data?.titulo ?? 'Termo de Normas'}
           </Text>
         </View>
+
+        {aviso ? (
+          <View style={s.aviso}>
+            <Icon name="information-circle-outline" size={17} color={LC.primaryDark} />
+            <Text style={s.avisoTexto}>{aviso}</Text>
+          </View>
+        ) : null}
 
         {termo.isLoading ? (
           <View style={s.centro}>
@@ -116,13 +138,21 @@ export function TermoModal({
                   <Text style={s.dica}>Role até o fim do texto para poder aceitar.</Text>
                 </View>
               ) : null}
+              {erro ? <Text style={s.erro}>{erro}</Text> : null}
               <Button
                 title="Li e concordo"
                 size="lg"
                 disabled={!podeAceitar}
+                loading={aceitando}
                 onPress={() => onAceitar(termo.data!.versao)}
               />
-              <Button title="Fechar" variant="outline" size="sm" onPress={onFechar} style={{ marginTop: 8 }} />
+              <Button
+                title={obrigatorio ? 'Sair da conta' : 'Fechar'}
+                variant="outline"
+                size="sm"
+                onPress={onFechar}
+                style={{ marginTop: 8 }}
+              />
             </View>
           </>
         )}
@@ -160,6 +190,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 14, paddingBottom: 28,
     backgroundColor: LC.bgCard, borderTopWidth: 1, borderTopColor: LC.border,
   },
+  aviso: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    paddingHorizontal: 20, paddingVertical: 12, backgroundColor: LC.primaryLight,
+  },
+  avisoTexto: { flex: 1, fontSize: 13, color: LC.primaryDark, lineHeight: 19 },
+  erro: { fontSize: 13, color: LC.danger, lineHeight: 19, marginBottom: 10, textAlign: 'center' },
   dicaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 10 },
   dica: { fontSize: 12.5, color: LC.textMuted },
 });

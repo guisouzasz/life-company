@@ -7,6 +7,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { LC } from '../constants/theme';
 import { useAuthStore } from '../store/auth';
 import { LimiteDeErro } from '../components/limite-de-erro';
+import { PortaoDoTermo } from '../components/portao-do-termo';
 import { queryClient } from '../lib/query-client';
 
 function RootNavigator() {
@@ -59,6 +60,10 @@ function RootNavigator() {
     <>
       <StatusBar barStyle="dark-content" backgroundColor={LC.bg} />
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }} />
+      {/* Aluno que já tinha conta antes do termo (ou de uma redação nova) lê e
+          aceita aqui, na primeira abertura depois do login. Fica sobre o Stack
+          porque vale em qualquer tela do app, não numa rota só. */}
+      <PortaoDoTermo />
     </>
   );
 }
