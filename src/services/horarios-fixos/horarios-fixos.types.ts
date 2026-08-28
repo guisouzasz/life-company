@@ -28,6 +28,8 @@ export interface HorarioFixoCriado extends HorarioFixo {
     erros: number;
     /** Mensagens da API, sem repetir a mesma várias vezes. */
     motivos?: string[];
+    /** Datas (YYYY-MM-DD) em que o aluno realmente entrou na turma. */
+    datas?: string[];
   };
 }
 

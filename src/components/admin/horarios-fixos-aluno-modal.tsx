@@ -135,20 +135,47 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
            */
           const g = resposta?.geracao;
           if (!g) return;
+          const nome = nomeCurto(aluno.nome);
+          const quando = (g.datas ?? []).map((d) => formatDate(d, 'ddd, DD/MM')).join(', ');
+
           if (g.criados === 0 && g.erros > 0) {
             setAviso({
               titulo: 'Horário salvo, aulas não',
               texto:
-                `O horário fixo foi salvo, mas nenhuma aula foi marcada para ${nomeCurto(aluno.nome)}: ` +
+                `O horário fixo foi salvo, mas nenhuma aula foi marcada para ${nome}: ` +
                 (g.motivos?.join(' ') || 'não foi possível gerar as aulas.') +
                 ' Resolva isso e adicione o horário de novo.',
+            });
+          } else if (g.criados === 0) {
+            /**
+             * Nada criado e nada falhou: o aluno já estava marcado em todas as
+             * datas. Antes isso não dizia nada, e "salvei e não aconteceu nada"
+             * era indistinguível de erro.
+             */
+            setAviso({
+              titulo: 'Horário salvo',
+              texto: `${nome} já estava marcado nas próximas aulas desse horário. Nada mudou.`,
             });
           } else if (g.erros > 0) {
             setAviso({
               titulo: 'Parte das aulas não entrou',
               texto:
-                `${g.criados} aula(s) marcada(s), mas outras não: ` +
-                (g.motivos?.join(' ') || 'não foi possível gerar todas.'),
+                `${nome} entrou em ${quando || `${g.criados} aula(s)`}. As outras não: ` +
+                (g.motivos?.join(' ') || 'não foi possível gerar todas.') +
+                ' Para colocar numa aula que ficou de fora, use a aba Agenda.',
+            });
+          } else {
+            /**
+             * Deu tudo certo — e mesmo assim precisa dizer ONDE. O horário fixo
+             * só marca as próximas duas semanas; quando a primeira ocorrência
+             * cai fora dessa janela, a dona olhava a semana atual na agenda,
+             * não via o aluno, e concluía que não tinha funcionado.
+             */
+            setAviso({
+              titulo: 'Horário fixo criado',
+              texto: quando
+                ? `${nome} está marcado em: ${quando}. As próximas semanas entram sozinhas.`
+                : `${nome} foi fixado neste horário.`,
             });
           }
         },
