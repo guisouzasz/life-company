@@ -24,6 +24,18 @@ export class HorariosController {
     return this.service.listar(modalidadeId, diaSemana, todos === '1' || todos === 'true');
   }
 
+  /**
+   * A grade da semana com os alunos de cada turma (admin).
+   *
+   * Fica antes das rotas com parâmetro para o Nest não ler "semana" como um id.
+   */
+  @Get('semana')
+  @UseGuards(AdminGuard)
+  @ApiQuery({ name: 'inicio', required: false, description: 'Qualquer data da semana desejada (YYYY-MM-DD). Padrão: semana atual.' })
+  semana(@Query('inicio') inicio?: string) {
+    return this.service.listarSemana(inicio);
+  }
+
   @Get('vagas')
   @ApiQuery({ name: 'modalidadeId', required: false })
   @ApiQuery({ name: 'data', required: true })

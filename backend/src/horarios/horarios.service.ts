@@ -22,6 +22,91 @@ export class HorariosService {
     return hoje.add((alvo - hoje.isoWeekday() + 7) % 7, 'day').toDate();
   }
 
+  /**
+   * A semana inteira do estúdio: segunda a sexta, cada turma com quem está
+   * dentro.
+   *
+   * A tela de horários mostra uma turma por vez, e só a próxima ocorrência
+   * dela — dá para gerenciar a grade, mas não para enxergar o dia. Esta visão
+   * existe para a pergunta que a dona faz o tempo todo: "quem está na quinta
+   * às 19h?", e para ela poder pôr alguém ali sem passar pelo horário fixo.
+   *
+   * `inicio` pode ser qualquer data da semana desejada — a função ancora na
+   * segunda-feira daquela semana, então a tela pode mandar simplesmente o dia
+   * que o usuário está olhando.
+   *
+   * Uma consulta para as turmas e outra para os agendamentos da semana toda; o
+   * cruzamento é em memória. Buscar aula por aula seriam ~50 idas ao banco
+   * para montar uma tela só.
+   */
+  async listarSemana(inicio?: string) {
+    const base = inicio ? dayjs(inicio) : dayjs();
+    const segunda = base.startOf('isoWeek').startOf('day');
+    const sexta = segunda.add(4, 'day');
+
+    const [horarios, agendamentos] = await Promise.all([
+      this.prisma.horario.findMany({
+        where: { ativo: true },
+        include: { modalidade: true },
+        orderBy: [{ horaInicio: 'asc' }],
+      }),
+      this.prisma.agendamento.findMany({
+        where: {
+          status: 'CONFIRMADO',
+          dataAula: { gte: segunda.toDate(), lte: sexta.endOf('day').toDate() },
+        },
+        include: { usuario: { select: { id: true, nome: true } } },
+      }),
+    ]);
+
+    // Chave (turma + dia) → quem está marcado. Evita varrer a lista de
+    // agendamentos uma vez por célula da grade.
+    const porTurmaEDia = new Map<string, typeof agendamentos>();
+    for (const ag of agendamentos) {
+      const chave = `${ag.horarioId}|${dayjs(ag.dataAula).format('YYYY-MM-DD')}`;
+      const lista = porTurmaEDia.get(chave);
+      if (lista) lista.push(ag);
+      else porTurmaEDia.set(chave, [ag]);
+    }
+
+    const dias = [0, 1, 2, 3, 4].map((n) => {
+      const dia = segunda.add(n, 'day');
+      const data = dia.format('YYYY-MM-DD');
+      const nomeDoDia = Object.keys(DIA_PARA_NUMERO).find(
+        (k) => DIA_PARA_NUMERO[k] === dia.isoWeekday(),
+      )!;
+
+      const aulas = horarios
+        .filter((h) => h.diaSemana === nomeDoDia)
+        .map((h) => {
+          const dentro = porTurmaEDia.get(`${h.id}|${data}`) ?? [];
+          // O teto da modalidade, não só o número gravado na turma: turma
+          // antiga salva com capacidade maior mostraria vaga que a API recusa.
+          const capacidade = capacidadeEfetiva(h.capacidadeMaxima, h.modalidade?.nome);
+          return {
+            horarioId: h.id,
+            horaInicio: h.horaInicio,
+            horaFim: h.horaFim,
+            modalidade: { id: h.modalidade.id, nome: h.modalidade.nome },
+            capacidade,
+            vagas: Math.max(capacidade - dentro.length, 0),
+            alunos: dentro
+              .map((ag) => ({
+                agendamentoId: ag.id,
+                usuarioId: ag.usuarioId,
+                nome: ag.usuario.nome,
+                reposicao: ag.reposicao,
+              }))
+              .sort((a, b) => a.nome.localeCompare(b.nome)),
+          };
+        });
+
+      return { data, diaSemana: nomeDoDia, aulas };
+    });
+
+    return { inicio: segunda.format('YYYY-MM-DD'), fim: sexta.format('YYYY-MM-DD'), dias };
+  }
+
   /** `incluirInativos` (admin): lista também horários desativados, para gestão. */
   async listar(modalidadeId?: string, diaSemana?: string, incluirInativos = false) {
     const horarios = await this.prisma.horario.findMany({

@@ -76,8 +76,22 @@ function rotuloDaAula(a: AulaDaSemana) {
  * pela aula da semana que está ocupando a vaga, que é o remanejamento que a
  * dona faz o tempo todo.
  */
-export function AlunosHorarioModal({ horario, onClose }: { horario: HorarioDoModal | null; onClose: () => void }) {
-  const data = horario ? proximaDataDoDia(horario.diaSemana) : undefined;
+export function AlunosHorarioModal({
+  horario,
+  onClose,
+  /**
+   * Dia exato da aula (YYYY-MM-DD). A agenda semanal manda a data da célula
+   * que a dona tocou; sem isto o modal cairia sempre na próxima ocorrência do
+   * dia da semana, e ela abriria a quinta da semana que vem achando que era a
+   * desta. As telas antigas não mandam nada e seguem com a próxima ocorrência.
+   */
+  data: dataFixa,
+}: {
+  horario: HorarioDoModal | null;
+  onClose: () => void;
+  data?: string;
+}) {
+  const data = horario ? (dataFixa ?? proximaDataDoDia(horario.diaSemana)) : undefined;
   const agendamentos = useAgendamentosDoHorario(horario?.id, data, !!horario);
   const cancelar = useCancelarAgendamentoAdmin();
   const adicionar = useAdicionarAlunoNaAula();
@@ -116,6 +130,13 @@ export function AlunosHorarioModal({ horario, onClose }: { horario: HorarioDoMod
   const ocupacao = agendamentos.data?.length ?? 0;
   const cabem = horario?.capacidadeMaxima;
   const lotado = cabem !== undefined && ocupacao >= cabem;
+  /**
+   * Aula de dia passado: a API recusa marcar (distorceria a cota da semana do
+   * aluno por uma aula que ele não teve). A agenda semanal deixa abrir dias
+   * anteriores para consulta, então o botão precisa sumir aqui — oferecer e
+   * depois recusar seria pior do que não oferecer.
+   */
+  const passou = !!data && data < formatDate(new Date(), 'YYYY-MM-DD');
 
   const fechar = () => {
     setModo('lista');
@@ -351,7 +372,12 @@ export function AlunosHorarioModal({ horario, onClose }: { horario: HorarioDoMod
         cheia, semana do plano ocupada). Quando isso acontecia a dona ficava
         sem saída: o fixo aparecia salvo e o aluno não estava na turma.
       */}
-      {lotado ? (
+      {passou ? (
+        <View style={s.lotadoRow}>
+          <Icon name="time-outline" size={14} color={LC.textMuted} />
+          <Text style={s.passouText}>Esta aula já passou: não dá mais para colocar aluno nela.</Text>
+        </View>
+      ) : lotado ? (
         <View style={s.lotadoRow}>
           <Icon name="alert-circle-outline" size={14} color={LC.danger} />
           <Text style={s.lotadoText}>Turma lotada ({ocupacao}/{cabem}). Tire alguém para abrir vaga.</Text>
@@ -408,6 +434,7 @@ const s = StyleSheet.create({
   addAlunoText: { fontSize: 14, fontWeight: '700', color: LC.primary },
   lotadoRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
   lotadoText: { flex: 1, fontSize: 12, color: LC.danger, lineHeight: 17 },
+  passouText: { flex: 1, fontSize: 12, color: LC.textMuted, lineHeight: 17 },
 
   // ── Conflito de plano ──────────────────────────────────────────────
   conflito: {

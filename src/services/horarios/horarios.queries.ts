@@ -35,3 +35,14 @@ export function useHorariosAdmin() {
     queryFn: () => horariosService.listar(undefined, true),
   });
 }
+
+/**
+ * Grade da semana do estúdio (admin). A chave carrega a data para trocar de
+ * semana não reaproveitar os dados da anterior.
+ */
+export function useGradeDaSemana(inicio?: string) {
+  return useQuery({
+    queryKey: queryKeys.gradeSemana(inicio),
+    queryFn: () => horariosService.semana(inicio),
+  });
+}

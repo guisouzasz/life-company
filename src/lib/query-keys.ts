@@ -9,6 +9,7 @@ export const queryKeys = {
   planos: ['planos'] as const,
   vagas: (modalidadeId: string, data: string) => ['horarios', 'vagas', modalidadeId, data] as const,
   horarios: ['horarios'] as const,
+  gradeSemana: (inicio?: string) => ['horarios', 'semana', inicio ?? 'atual'] as const,
   relatorioDashboard: ['relatorios', 'dashboard'] as const,
   relatorioFrequencia: ['relatorios', 'frequencia'] as const,
   creditosMeus: ['creditos', 'meus'] as const,

@@ -44,3 +44,42 @@ export type AtualizarHorarioPayload = Partial<CriarHorarioPayload> & {
    */
   confirmarMudancaDeHorario?: boolean;
 };
+
+/** Aluno dentro de uma turma, na grade da semana. */
+export interface AlunoNaAula {
+  agendamentoId: string;
+  usuarioId: string;
+  nome: string;
+  reposicao: boolean;
+}
+
+/**
+ * Uma turma num dia concreto da grade.
+ *
+ * Não confundir com `AulaDaSemana` de agendamentos.types, que é a aula do
+ * ALUNO ocupando a cota semanal dele.
+ */
+export interface AulaNaGrade {
+  horarioId: string;
+  horaInicio: string;
+  horaFim: string;
+  modalidade: Modalidade;
+  /** Quantos cabem — já com o teto da modalidade aplicado pela API. */
+  capacidade: number;
+  vagas: number;
+  alunos: AlunoNaAula[];
+}
+
+export interface DiaDaSemana {
+  /** YYYY-MM-DD. Data de verdade, não "a próxima segunda". */
+  data: string;
+  diaSemana: DiaSemana;
+  aulas: AulaNaGrade[];
+}
+
+/** GET /horarios/semana?inicio= — a grade de segunda a sexta (admin). */
+export interface GradeDaSemana {
+  inicio: string;
+  fim: string;
+  dias: DiaDaSemana[];
+}

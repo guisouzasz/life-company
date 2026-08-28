@@ -1,9 +1,24 @@
 import { http } from '../http';
-import type { AtualizarHorarioPayload, CriarHorarioPayload, HorarioAdmin, HorarioVaga } from './horarios.types';
+import type {
+  AtualizarHorarioPayload,
+  CriarHorarioPayload,
+  GradeDaSemana,
+  HorarioAdmin,
+  HorarioVaga,
+} from './horarios.types';
 
 export const horariosService = {
   async vagas(modalidadeId: string, data: string): Promise<HorarioVaga[]> {
     const res = await http.get<HorarioVaga[]>('/horarios/vagas', { params: { modalidadeId, data } });
+    return res.data;
+  },
+
+  /**
+   * Grade de segunda a sexta com os alunos de cada turma (admin).
+   * `inicio` pode ser qualquer data da semana desejada.
+   */
+  async semana(inicio?: string): Promise<GradeDaSemana> {
+    const res = await http.get<GradeDaSemana>('/horarios/semana', { params: inicio ? { inicio } : {} });
     return res.data;
   },
 

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
 import { corPorModalidade, iconePorModalidade, nomeModalidade } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
@@ -139,6 +140,17 @@ export default function AdminHorarios() {
       <View style={s.root}>
         <StatusBar barStyle="dark-content" />
         <View style={isDesktop ? s.deskHeader : s.header}>
+          {/* A aba agora é a Agenda; esta tela virou o "gerenciar" dela, então
+              precisa de um caminho de volta explícito. */}
+          <Pressable
+            style={s.voltarAgenda}
+            hitSlop={8}
+            accessibilityRole="button"
+            onPress={() => router.replace('/admin/agenda')}
+          >
+            <Icon name="chevron-back" size={16} color={LC.primary} />
+            <Text style={s.voltarAgendaText}>Agenda da semana</Text>
+          </Pressable>
           <Text style={s.title}>Horários</Text>
           <Text style={s.subtitle}>Escolha uma modalidade para gerenciar</Text>
         </View>
@@ -343,6 +355,8 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: LC.border, alignItems: 'center', justifyContent: 'center',
   },
   headerIcon: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  voltarAgenda: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 6, alignSelf: 'flex-start' },
+  voltarAgendaText: { fontSize: 13, fontWeight: '700', color: LC.primary },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 13, color: LC.textSecondary, marginTop: 2 },
   scroll: { padding: 16, paddingTop: 8 },
