@@ -25,10 +25,28 @@ const DIA_MAP: Record<number, string> = { 1: 'SEGUNDA', 2: 'TERCA', 3: 'QUARTA',
  */
 const DIAS_MAXIMOS_ANTECEDENCIA = 60;
 
-/** "CARLOS EDUARDO RAVAGLI" → "Carlos": aviso de tela fala do aluno pelo nome. */
-function primeiroNome(nome: string): string {
-  const primeiro = nome.trim().split(/\s+/)[0] ?? '';
-  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase();
+/** "da", "de", "dos"... continuam minúsculas ao formatar o nome. */
+const CONECTIVOS = new Set(['da', 'de', 'di', 'do', 'das', 'des', 'dos', 'e']);
+
+/**
+ * Como o sistema chama o aluno nas mensagens: primeiro nome + último
+ * sobrenome. "CARLOS EDUARDO RAVAGLIO DA ROCHA" → "Carlos Rocha".
+ *
+ * Só o primeiro nome não serve. O estúdio tem três Carlos, e o aviso "Carlos
+ * já tem 1 aula nesta semana" fez a dona achar que o sistema tinha misturado
+ * os cadastros — ela leu como se estivesse falando de OUTRO Carlos. É como
+ * ela chama cada um ("o Carlos Rocha"), então é como o sistema deve falar.
+ */
+function nomeCurto(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  const capitaliza = (p: string) =>
+    CONECTIVOS.has(p.toLowerCase()) ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+  if (partes.length === 0) return nome;
+  const primeiro = capitaliza(partes[0]);
+  // Último token que não seja conectivo ("... DA ROCHA" → "Rocha").
+  const sobrenome = [...partes].reverse().find((x) => !CONECTIVOS.has(x.toLowerCase()));
+  if (partes.length === 1 || !sobrenome || sobrenome === partes[0]) return primeiro;
+  return `${primeiro} ${capitaliza(sobrenome)}`;
 }
 
 @Injectable()
@@ -64,7 +82,7 @@ export class AgendamentosService {
      */
     return this.agendar(dto.usuarioId, dto, {
       admin: true,
-      nome: primeiroNome(aluno.nome),
+      nome: nomeCurto(aluno.nome),
       substituirAgendamentoId: dto.substituirAgendamentoId,
     });
   }

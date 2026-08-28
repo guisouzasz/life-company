@@ -18,6 +18,7 @@ import { useAulaAgora } from '../../hooks/use-aula-agora';
 import { useAlunosExtras } from '../../services/aula-extras';
 import { useAgendamentosDoHorario } from '../../services/agendamentos/agendamentos.queries';
 import type { HorarioVaga } from '../../services/horarios/horarios.types';
+import { nomeCurto } from '../../services/nome';
 
 /**
  * A aula que está acontecendo, no topo da tela do professor.
@@ -28,7 +29,8 @@ import type { HorarioVaga } from '../../services/horarios/horarios.types';
  * de dentro dela se passa para o próximo.
  */
 
-const primeiroNome = (nome: string) => nome.trim().split(/\s+/)[0];
+/** Dois "Carlos E." na mesma sala confundem o professor: nome + sobrenome. */
+const primeiroNome = nomeCurto;
 
 interface Props {
   /** Aulas de hoje do professor (já filtradas pelo dia da semana). */

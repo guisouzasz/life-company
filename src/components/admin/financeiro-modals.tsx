@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Icon } from '../ui/icon';
 import { formatDate } from '../../services/date';
+import { nomeCurto } from '../../services/nome';
 import { formatarReal, mascaraReal, realParaNumero, valorOuNulo } from '../../services/mascaras';
 import { useRegistrarPagamento, useConfigurarFinanceiroAluno } from '../../services/financeiro/financeiro.mutations';
 import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types';
@@ -61,7 +62,7 @@ export function RegistrarPagamentoModal({ aluno, onClose }: { aluno: AlunoFinanc
   const meses = [-1, 0, 1].map((off) => ({ off, ...mesRef(off) }));
 
   return (
-    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Marcar como pago — ${aluno.nome.split(' ')[0]}` : ''}>
+    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Marcar como pago — ${nomeCurto(aluno.nome)}` : ''}>
       <Text style={s.label}>Mês de referência</Text>
       <View style={s.chips}>
         {meses.map((m) => (
@@ -137,7 +138,7 @@ export function ConfigFinanceiroModal({ aluno, onClose }: { aluno: AlunoFinancei
   };
 
   return (
-    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Mensalidade — ${aluno.nome.split(' ')[0]}` : ''}>
+    <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Mensalidade — ${nomeCurto(aluno.nome)}` : ''}>
       <Text style={s.label}>Valor da mensalidade</Text>
       <Input
         value={valorTexto}

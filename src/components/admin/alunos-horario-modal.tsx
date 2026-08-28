@@ -26,6 +26,7 @@ import {
 } from '../../services/agendamentos/agendamentos.types';
 import { ApiError } from '../../services/http';
 import { formatDate, proximaDataDoDia } from '../../services/date';
+import { nomeCurto } from '../../services/nome';
 
 /**
  * O mínimo que o modal precisa. Um HorarioAdmin completo satisfaz este tipo,
@@ -46,11 +47,12 @@ export type HorarioDoModal = Pick<HorarioAdmin, 'id' | 'diaSemana' | 'horaInicio
 const semAcento = (t: string) =>
   t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
-/** "CARLOS EDUARDO RAVAGLI" → "Carlos": o cadastro é todo em caixa alta. */
-const primeiroNome = (nome: string) => {
-  const p = nome.trim().split(/\s+/)[0] ?? nome;
-  return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-};
+/**
+ * "CARLOS EDUARDO RAVAGLIO DA ROCHA" → "Carlos Rocha". Só o primeiro nome não
+ * serve aqui: são três Carlos no estúdio, e a dona lia "Carlos já tem 2 aulas"
+ * como se o sistema estivesse falando de outro aluno.
+ */
+const primeiroNome = nomeCurto;
 
 /**
  * O que dizer sobre o cadastro do aluno na lista de quem pode entrar.
@@ -241,7 +243,19 @@ export function AlunosHorarioModal({
 
         {conflito ? (
           <View style={s.conflito}>
+            {/*
+              O nome COMPLETO em cima da explicação.
+              O estúdio tem três Carlos; com só o primeiro nome no aviso, a
+              dona leu "Carlos já tem 1 aula nesta semana" e achou que o
+              sistema tinha misturado os cadastros — que a aula listada era de
+              outro Carlos. Escrever quem é acaba com a dúvida.
+            */}
+            <Text style={s.conflitoQuem}>{conflito.aluno.nome}</Text>
             <Text style={s.conflitoTitulo}>{conflito.texto}</Text>
+            <Text style={s.conflitoNota}>
+              As aulas abaixo são dele. Se não deveriam estar aí, use "Trocar" ou tire pelo cadastro
+              (Alunos → Plano → Próximas aulas marcadas).
+            </Text>
             {conflito.aulas.length === 0 ? (
               <Text style={s.conflitoVazio}>
                 As aulas desta semana já aconteceram — não dá para trocar. Aumente o plano de{' '}
@@ -518,7 +532,8 @@ const s = StyleSheet.create({
     backgroundColor: LC.dangerBg, borderRadius: LC.radius.md,
     paddingVertical: 12, paddingHorizontal: 12, marginBottom: 12, marginTop: 4,
   },
-  conflitoTitulo: { fontSize: 13, fontWeight: '700', color: LC.danger, lineHeight: 18, marginBottom: 8 },
+  conflitoQuem: { fontSize: 13.5, fontWeight: '800', color: LC.textPrimary, marginBottom: 4 },
+  conflitoTitulo: { fontSize: 13, fontWeight: '700', color: LC.danger, lineHeight: 18, marginBottom: 6 },
   conflitoLinha: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 8, borderTopWidth: 1, borderTopColor: LC.border,

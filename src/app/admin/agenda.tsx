@@ -13,6 +13,7 @@ import { useGradeDaSemana } from '../../services/horarios/horarios.queries';
 import type { AulaNaGrade, DiaDaSemana } from '../../services/horarios/horarios.types';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { addDays, formatDate } from '../../services/date';
+import { nomeCurto } from '../../services/nome';
 
 const DIAS_CURTO: Record<string, string> = {
   SEGUNDA: 'Seg', TERCA: 'Ter', QUARTA: 'Qua', QUINTA: 'Qui', SEXTA: 'Sex',
@@ -20,14 +21,6 @@ const DIAS_CURTO: Record<string, string> = {
 
 /** Hoje no fuso do estúdio, no mesmo formato que a API devolve. */
 const hojeISO = () => formatDate(new Date(), 'YYYY-MM-DD');
-
-/** "MARIA APARECIDA SOUZA" → "Maria A." — cabe na célula sem virar sopa. */
-function nomeCurto(nome: string): string {
-  const partes = nome.trim().split(/\s+/);
-  const capitaliza = (p: string) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-  const primeiro = capitaliza(partes[0] ?? nome);
-  return partes.length > 1 ? `${primeiro} ${partes[1].charAt(0).toUpperCase()}.` : primeiro;
-}
 
 /**
  * A semana do estúdio numa tela só: segunda a sexta, cada turma com quem

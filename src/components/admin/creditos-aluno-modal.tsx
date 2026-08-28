@@ -11,6 +11,7 @@ import { useConcederCredito, useRevogarCredito } from '../../services/creditos/c
 import type { StatusCredito } from '../../services/creditos/creditos.types';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { formatDate } from '../../services/date';
+import { nomeCurto } from '../../services/nome';
 
 const STATUS: Record<StatusCredito, { label: string; variant: BadgeVariant }> = {
   VALIDO: { label: 'Disponível', variant: 'success' },
@@ -24,7 +25,7 @@ export function CreditosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin | nul
   const conceder = useConcederCredito();
   const revogar = useRevogarCredito();
 
-  const primeiroNome = aluno?.nome.split(' ')[0] ?? '';
+  const primeiroNome = aluno ? nomeCurto(aluno.nome) : '';
 
   return (
     <AppModal visible={!!aluno} onClose={onClose} title={aluno ? `Créditos — ${primeiroNome}` : ''}>

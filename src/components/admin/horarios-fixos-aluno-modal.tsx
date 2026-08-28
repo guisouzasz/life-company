@@ -19,6 +19,7 @@ import { useAtualizarPlanoAluno } from '../../services/usuarios/usuarios.mutatio
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import type { DiaSemana } from '../../services/agendamentos/agendamentos.types';
 import { addDays, formatDate } from '../../services/date';
+import { nomeCurto } from '../../services/nome';
 
 const DIAS_ORDEM: DiaSemana[] = ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA'];
 const DIAS_CURTO: Record<string, string> = {
@@ -93,7 +94,18 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
 
   const idsFixosAtivos = new Set((fixos.data ?? []).map((f) => f.horarioId));
 
-  const primeiroNome = aluno?.nome.split(' ')[0] ?? '';
+  /**
+   * Aula marcada que não corresponde a nenhum horário fixo ativo. Reposição não
+   * conta — essa é avulsa de propósito. As outras quase sempre são sobra de um
+   * horário fixo que foi removido depois: continuam ocupando a semana do aluno
+   * e derrubam o horário novo com "limite semanal", sem dar pista de onde veio.
+   * A dona viu isso como o sistema "misturando" um aluno com outro.
+   */
+  const ehSolta = (ag: { horarioId: string; reposicao?: boolean }) =>
+    !ag.reposicao && !!fixos.data && !idsFixosAtivos.has(ag.horarioId);
+  const soltas = (aulas.data ?? []).filter(ehSolta).length;
+
+  const primeiroNome = aluno ? nomeCurto(aluno.nome) : '';
 
   const fechar = () => {
     setModo('ver');
@@ -127,7 +139,7 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
             setAviso({
               titulo: 'Horário salvo, aulas não',
               texto:
-                `O horário fixo foi salvo, mas nenhuma aula foi marcada para ${aluno.nome.split(' ')[0]}: ` +
+                `O horário fixo foi salvo, mas nenhuma aula foi marcada para ${nomeCurto(aluno.nome)}: ` +
                 (g.motivos?.join(' ') || 'não foi possível gerar as aulas.') +
                 ' Resolva isso e adicione o horário de novo.',
             });
@@ -384,6 +396,16 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
           desse para ver a causa em lugar nenhum.
         */}
         <Text style={s.sectionLabel}>Próximas aulas marcadas</Text>
+        {soltas > 0 && (
+          <View style={s.soltasAviso}>
+            <Icon name="alert-circle-outline" size={14} color={LC.warningFg} />
+            <Text style={s.soltasAvisoText}>
+              {soltas === 1 ? '1 aula está fora' : `${soltas} aulas estão fora`} dos horários fixos de cima.
+              Costuma ser sobra de um horário fixo antigo: ela ocupa a semana do aluno e faz o horário
+              novo falhar. Se não deveria estar aí, tire no ✕.
+            </Text>
+          </View>
+        )}
         {aulas.isLoading ? (
           <View style={{ height: 50 }}><Loading /></View>
         ) : !aulas.data || aulas.data.length === 0 ? (
@@ -399,6 +421,11 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
                   {formatDate(ag.dataAula, 'ddd, DD/MM')}
                   {ag.reposicao ? ' · reposição' : ''}
                 </Text>
+                {ehSolta(ag) && (
+                  <View style={s.soltaBadge}>
+                    <Text style={s.soltaBadgeText}>Fora dos horários fixos</Text>
+                  </View>
+                )}
               </View>
               <Pressable
                 style={s.removeBtn}
@@ -449,6 +476,25 @@ const s = StyleSheet.create({
   },
   aulaTitulo: { fontSize: 13.5, fontWeight: '700', color: LC.textPrimary },
   aulaDetalhe: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  soltaBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: LC.radius.full,
+    backgroundColor: LC.warningBg,
+  },
+  soltaBadgeText: { fontSize: 10.5, fontWeight: '800', color: LC.warningFg },
+  soltasAviso: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+    backgroundColor: LC.warningBg,
+    borderRadius: LC.radius.md,
+    padding: 10,
+    marginBottom: 10,
+  },
+  soltasAvisoText: { flex: 1, fontSize: 11.5, color: LC.warningFg, lineHeight: 16 },
   scroll: { maxHeight: 480 },
   sectionLabel: {
     fontSize: 11,
