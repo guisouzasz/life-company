@@ -15,6 +15,16 @@ import { capacidadeEfetiva } from '../horarios/capacidade';
 
 const DIA_MAP: Record<number, string> = { 1: 'SEGUNDA', 2: 'TERCA', 3: 'QUARTA', 4: 'QUINTA', 5: 'SEXTA' };
 
+/**
+ * Até quando o ALUNO pode marcar, em dias.
+ *
+ * A tela dele oferece as próximas duas semanas, mas a rota aceitava qualquer
+ * data futura: dava para marcar meses à frente e sentar em cima da vaga de
+ * turmas que nem foram montadas ainda. O estúdio não tem esse limite — a dona
+ * remaneja para onde precisar.
+ */
+const DIAS_MAXIMOS_ANTECEDENCIA = 60;
+
 /** "CARLOS EDUARDO RAVAGLI" → "Carlos": aviso de tela fala do aluno pelo nome. */
 function primeiroNome(nome: string): string {
   const primeiro = nome.trim().split(/\s+/)[0] ?? '';
@@ -99,10 +109,18 @@ export class AgendamentosService {
       if (dayjs(dataAula).isBefore(dayjs().startOf('day'))) {
         throw new BadRequestException('Esta aula já passou. Só dá para marcar de hoje em diante.');
       }
-    } else if (!inicioAula.isAfter(dayjs())) {
-      throw new BadRequestException(
-        'Esta aula já começou. Escolha um horário que ainda vai acontecer.',
-      );
+    } else {
+      if (!inicioAula.isAfter(dayjs())) {
+        throw new BadRequestException(
+          'Esta aula já começou. Escolha um horário que ainda vai acontecer.',
+        );
+      }
+      const limite = dayjs().startOf('day').add(DIAS_MAXIMOS_ANTECEDENCIA, 'day');
+      if (dayjs(dataAula).isAfter(limite)) {
+        throw new BadRequestException(
+          `Só dá para marcar com até ${DIAS_MAXIMOS_ANTECEDENCIA} dias de antecedência.`,
+        );
+      }
     }
 
     // Plano dá N aulas/semana para QUALQUER modalidade (não trava por categoria)
@@ -293,6 +311,57 @@ export class AgendamentosService {
       if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemanaAtual)) {
         await tx.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: 0, semanaReferencia: inicioSemanaAtual } });
         usuarioPlano.aulasUsadasSemana = 0;
+      }
+
+      /**
+       * O crédito é para a aula que o aluno PERDEU — não para a que ele
+       * remarcou.
+       *
+       * Cancelar libera a vaga da semana E gerava um crédito. Quem cancelasse
+       * e marcasse de novo na mesma semana ficava com a aula e com o crédito,
+       * e podia repetir o ciclo à vontade: cancela, remarca, cancela,
+       * remarca — um crédito por volta. Como reposição não consome cota, cada
+       * volta virava uma aula extra depois. Um plano 1x rendia 2 aulas por
+       * semana, indefinidamente.
+       *
+       * Régua: cada aula que o aluno remarca na semana derruba um crédito que
+       * ELE gerou naquela mesma semana. Quem cancela e não remarca fica com o
+       * crédito — que é o caso legítimo, o da aula realmente perdida.
+       *
+       * Só vale para o aluno se agendando. Quando é a dona quem coloca (troca
+       * de turma, arrumação de agenda), o crédito fica de pé: ela está
+       * remanejando, não devolvendo aula ao aluno. Crédito concedido pelo
+       * estúdio também nunca cai — a compensação é dela e não se desfaz
+       * porque o aluno achou outro horário.
+       */
+      if (!ctx.admin) {
+        const canceladasNaSemana = await tx.agendamento.findMany({
+          where: {
+            usuarioId,
+            dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
+            status: 'CANCELADO',
+          },
+          select: { id: true },
+        });
+        if (canceladasNaSemana.length > 0) {
+          const credito = await tx.creditoReposicao.findFirst({
+            where: {
+              usuarioId,
+              usado: false,
+              revogado: false,
+              concedidoAdmin: false,
+              origemAgendamentoId: { in: canceladasNaSemana.map((c) => c.id) },
+            },
+            orderBy: { criadoEm: 'asc' },
+            select: { id: true },
+          });
+          if (credito) {
+            await tx.creditoReposicao.update({
+              where: { id: credito.id },
+              data: { revogado: true },
+            });
+          }
+        }
       }
 
       const agendamento = await gravar({ reposicao: false, creditoId: null });
