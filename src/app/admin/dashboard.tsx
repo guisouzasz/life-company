@@ -19,6 +19,8 @@ import { AppModal } from '../../components/ui/modal';
 import { AlunosHorarioModal, type HorarioDoModal } from '../../components/admin/alunos-horario-modal';
 import { formatDate, getDiaSemanaKey } from '../../services/date';
 import { nomeModalidade } from '../../constants/assets';
+import { openBrowserAsync } from 'expo-web-browser';
+import { linkWhatsapp, mensagemAniversario, telefoneParaWhatsapp } from '../../services/whatsapp';
 import type { RelatorioDashboard } from '../../services/relatorios/relatorios.types';
 
 type StatDef = { label: string; value: number | string; icon: IconName; color: string; bg: string };
@@ -226,16 +228,35 @@ function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
 
       {/* Quem é hoje vem primeiro e com fundo próprio: é o que precisa de
           ação agora, e some no meio da lista se ficar em ordem de data. */}
-      {deHoje.map((a) => (
-        <View key={a.id} style={[s.aniversarioLinha, s.aniversarioHoje]}>
-          <Avatar nome={a.nome} size={34} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
-            <Text style={s.aniversarioHojeTag}>HOJE · não esqueça os parabéns</Text>
+      {deHoje.map((a) => {
+        // Só quem é do dia ganha o botão: parabéns adiantado soa estranho, e
+        // um botão por linha em toda a semana viraria ruído no card.
+        const zap = telefoneParaWhatsapp(a.telefone);
+        return (
+          <View key={a.id} style={[s.aniversarioLinha, s.aniversarioHoje]}>
+            <Avatar nome={a.nome} size={34} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
+              <Text style={s.aniversarioHojeTag}>HOJE · {a.idade} anos</Text>
+            </View>
+            {zap ? (
+              <Pressable
+                style={s.parabensBtn}
+                accessibilityRole="button"
+                accessibilityLabel={`Mandar parabéns para ${a.nome} no WhatsApp`}
+                onPress={() => openBrowserAsync(linkWhatsapp(zap, mensagemAniversario(a.nome))).catch(() => {})}
+              >
+                <Icon name="logo-whatsapp" size={15} color="#fff" />
+                <Text style={s.parabensTexto}>Parabenizar</Text>
+              </Pressable>
+            ) : (
+              // Sem telefone no cadastro não há para onde mandar; dizer o
+              // motivo evita a dona procurar um botão que não existe.
+              <Text style={s.semTelefone}>Sem telefone{'\n'}no cadastro</Text>
+            )}
           </View>
-          <Text style={s.aniversarioIdade}>{a.idade} anos</Text>
-        </View>
-      ))}
+        );
+      })}
 
       {restante.map((a) => (
         <View key={a.id} style={s.aniversarioLinha}>
@@ -694,7 +715,6 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: LC.border,
   },
   aniversarioNome: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary },
-  aniversarioIdade: { fontSize: 13, fontWeight: '700', color: LC.primary },
   aniversarioHoje: {
     backgroundColor: LC.primaryLight, borderRadius: LC.radius.md,
     paddingHorizontal: 10, marginHorizontal: -4,
@@ -704,6 +724,13 @@ const s = StyleSheet.create({
     letterSpacing: 0.6, marginTop: 2,
   },
   aniversarioDia: { fontSize: 12, color: LC.textMuted, marginTop: 2 },
+  parabensBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#25D366', paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: LC.radius.full,
+  },
+  parabensTexto: { fontSize: 12.5, fontWeight: '800', color: '#fff' },
+  semTelefone: { fontSize: 11, color: LC.textMuted, textAlign: 'right', lineHeight: 15 },
   aniversarioIdadeFraca: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
 
   atCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },

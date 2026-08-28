@@ -28,7 +28,16 @@ export function telefoneParaWhatsapp(telefone?: string | null): string | null {
   return null;
 }
 
-const primeiroNome = (nome: string) => nome.trim().split(/\s+/)[0];
+/**
+ * "MARIA APARECIDA SOUZA" → "Maria".
+ *
+ * O cadastro é todo em caixa alta, e "Oi, MARIA!" numa mensagem soa como
+ * grito. Vale para todos os textos daqui.
+ */
+const primeiroNome = (nome: string) => {
+  const p = nome.trim().split(/\s+/)[0] ?? nome;
+  return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
+};
 
 /**
  * Texto do aviso. Muda conforme a mensalidade está por vencer ou já venceu —
@@ -87,6 +96,24 @@ export function mensagemPrimeiroAcesso(params: {
     `Criei o seu acesso ao app da ${STUDIO_NOME} — é por ele que você marca e cancela as suas aulas. ` +
     `Abra o link abaixo para criar a sua senha:\n\n${link}\n\n` +
     `O link é só seu, não precisa repassar. Qualquer dúvida, é só me chamar por aqui!`
+  );
+}
+
+/**
+ * Parabéns do estúdio, assinado pela equipe.
+ *
+ * Assina "Equipe {estúdio}" e não a dona: quem manda pode ser ela ou quem
+ * estiver na recepção, e o aluno recebe como mensagem da academia.
+ *
+ * A idade fica de fora de propósito — nem todo mundo gosta de ver o número,
+ * e a mensagem funciona igual sem ele.
+ */
+export function mensagemAniversario(nome: string): string {
+  return (
+    `Parabéns, ${primeiroNome(nome)}! 🎉\n\n` +
+    `Hoje é o seu dia, e a gente queria desejar muita saúde, alegria e treinos bons no ano que começa. ` +
+    `É uma alegria ter você com a gente!\n\n` +
+    `Um abraço da Equipe ${STUDIO_NOME} 💚`
   );
 }
 

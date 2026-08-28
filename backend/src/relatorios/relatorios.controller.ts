@@ -168,9 +168,9 @@ export class RelatoriosController {
     );
 
     const linhas = await this.prisma.$queryRaw<
-      { id: string; nome: string; ano: number; mes: number; dia: number }[]
+      { id: string; nome: string; telefone: string | null; ano: number; mes: number; dia: number }[]
     >`
-      SELECT id, nome,
+      SELECT id, nome, telefone,
              EXTRACT(YEAR FROM data_nascimento)::int  AS ano,
              EXTRACT(MONTH FROM data_nascimento)::int AS mes,
              EXTRACT(DAY FROM data_nascimento)::int   AS dia
@@ -192,6 +192,9 @@ export class RelatoriosController {
         return {
           id: l.id,
           nome: l.nome,
+          // Para o botão de parabéns pelo WhatsApp. Vem null em cadastro
+          // antigo sem telefone — aí a tela não oferece o botão.
+          telefone: l.telefone,
           idade: alvo.data.year() - l.ano,
           data: alvo.data.format('YYYY-MM-DD'),
           hoje: alvo.data.isSame(hoje, 'day'),

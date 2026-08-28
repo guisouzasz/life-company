@@ -32,6 +32,8 @@ export interface RelatorioDashboard {
   aniversariantes?: {
     id: string;
     nome: string;
+    /** Do cadastro; null nos antigos, e aí não há botão de parabéns. */
+    telefone?: string | null;
     /** Idade que faz nesta data. */
     idade: number;
     /** YYYY-MM-DD do aniversário nesta semana. */
