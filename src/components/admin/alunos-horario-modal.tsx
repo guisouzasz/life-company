@@ -14,11 +14,16 @@ import { useAgendamentosDoHorario } from '../../services/agendamentos/agendament
 import {
   useAdicionarAlunoNaAula,
   useCancelarAgendamentoAdmin,
+  useDesmarcarAgendamento,
 } from '../../services/agendamentos/agendamentos.mutations';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import type { HorarioAdmin } from '../../services/horarios/horarios.types';
-import { ehLimiteSemanal, type AulaDaSemana } from '../../services/agendamentos/agendamentos.types';
+import {
+  ehLimiteSemanal,
+  type AgendamentoDoHorario,
+  type AulaDaSemana,
+} from '../../services/agendamentos/agendamentos.types';
 import { ApiError } from '../../services/http';
 import { formatDate, proximaDataDoDia } from '../../services/date';
 
@@ -71,7 +76,8 @@ function rotuloDaAula(a: AulaDaSemana) {
  * Alunos agendados na PRÓXIMA ocorrência do horário (inclui hoje), com o
  * estúdio podendo colocar e tirar gente ali mesmo.
  *
- * Cancelar pelo admin gera 1 crédito de reposição para o aluno. Adicionar
+ * Ao tirar um aluno, a tela pergunta se a aula vira crédito de reposição —
+ * academia que desmarcou compensa, remanejamento não. Adicionar
  * respeita lotação e plano — e quando o plano é o que trava, oferece trocar
  * pela aula da semana que está ocupando a vaga, que é o remanejamento que a
  * dona faz o tempo todo.
@@ -94,11 +100,13 @@ export function AlunosHorarioModal({
   const data = horario ? (dataFixa ?? proximaDataDoDia(horario.diaSemana)) : undefined;
   const agendamentos = useAgendamentosDoHorario(horario?.id, data, !!horario);
   const cancelar = useCancelarAgendamentoAdmin();
+  const desmarcar = useDesmarcarAgendamento();
   const adicionar = useAdicionarAlunoNaAula();
 
   const [modo, setModo] = useState<'lista' | 'adicionar'>('lista');
   const [busca, setBusca] = useState('');
-  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
+  /** Aluno que a dona está tirando da aula — falta escolher se leva crédito. */
+  const [tirando, setTirando] = useState<AgendamentoDoHorario | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   /** Aluno esbarrou no plano: quais aulas da semana dele podem sair no lugar. */
   const [conflito, setConflito] = useState<{ aluno: AlunoAdmin; texto: string; aulas: AulaDaSemana[] } | null>(null);
@@ -141,7 +149,7 @@ export function AlunosHorarioModal({
   const fechar = () => {
     setModo('lista');
     setBusca('');
-    setConfirmandoId(null);
+    setTirando(null);
     setConflito(null);
     setFeedback(null);
     onClose();
@@ -153,15 +161,25 @@ export function AlunosHorarioModal({
     setConflito(null);
   };
 
-  const cancelarAula = (id: string) => {
-    cancelar.mutate(id, {
+  /**
+   * Tirar o aluno da aula, com ou sem crédito — quem decide é a dona.
+   *
+   * Antes o botão sempre gerava crédito, e nem sempre é isso: quando a
+   * academia cancela a aula, compensar é justo; quando ela só está arrumando
+   * a agenda ou remanejando de turma, o crédito inflava o saldo do aluno a
+   * cada correção. São duas rotas diferentes na API; a tela pergunta qual.
+   */
+  const tirarDaAula = (comCredito: boolean) => {
+    if (!tirando) return;
+    const acao = comCredito ? cancelar : desmarcar;
+    acao.mutate(tirando.id, {
       onSuccess: (r) => {
-        setConfirmandoId(null);
+        setTirando(null);
         setFeedback(r.mensagem);
       },
       onError: (e) => {
-        setConfirmandoId(null);
-        setFeedback(e instanceof ApiError ? e.message : 'Não foi possível cancelar.');
+        setTirando(null);
+        setFeedback(e instanceof ApiError ? e.message : 'Não foi possível tirar o aluno da aula.');
       },
     });
   };
@@ -336,29 +354,15 @@ export function AlunosHorarioModal({
                 </View>
                 <Text style={s.rowSub}>CPF {ag.usuario.cpf}</Text>
               </View>
-              {confirmandoId === ag.id ? (
-                <View style={s.confirmRow}>
-                  <Button
-                    title="Confirmar"
-                    variant="danger"
-                    size="sm"
-                    fullWidth={false}
-                    loading={cancelar.isPending}
-                    onPress={() => cancelarAula(ag.id)}
-                  />
-                  <Button title="Voltar" variant="outline" size="sm" fullWidth={false} onPress={() => setConfirmandoId(null)} />
-                </View>
-              ) : (
-                <Pressable
-                  style={s.cancelBtn}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Tirar ${ag.usuario.nome} desta aula`}
-                  onPress={() => setConfirmandoId(ag.id)}
-                >
-                  <Icon name="trash-outline" size={16} color={LC.danger} />
-                </Pressable>
-              )}
+              <Pressable
+                style={s.cancelBtn}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`Tirar ${ag.usuario.nome} desta aula`}
+                onPress={() => setTirando(ag)}
+              >
+                <Icon name="trash-outline" size={16} color={LC.danger} />
+              </Pressable>
             </View>
           ))}
         </ScrollView>
@@ -400,8 +404,73 @@ export function AlunosHorarioModal({
 
       <View style={s.hintRow}>
         <Icon name="ticket-outline" size={14} color={LC.textMuted} />
-        <Text style={s.hint}>Cancelar pelo admin devolve 1 crédito de reposição ao aluno.</Text>
+        <Text style={s.hint}>
+          Ao tirar um aluno da aula, você escolhe se ele ganha crédito de reposição.
+        </Text>
       </View>
+
+      {/*
+        A pergunta do crédito.
+        Fica num modal próprio, e não em dois botões na linha do aluno, porque
+        as duas opções precisam de uma frase explicando quando usar cada uma —
+        na linha não caberia, e a dona escolheria no chute.
+      */}
+      <AppModal
+        visible={!!tirando}
+        onClose={() => setTirando(null)}
+        title={tirando ? `Tirar ${primeiroNome(tirando.usuario.nome)} desta aula` : ''}
+        dismissable={!cancelar.isPending && !desmarcar.isPending}
+      >
+        <Text style={s.escolhaTexto}>
+          {tirando ? `${tirando.usuario.nome} sai da aula de ` : ''}
+          {data ? formatDate(data, 'dddd, DD/MM') : ''}
+          {tirando ? ` às ${horario?.horaInicio}.` : ''} O que fazer com essa aula?
+        </Text>
+
+        <Pressable
+          style={s.escolha}
+          accessibilityRole="button"
+          disabled={cancelar.isPending || desmarcar.isPending}
+          onPress={() => tirarDaAula(true)}
+        >
+          <View style={[s.escolhaIcone, { backgroundColor: LC.primaryLight }]}>
+            <Icon name="ticket-outline" size={18} color={LC.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.escolhaTitulo}>Dar crédito de reposição</Text>
+            <Text style={s.escolhaSub}>
+              O aluno pode repor essa aula depois. Use quando foi a academia que desmarcou.
+            </Text>
+          </View>
+          {cancelar.isPending ? <Text style={s.escolhaSub}>…</Text> : null}
+        </Pressable>
+
+        <Pressable
+          style={s.escolha}
+          accessibilityRole="button"
+          disabled={cancelar.isPending || desmarcar.isPending}
+          onPress={() => tirarDaAula(false)}
+        >
+          <View style={[s.escolhaIcone, { backgroundColor: LC.neutralBg }]}>
+            <Icon name="swap-horizontal-outline" size={18} color={LC.textSecondary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.escolhaTitulo}>Tirar sem crédito</Text>
+            <Text style={s.escolhaSub}>
+              Só arrumação de agenda: remanejamento de turma ou aula que sobrou. Não muda o saldo do aluno.
+            </Text>
+          </View>
+          {desmarcar.isPending ? <Text style={s.escolhaSub}>…</Text> : null}
+        </Pressable>
+
+        <Button
+          title="Voltar"
+          variant="outline"
+          size="sm"
+          onPress={() => setTirando(null)}
+          style={{ marginTop: 10 }}
+        />
+      </AppModal>
     </AppModal>
   );
 }
@@ -421,7 +490,15 @@ const s = StyleSheet.create({
   rowNomeLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   rowNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
   rowSub: { fontSize: 12, color: LC.textSecondary, marginTop: 1 },
-  confirmRow: { flexDirection: 'row', gap: 6 },
+  escolhaTexto: { fontSize: 13.5, color: LC.textSecondary, lineHeight: 20, marginBottom: 14 },
+  escolha: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    padding: 13, marginBottom: 10, borderRadius: LC.radius.md,
+    borderWidth: 1.5, borderColor: LC.border, backgroundColor: LC.bg,
+  },
+  escolhaIcone: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  escolhaTitulo: { fontSize: 14, fontWeight: '800', color: LC.textPrimary },
+  escolhaSub: { fontSize: 12.5, color: LC.textSecondary, lineHeight: 18, marginTop: 3 },
   cancelBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.dangerBg, alignItems: 'center', justifyContent: 'center' },
   addBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
 
