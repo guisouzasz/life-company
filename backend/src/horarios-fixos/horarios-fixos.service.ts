@@ -29,32 +29,51 @@ export class HorariosFixosService {
     const horario = await this.prisma.horario.findUnique({ where: { id: dto.horarioId } });
     if (!horario || !horario.ativo) throw new NotFoundException('Horário não encontrado ou inativo');
 
-    const existente = await this.prisma.horarioFixo.findUnique({
-      where: { usuarioId_horarioId: { usuarioId, horarioId: dto.horarioId } },
-    });
-
-    if (!existente || !existente.ativo) {
-      const ativosCount = await this.prisma.horarioFixo.count({ where: { usuarioId, ativo: true } });
-      if (ativosCount >= usuarioPlano.plano.aulasSemanais) {
-        throw new BadRequestException(
-          `Limite de horários fixos atingido (${usuarioPlano.plano.aulasSemanais}x/semana no plano ${usuarioPlano.plano.nome})`,
-        );
-      }
-    }
-
     const dataInicio = dto.dataInicio ? new Date(dto.dataInicio) : new Date();
     const dataFim = dto.dataFim ? new Date(dto.dataFim) : null;
 
-    const fixo = existente
-      ? await this.prisma.horarioFixo.update({
-          where: { id: existente.id },
-          data: { ativo: true, dataInicio, dataFim },
-          include: { horario: { include: { modalidade: true } } },
-        })
-      : await this.prisma.horarioFixo.create({
-          data: { usuarioId, horarioId: dto.horarioId, dataInicio, dataFim },
-          include: { horario: { include: { modalidade: true } } },
-        });
+    /**
+     * Contar os fixos e gravar o novo tem que ser uma coisa só.
+     *
+     * Sem a trava, dois envios quase simultâneos — dois toques no "+", ou o app
+     * reenviando numa conexão ruim — liam os dois a MESMA contagem e ambos
+     * passavam: um aluno de plano 1x ficava com dois horários fixos ativos. A
+     * cota semanal ainda segurava as aulas, então o estrago aparecia depois e
+     * sem explicação: toda semana o cron gerava por um dos fixos e falhava no
+     * outro, e qual dia ganhava era sorteio. A trava é no plano do aluno,
+     * mesma linha que o agendamento já usa, então dois alunos diferentes não
+     * esperam um pelo outro.
+     *
+     * A geração das aulas fica FORA daqui de propósito: ela abre transação
+     * própria e tranca esta mesma linha do plano.
+     */
+    const fixo = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
+
+      const existente = await tx.horarioFixo.findUnique({
+        where: { usuarioId_horarioId: { usuarioId, horarioId: dto.horarioId } },
+      });
+
+      if (!existente || !existente.ativo) {
+        const ativosCount = await tx.horarioFixo.count({ where: { usuarioId, ativo: true } });
+        if (ativosCount >= usuarioPlano.plano.aulasSemanais) {
+          throw new BadRequestException(
+            `Limite de horários fixos atingido (${usuarioPlano.plano.aulasSemanais}x/semana no plano ${usuarioPlano.plano.nome})`,
+          );
+        }
+      }
+
+      return existente
+        ? tx.horarioFixo.update({
+            where: { id: existente.id },
+            data: { ativo: true, dataInicio, dataFim },
+            include: { horario: { include: { modalidade: true } } },
+          })
+        : tx.horarioFixo.create({
+            data: { usuarioId, horarioId: dto.horarioId, dataInicio, dataFim },
+            include: { horario: { include: { modalidade: true } } },
+          });
+    });
 
     // Gera as próximas aulas na hora — sem esperar o cron das 3h. Falha na
     // geração (ex: sem saldo na semana) não desfaz o horário fixo criado.
