@@ -2,6 +2,9 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { AnelProgresso } from '../components/ui/anel-progresso';
+import { Toque, EntraSubindo } from '../components/ui/motion';
+import { primeiroNome as soPrimeiroNome } from '../services/nome';
 import { useAuthStore } from '../store/auth';
 import { LC } from '../constants/theme';
 import { STUDIO_NOME, DIAS_PT } from '../constants/app';
@@ -56,7 +59,8 @@ export default function Dashboard() {
     );
   }
 
-  const primeiroNome = nome?.split(' ')[0] || 'Aluno';
+  // O cadastro é todo em caixa alta; "Olá, MARINA!" grita com a aluna.
+  const primeiroNome = nome ? soPrimeiroNome(nome) : 'Aluno';
   const proxima = meus.data?.[0];
   const hist = historico.data ?? [];
   const aulasFeitas = hist.filter((a) => a.status === 'REALIZADO' || a.presenca?.compareceu).length;
@@ -71,45 +75,54 @@ export default function Dashboard() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} colors={[LC.primary]} tintColor={LC.primary} />}
       >
-        {/* Header */}
-        <View style={s.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.greeting}>Olá, {primeiroNome}!</Text>
-            <Text style={s.greetingSub}>Bem-vindo(a) ao seu espaço.</Text>
+        {/*
+          Saudação e saldo da semana num bloco escuro só.
+          Eram duas coisas separadas — um título preto no branco e, abaixo, um
+          card com o plano. Juntando, a primeira dobra da tela responde de uma
+          vez as duas perguntas de quem abre o app: "quantas aulas ainda tenho
+          esta semana" e "qual é a próxima". O anel mostra o saldo antes de a
+          pessoa ler o número.
+        */}
+        <LinearGradient colors={LC.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
+          <View style={s.header}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.kicker}>{STUDIO_NOME}</Text>
+              <Text style={s.greeting}>Olá, {primeiroNome}!</Text>
+            </View>
+            <Toque escala={0.9} style={s.bell} onPress={() => router.push('/notificacoes')} hitSlop={8}>
+              <Icon name="notifications-outline" size={21} color="#fff" />
+              <View style={s.bellDot} />
+            </Toque>
           </View>
-          <Pressable style={s.bell} onPress={() => router.push('/notificacoes')} hitSlop={8}>
-            <Icon name="notifications-outline" size={22} color={LC.textPrimary} />
-            <View style={s.bellDot} />
-          </Pressable>
-        </View>
 
-        {/* Plano + saldo */}
-        {saldo.data ? (
-          <Card style={s.block} padding={18}>
-            <View style={s.planRow}>
+          {saldo.data ? (
+            <View style={s.saldoBloco}>
+              <AnelProgresso
+                fracao={saldo.data.total > 0 ? saldo.data.usadas / saldo.data.total : 0}
+                tamanho={92}
+                espessura={8}
+                cor={LC.primaryMid}
+                trilho="rgba(255,255,255,0.18)"
+                corDoFuro="#08494D"
+              >
+                <Text style={s.anelNum}>{saldo.data.total - saldo.data.usadas}</Text>
+                <Text style={s.anelLabel}>restam</Text>
+              </AnelProgresso>
+
               <View style={{ flex: 1 }}>
-                <Text style={s.metaLabel}>Plano atual</Text>
-                <Text style={s.planNome}>{saldo.data.plano}</Text>
-                <Text style={s.planSub}>{saldo.data.total} aulas por semana</Text>
+                <Text style={s.saldoLabel}>Saldo da semana</Text>
+                <Text style={s.saldoCount}>
+                  {saldo.data.usadas} de {saldo.data.total} aulas usadas
+                </Text>
+                <Text style={s.saldoRenova}>Renova em {endOfIsoWeekFormatted()}</Text>
+                <Toque escala={0.94} style={s.linkRow} onPress={() => router.push('/meu-plano')} hitSlop={6}>
+                  <Text style={s.linkText}>{saldo.data.plano}</Text>
+                  <Icon name="chevron-forward" size={15} color="#fff" />
+                </Toque>
               </View>
-              <Pressable style={s.linkRow} onPress={() => router.push('/meu-plano')} hitSlop={6}>
-                <Text style={s.linkText}>Ver detalhes</Text>
-                <Icon name="chevron-forward" size={16} color={LC.primary} />
-              </Pressable>
             </View>
-
-            <View style={s.divider} />
-
-            <View style={s.saldoHead}>
-              <Text style={s.saldoLabel}>Saldo da semana</Text>
-              <Text style={s.saldoRenova}>Renova em {endOfIsoWeekFormatted()}</Text>
-            </View>
-            <Text style={s.saldoCount}>
-              {saldo.data.usadas} de {saldo.data.total} aulas utilizadas
-            </Text>
-            <SaldoDots usadas={saldo.data.usadas} total={saldo.data.total} />
-          </Card>
-        ) : null}
+          ) : null}
+        </LinearGradient>
 
         {/* Próxima aula */}
         {proxima ? (
@@ -234,27 +247,51 @@ function Stat({ value, label }: { value: string; label: string }) {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   scroll: { ...LC.coluna, paddingBottom: 16 },
-  header: { ...LC.coluna, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
-  greeting: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
-  greetingSub: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
-  bell: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: LC.bgCard,
-    borderWidth: 1, borderColor: LC.border, alignItems: 'center', justifyContent: 'center',
+  // ── Bloco escuro do topo ──────────────────────────────────────────
+  hero: { paddingBottom: 26, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, marginBottom: 18 },
+  header: { ...LC.coluna, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 58, paddingBottom: 20 },
+  kicker: {
+    fontSize: 10.5, fontWeight: '800', letterSpacing: 1.6,
+    textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 6,
   },
-  bellDot: { position: 'absolute', top: 11, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: LC.danger, borderWidth: 1.5, borderColor: LC.bgCard },
+  greeting: { fontSize: 27, fontWeight: '800', color: '#fff', letterSpacing: -0.7 },
+  bell: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center',
+  },
+  bellDot: { position: 'absolute', top: 11, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: '#FBBF24', borderWidth: 1.5, borderColor: '#0B5F63' },
+
+  saldoBloco: {
+    ...LC.coluna, flexDirection: 'row', alignItems: 'center', gap: 20,
+    paddingHorizontal: 22,
+  },
+  /** O número grande dentro do anel: quantas aulas ainda cabem na semana. */
+  anelNum: { fontSize: 30, fontWeight: '800', color: '#fff', letterSpacing: -1 },
+  anelLabel: {
+    fontSize: 9, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.6)', marginTop: -1,
+  },
+  saldoLabel: {
+    fontSize: 10.5, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.55)',
+  },
+  saldoCount: { fontSize: 17, fontWeight: '700', color: '#fff', marginTop: 5 },
+  saldoRenova: { fontSize: 12.5, color: 'rgba(255,255,255,0.6)', marginTop: 3 },
+  linkRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 12,
+    alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.13)',
+    paddingLeft: 12, paddingRight: 8, paddingVertical: 6, borderRadius: LC.radius.full,
+  },
+  linkText: { color: '#fff', fontSize: 12.5, fontWeight: '700' },
+
   block: { marginHorizontal: 16, marginBottom: 12 },
   metaLabel: { fontSize: 12, color: LC.textMuted, marginBottom: 3 },
   planRow: { flexDirection: 'row', alignItems: 'flex-start' },
   planNome: { fontSize: 18, fontWeight: '800', color: LC.textPrimary },
   planSub: { fontSize: 13, color: LC.textSecondary, marginTop: 2 },
-  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  linkText: { color: LC.primary, fontSize: 13, fontWeight: '700' },
   divider: { height: 1, backgroundColor: LC.border, marginVertical: 14 },
   saldoHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  saldoLabel: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
-  saldoRenova: { fontSize: 12, color: LC.textMuted },
-  saldoCount: { fontSize: 13, color: LC.textSecondary, marginBottom: 12 },
-  nextCard: { borderRadius: LC.radius.lg, padding: 18 },
+  nextCard: { borderRadius: LC.radius.xl, padding: 20, ...LC.shadowCard },
   nextHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   nextLabel: { fontSize: 12, color: 'rgba(255,255,255,0.75)' },
   nextIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
