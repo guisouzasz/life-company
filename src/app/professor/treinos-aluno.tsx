@@ -25,6 +25,7 @@ import { useMe } from '../../services/auth/auth.queries';
 import type { ExercicioPayload, Treino } from '../../services/treinos/treinos.types';
 import { ApiError } from '../../services/http';
 import { formatDate } from '../../services/date';
+import { primeiroNome } from '../../services/nome';
 
 interface ExercicioForm extends ExercicioPayload {
   seriesTexto: string;
@@ -579,7 +580,7 @@ export default function TreinosAluno() {
               </Card>
             ))
           ) : (
-            <EmptyState icon="barbell-outline" title="Nenhum treino ainda" description={`Monte o primeiro treino de ${alunoNome.split(' ')[0]}.`} />
+            <EmptyState icon="barbell-outline" title="Nenhum treino ainda" description={`Monte o primeiro treino de ${primeiroNome(alunoNome)}.`} />
           )}
           <View style={{ height: 90 }} />
         </ScrollView>
@@ -603,7 +604,7 @@ export default function TreinosAluno() {
       <ConfirmModal
         visible={!!excluindo}
         title="Remover treino"
-        message={excluindo ? `Remover "${excluindo.titulo}" de ${alunoNome.split(' ')[0]}?` : ''}
+        message={excluindo ? `Remover "${excluindo.titulo}" de ${primeiroNome(alunoNome)}?` : ''}
         confirmLabel="Remover"
         cancelLabel="Voltar"
         destructive

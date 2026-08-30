@@ -4,6 +4,7 @@ import { Icon } from '../ui/icon';
 import { Badge } from '../ui/badge';
 import type { Anamnese } from '../../services/anamnese/anamnese.types';
 import { formatDate } from '../../services/date';
+import { primeiroNome } from '../../services/nome';
 
 /**
  * O que o aluno respondeu sobre a saúde dele.
@@ -56,7 +57,7 @@ export function FichaSaude({ ficha, alunoNome, completa = false }: Props) {
         <Icon name="clipboard-outline" size={34} color={LC.textMuted} />
         <Text style={s.vazioTitulo}>Ficha ainda não preenchida</Text>
         <Text style={s.vazioTexto}>
-          {alunoNome.split(' ')[0]} não respondeu a ficha de saúde no app. Vale pedir que preencha
+          {primeiroNome(alunoNome)} não respondeu a ficha de saúde no app. Vale pedir que preencha
           antes do primeiro treino — é onde ele conta lesões, cirurgias e limitações.
         </Text>
       </View>

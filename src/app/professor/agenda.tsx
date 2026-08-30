@@ -15,6 +15,7 @@ import { useIsTablet } from '../../hooks/use-is-desktop';
 import { useMe } from '../../services/auth/auth.queries';
 import type { HorarioVaga } from '../../services/horarios/horarios.types';
 import { formatDate, getDiaSemanaKey, getProximosDiasUteis } from '../../services/date';
+import { primeiroNome } from '../../services/nome';
 
 type Dia = ReturnType<typeof getProximosDiasUteis>[number];
 
@@ -59,7 +60,7 @@ export default function ProfessorAgenda() {
       <StatusBar barStyle="dark-content" />
       <View style={[s.header, largo]}>
         <Text style={s.title}>Agenda{minhaModalidade ? ` — ${nomeModalidade(minhaModalidade)}` : ''}</Text>
-        <Text style={s.subtitle}>Olá, {nome?.split(' ')[0] ?? 'Professor'} — toque numa aula para ver os alunos</Text>
+        <Text style={s.subtitle}>Olá, {nome ? primeiroNome(nome) : 'Professor'} — toque numa aula para ver os alunos</Text>
       </View>
 
       {hojeEhUtil ? <AulaAgora aulasDeHoje={aulasDeHoje} hoje={hoje} porAluno={porAluno} /> : null}
