@@ -206,6 +206,12 @@ export default function AdminAgenda() {
             {ehSemanaAtual ? ' • semana atual' : ''}
           </Text>
         </View>
+        {/*
+          No celular este botão ficava no fim da rolagem, depois de todas as
+          aulas do dia. Para trocar a grade a dona tinha que descer a tela
+          inteira e caçar — num dia cheio são vários rolares. Aqui em cima ele
+          está sempre à vista, no mesmo lugar em que já estava no computador.
+        */}
         {isDesktop ? (
           <Button
             title="Gerenciar horários"
@@ -215,7 +221,18 @@ export default function AdminAgenda() {
             leftIcon={<Icon name="options-outline" size={15} color={LC.primary} />}
             onPress={() => router.replace('/admin/horarios')}
           />
-        ) : null}
+        ) : (
+          <Pressable
+            style={s.gerenciarTopo}
+            onPress={() => router.replace('/admin/horarios')}
+            accessibilityRole="button"
+            accessibilityLabel="Gerenciar horários"
+            hitSlop={8}
+          >
+            <Icon name="options-outline" size={15} color={LC.primary} />
+            <Text style={s.gerenciarTopoTexto}>Horários</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={s.navSemana}>
@@ -302,10 +319,6 @@ export default function AdminAgenda() {
             ) : (
               diaAberto.aulas.map((a) => <CardDaAula key={a.horarioId} dia={diaAberto} aula={a} />)
             )}
-            <Pressable style={s.gerenciar} onPress={() => router.replace('/admin/horarios')}>
-              <Icon name="options-outline" size={16} color={LC.primary} />
-              <Text style={s.gerenciarTexto}>Gerenciar horários</Text>
-            </Pressable>
             <View style={{ height: 90 }} />
           </ScrollView>
         </>
@@ -408,10 +421,16 @@ const s = StyleSheet.create({
   diaChipPontoSel: { backgroundColor: '#fff' },
   diaChipPontoVazio: { width: 5, height: 5, marginTop: 1 },
 
-  gerenciar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-    marginTop: 16, paddingVertical: 13, borderRadius: LC.radius.md,
-    borderWidth: 1.5, borderColor: LC.primary, borderStyle: 'dashed',
+  /**
+   * Atalho para a grade, no cabeçalho do celular. Compacto de propósito: divide
+   * a linha com o título "Agenda da semana" e não pode empurrá-lo para baixo.
+   */
+  gerenciarTopo: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: LC.radius.full,
+    backgroundColor: LC.primaryLight,
+    borderWidth: 1, borderColor: LC.primarySoft,
   },
-  gerenciarTexto: { fontSize: 14, fontWeight: '700', color: LC.primary },
+  gerenciarTopoTexto: { fontSize: 13, fontWeight: '700', color: LC.primary },
 });
