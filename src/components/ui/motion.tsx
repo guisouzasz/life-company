@@ -74,6 +74,13 @@ export const Toque = forwardRef<any, PressableProps & {
  * O escalonamento (`indice`) é o que faz a lista parecer que se montou em vez
  * de aparecer de uma vez. Passa de 8 itens e o último demoraria demais, então
  * o atraso satura.
+ *
+ * CUIDADO no navegador: a animação de entrada do Reanimated tira o item do
+ * fluxo do layout. Enquanto a lista for a última coisa do ScrollView isso não
+ * aparece, mas QUALQUER elemento depois dela (um rodapé, uma paginação) sobe e
+ * fica por cima do primeiro item — e chega a roubar o toque dele. Aconteceu na
+ * tela de registro de ações. Se houver algo abaixo da lista, use os itens sem
+ * este envelope.
  */
 export function EntraSubindo({
   indice = 0,

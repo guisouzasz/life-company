@@ -22,6 +22,7 @@ import { nomeModalidade } from '../../constants/assets';
 import { openBrowserAsync } from 'expo-web-browser';
 import { linkWhatsapp, mensagemAniversario, telefoneParaWhatsapp } from '../../services/whatsapp';
 import type { RelatorioDashboard } from '../../services/relatorios/relatorios.types';
+import { useMe } from '../../services/auth/auth.queries';
 
 type StatDef = { label: string; value: number | string; icon: IconName; color: string; bg: string };
 type AcaoDef = { label: string; desc: string; icon: IconName; route: string; color: string; bg: string };
@@ -33,6 +34,16 @@ const ACOES: AcaoDef[] = [
   { label: 'Frequência', desc: 'Presenças e faltas', icon: 'stats-chart-outline', route: '/admin/frequencia', color: '#F59E0B', bg: '#FEF3C7' },
   { label: 'Novo aluno', desc: 'Cadastrar e gerar link', icon: 'person-add-outline', route: '/admin/novo-aluno', color: LC.info, bg: LC.infoBg },
 ];
+
+/** Só o dono vê. Fora do ACOES para não vazar na tela de quem não é. */
+const ACAO_DO_DONO: AcaoDef = {
+  label: 'O que foi feito',
+  desc: 'Registro de ações do sistema',
+  icon: 'document-text-outline',
+  route: '/admin/logs',
+  color: '#7C3AED',
+  bg: '#EDE9FE',
+};
 
 // ── Blocos reutilizados nos dois layouts ─────────────────────────────
 
@@ -455,6 +466,8 @@ function FinanceiroCard() {
 
 export default function AdminDashboard() {
   const nome = useAuthStore((s) => s.nome);
+  const me = useMe();
+  const ehDono = me.data?.dono === true;
   const relatorio = useRelatorioDashboard();
   const logout = useLogout();
   const isDesktop = useIsDesktop();
@@ -589,7 +602,12 @@ export default function AdminDashboard() {
 
               <Text style={s.sectionTitle}>Gestão rápida</Text>
               <View style={s.acoes}>
-                {ACOES.map((a) => (
+                {/*
+                  No celular a barra de abas já está cheia (cinco), e uma sexta
+                  deixaria os rótulos ilegíveis. O registro de ações entra aqui,
+                  na gestão rápida, e só para o dono.
+                */}
+                {(ehDono ? [...ACOES, ACAO_DO_DONO] : ACOES).map((a) => (
                   <Pressable
                     key={a.label}
                     onPress={() => router.push(a.route as any)}

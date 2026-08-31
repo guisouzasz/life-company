@@ -6,6 +6,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import { garantirEsquema } from './prisma/garantir-esquema';
+import { garantirDono } from './prisma/garantir-dono';
 
 /** Origens do app web autorizadas a chamar a API (CORS_ORIGINS separa por vírgula). */
 const ORIGENS_PADRAO = [
@@ -64,6 +65,15 @@ async function bootstrap() {
   // Alinha o banco ANTES de aceitar tráfego: enquanto isto não passa, quem
   // está usando o sistema continua atendido pela versão anterior do deploy.
   await garantirEsquema(app.get(PrismaService));
+
+  /**
+   * Depois do esquema, porque depende da coluna `dono`. Falha aqui não
+   * derruba o boot: sem o dono o estúdio continua funcionando normalmente —
+   * só a área de registro fica inacessível.
+   */
+  await garantirDono(app.get(PrismaService)).catch((e) =>
+    console.error('não consegui garantir o usuário dono:', e?.message),
+  );
 
   const port = process.env.PORT || 3000;
   await app.listen(port);

@@ -49,6 +49,11 @@ model Usuario {
   dataNascimento        DateTime?   @map("data_nascimento")
   senhaHash             String?     @map("senha_hash")
   tipoUsuario           TipoUsuario @default(ALUNO) @map("tipo_usuario")
+  /// Dono do sistema: um ADMIN que também enxerga o registro de ações.
+  /// É uma MARCA, não um tipo novo, de propósito — assim todo guard, rota e
+  /// tela que já existem continuam valendo sem nenhuma alteração, e o dono
+  /// simplesmente ganha uma área a mais.
+  dono                  Boolean     @default(false)
   ativo                 Boolean     @default(true)
   fcmToken              String?     @map("fcm_token")
   // Financeiro: valor personalizado (override do preço do plano) e dia do vencimento
@@ -73,9 +78,46 @@ model Usuario {
   treinosDia          TreinoDia[]        @relation("TreinosDiaDoProfessor")
   anamnese            Anamnese?
   aceitesTermo        AceiteTermo[]
+  logsAcao            LogAcao[]
   modalidadeProfessor Modalidade?        @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
 
   @@map("usuarios")
+}
+
+/// Registro do que o estúdio fez no sistema.
+///
+/// Serve para responder "quem mexeu nisso, e quando" — aluno que sumiu da
+/// turma, plano que mudou, crédito que apareceu. Grava só ESCRITA (criar,
+/// editar, apagar): registrar leitura encheria a tabela sem responder nada.
+///
+/// O que NÃO entra aqui, de propósito: senha, token, e o conteúdo de anamnese
+/// e treino. O log não pode virar uma segunda cópia dos dados de saúde do
+/// aluno — guarda o suficiente para reconstruir a ação, não os dados dela.
+model LogAcao {
+  id         String   @id @default(uuid())
+  /// Quem fez. Null quando a ação não tinha sessão (ex: login que falhou).
+  usuarioId  String?  @map("usuario_id")
+  /// Nome e tipo copiados no momento da ação: se o usuário for editado ou
+  /// desativado depois, o log continua contando a história certa.
+  usuarioNome String  @map("usuario_nome")
+  usuarioTipo String  @map("usuario_tipo")
+  metodo     String
+  rota       String
+  /// Frase legível, montada a partir da rota ("Colocou aluno na aula").
+  resumo     String
+  /// Registro afetado, quando dá para saber pela rota.
+  entidadeId String?  @map("entidade_id")
+  /// Campos úteis e seguros do corpo, em JSON. Nunca dados sensíveis.
+  detalhe    String?
+  status     Int
+  ip         String?
+  criadoEm   DateTime @default(now()) @map("criado_em")
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([criadoEm])
+  @@index([usuarioId, criadoEm])
+  @@map("logs_acao")
 }
 
 /// Aceite do termo de normas, gravado no primeiro acesso do aluno.

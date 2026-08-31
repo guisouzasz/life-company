@@ -77,6 +77,9 @@ export class AuthService {
       where: { id: usuarioId },
       select: {
         id: true, nome: true, email: true, cpf: true, telefone: true, tipoUsuario: true,
+        // A marca de dono vem daqui para o app saber se mostra a área de
+        // registro. É só uma dica de tela — quem manda é o guard na API.
+        dono: true,
         modalidadeProfessor: { select: { id: true, nome: true } },
       },
     });
