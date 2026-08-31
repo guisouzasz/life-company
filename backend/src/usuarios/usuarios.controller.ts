@@ -44,5 +44,15 @@ export class UsuariosController {
 
   @Delete(':id') @UseGuards(AdminGuard) excluir(@Param('id') id: string) { return this.service.excluir(id); }
 
+  /**
+   * Exclusão definitiva. Rota separada do DELETE simples de propósito: quem
+   * desativa e quem apaga de vez não podem ser o mesmo botão nem o mesmo
+   * endereço — um toque errado aqui não tem volta.
+   */
+  @Delete(':id/definitivo')
+  @UseGuards(AdminGuard)
+  @ApiOperation({ summary: 'Excluir aluno definitivamente (dados pessoais e conteúdo)' })
+  excluirDefinitivo(@Param('id') id: string) { return this.service.excluirDefinitivamente(id); }
+
   @Post(':id/gerar-link') @UseGuards(AdminGuard) gerarLink(@Param('id') id: string) { return this.service.gerarLink(id); }
 }

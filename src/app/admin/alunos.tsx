@@ -10,12 +10,12 @@ import { Avatar } from '../../components/ui/avatar';
 import { Badge } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
-import { AppModal } from '../../components/ui/modal';
+import { AppModal, ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { CreditosAlunoModal } from '../../components/admin/creditos-aluno-modal';
 import { HorariosFixosAlunoModal } from '../../components/admin/horarios-fixos-aluno-modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
-import { useGerarLink, useAtualizarAluno } from '../../services/usuarios/usuarios.mutations';
+import { useGerarLink, useAtualizarAluno, useExcluirAlunoDefinitivamente } from '../../services/usuarios/usuarios.mutations';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { ApiError } from '../../services/http';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
@@ -86,6 +86,11 @@ export default function AdminAlunos() {
     nome: '', rg: '', cpf: '', endereco: '', cep: '', email: '', nascimento: '', telefone: '', ativo: true,
   });
   const [erroEdicao, setErroEdicao] = useState<string | null>(null);
+  /** Recado depois de desativar: o que saiu das turmas. */
+  const [aviso, setAviso] = useState<{ titulo: string; texto: string } | null>(null);
+  /** Aluno que a dona quer apagar de vez — precisa confirmar. */
+  const [excluindo, setExcluindo] = useState<AlunoAdmin | null>(null);
+  const excluirDefinitivo = useExcluirAlunoDefinitivamente();
 
   const abrirEdicao = (aluno: AlunoAdmin) => {
     setEditando(aluno);
@@ -143,7 +148,21 @@ export default function AdminAlunos() {
         },
       },
       {
-        onSuccess: () => setEditando(null),
+        onSuccess: (r: any) => {
+          setEditando(null);
+          // A API devolve o que foi liberado quando o aluno é desativado.
+          const fixos = r?.horariosFixosRemovidos ?? 0;
+          const aulas = r?.aulasCanceladas ?? 0;
+          if (fixos > 0 || aulas > 0) {
+            const partes = [];
+            if (fixos > 0) partes.push(`${fixos} horário(s) fixo(s)`);
+            if (aulas > 0) partes.push(`${aulas} aula(s) futura(s)`);
+            setAviso({
+              titulo: 'Aluno desativado',
+              texto: `Foram liberados: ${partes.join(' e ')}. As vagas voltaram para as turmas.`,
+            });
+          }
+        },
         onError: (e) => setErroEdicao(e instanceof ApiError ? e.message : 'Não foi possível salvar.'),
       },
     );
@@ -269,6 +288,23 @@ export default function AdminAlunos() {
                         <Icon name="link-outline" size={15} color={LC.primary} />
                         <Text style={s.tAcaoText}>Link</Text>
                       </Pressable>
+                      {/*
+                        Só para quem já está inativo. Excluir de vez é o fim de
+                        um caminho — desativa primeiro, e se a pessoa não
+                        voltar mesmo, apaga. Oferecer isso ao lado de "Editar"
+                        num aluno em atividade é convite a um toque errado que
+                        não tem volta.
+                      */}
+                      {!aluno.ativo && (
+                        <Pressable
+                          style={s.tAcao}
+                          onPress={() => setExcluindo(aluno)}
+                          accessibilityLabel={`Excluir ${aluno.nome} definitivamente`}
+                        >
+                          <Icon name="trash-outline" size={15} color={LC.danger} />
+                          <Text style={[s.tAcaoText, { color: LC.danger }]}>Excluir</Text>
+                        </Pressable>
+                      )}
                     </View>
                   </View>
                 );
@@ -401,12 +437,29 @@ export default function AdminAlunos() {
               </Pressable>
             </View>
             {!form.ativo ? (
-              <Text style={s.editAviso}>Inativo não consegue entrar no app nem agendar aulas.</Text>
+              /*
+                O aviso precisa dizer o que ACONTECE, não só o que fica
+                proibido. Ao salvar como inativo o aluno sai das turmas — sem
+                isso ele continuaria ocupando vaga, e era assim que as turmas
+                do estúdio ficavam "lotadas" de gente que não treina mais.
+              */
+              <Text style={s.editAviso}>
+                Inativo não entra no app nem agenda aulas. Ao salvar, ele sai dos horários fixos e as
+                aulas futuras dele são canceladas — as vagas voltam para as turmas. Se ele voltar, é
+                preciso cadastrar os horários de novo.
+              </Text>
             ) : null}
 
-            {erroEdicao ? <Text style={s.erro}>{erroEdicao}</Text> : null}
           </View>
         </ScrollView>
+        {/*
+          O erro fica FORA da rolagem, colado no botão.
+          Dentro do formulário ele nascia embaixo do último campo, fora da
+          área visível: a dona apertava "Salvar", nada acontecia na tela e o
+          motivo estava escondido abaixo da dobra. Aqui ela lê antes de
+          apertar de novo.
+        */}
+        {erroEdicao ? <Text style={[s.erro, s.erroFixo]}>{erroEdicao}</Text> : null}
         <View style={s.modalActions}>
           <Button title="Cancelar" variant="outline" onPress={() => setEditando(null)} style={{ flex: 1 }} />
           <Button title="Salvar" loading={atualizar.isPending} onPress={salvarEdicao} style={{ flex: 1 }} />
@@ -418,6 +471,51 @@ export default function AdminAlunos() {
 
       {/* Modal: plano e horário fixo do aluno */}
       <HorariosFixosAlunoModal aluno={planoHorarioAluno} onClose={() => setPlanoHorarioAluno(null)} />
+
+      {/*
+        Excluir de vez. O texto diz exatamente o que some e o que fica: sem
+        isso a escolha entre "desativar" e "excluir" seria um chute, e só uma
+        delas tem volta.
+      */}
+      <ConfirmModal
+        visible={!!excluindo}
+        title="Excluir definitivamente?"
+        message={
+          excluindo
+            ? `${excluindo.nome} vai sair da lista para sempre. Somem os dados pessoais (contato, ` +
+              `documento), os treinos e os créditos. As aulas e os pagamentos ficam no histórico do ` +
+              `estúdio, sem o nome. NÃO TEM VOLTA.\n\nSe ele pode voltar a treinar um dia, use ` +
+              `"Inativo" no cadastro em vez disto.`
+            : ''
+        }
+        confirmLabel="Excluir para sempre"
+        destructive
+        loading={excluirDefinitivo.isPending}
+        onConfirm={() => {
+          if (!excluindo) return;
+          excluirDefinitivo.mutate(excluindo.id, {
+            onSuccess: (r: any) => {
+              setExcluindo(null);
+              setAviso({ titulo: 'Aluno excluído', texto: r?.mensagem ?? 'Cadastro removido.' });
+            },
+            onError: (e) => {
+              setExcluindo(null);
+              setAviso({
+                titulo: 'Não foi possível excluir',
+                texto: e instanceof ApiError ? e.message : 'Tente de novo.',
+              });
+            },
+          });
+        }}
+        onCancel={() => setExcluindo(null)}
+      />
+
+      <InfoModal
+        visible={!!aviso}
+        title={aviso?.titulo ?? ''}
+        message={aviso?.texto ?? ''}
+        onClose={() => setAviso(null)}
+      />
     </View>
   );
 }
@@ -475,6 +573,14 @@ const s = StyleSheet.create({
   editChipText: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
   editAviso: { fontSize: 12, color: LC.textMuted, marginTop: -4 },
   erro: { fontSize: 13, color: LC.danger },
+  erroFixo: {
+    backgroundColor: LC.dangerBg,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    lineHeight: 18,
+  },
 
   // ── Tabela desktop ──────────────────────────────────────────────
   tabela: { overflow: 'hidden' },

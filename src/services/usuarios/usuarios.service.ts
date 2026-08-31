@@ -52,4 +52,10 @@ export const usuariosService = {
     const { data } = await http.post<GerarLinkResposta>(`/usuarios/${id}/gerar-link`, {});
     return data;
   },
+
+  /** Apaga o aluno de vez (dados pessoais e conteúdo; histórico fica anônimo). */
+  async excluirDefinitivamente(id: string): Promise<{ mensagem: string }> {
+    const { data } = await http.delete<{ mensagem: string }>(`/usuarios/${id}/definitivo`);
+    return data;
+  },
 };

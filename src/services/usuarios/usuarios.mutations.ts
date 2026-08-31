@@ -47,3 +47,23 @@ export function useDefinirSenha() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['usuarios'] }),
   });
 }
+
+/**
+ * Apaga o aluno de vez.
+ *
+ * Separada de qualquer mutation de edição de propósito: desativar e excluir
+ * não podem compartilhar caminho, porque só uma delas tem volta.
+ */
+export function useExcluirAlunoDefinitivamente() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => usuariosService.excluirDefinitivamente(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['usuarios'] });
+      qc.invalidateQueries({ queryKey: ['agendamentos'] });
+      qc.invalidateQueries({ queryKey: ['horarios'] });
+      qc.invalidateQueries({ queryKey: ['horarios-fixos'] });
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+    },
+  });
+}

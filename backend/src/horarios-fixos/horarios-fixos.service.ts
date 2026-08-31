@@ -20,6 +20,29 @@ export class HorariosFixosService {
   }
 
   async criar(usuarioId: string, dto: CriarHorarioFixoDto) {
+    /**
+     * Aluno desativado não entra em turma.
+     *
+     * Desativar já tira a pessoa dos horários fixos, mas nada impedia de
+     * colocá-la de volta depois — e aí ela voltava a ocupar vaga sem treinar,
+     * que é exatamente o buraco que enchia as turmas do estúdio. Melhor
+     * recusar com um aviso do que deixar a vaga sumir em silêncio.
+     *
+     * O critério é `inativo E já tem senha`, o mesmo do resto do sistema:
+     * cadastro novo nasce inativo e só vira ativo no primeiro acesso do aluno,
+     * e o caminho mais comum da dona é cadastrar e já colocar na turma.
+     */
+    const aluno = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { nome: true, ativo: true, senhaHash: true },
+    });
+    if (!aluno) throw new NotFoundException('Aluno não encontrado');
+    if (!aluno.ativo && aluno.senhaHash) {
+      throw new BadRequestException(
+        `O cadastro de ${aluno.nome} está inativo. Reative antes de colocar num horário fixo.`,
+      );
+    }
+
     const usuarioPlano = await this.prisma.usuarioPlano.findFirst({
       where: { usuarioId, vigenciaFim: null },
       include: { plano: true },

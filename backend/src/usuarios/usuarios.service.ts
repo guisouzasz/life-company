@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -281,7 +282,7 @@ export class UsuariosService {
       if (outro) throw new ConflictException("Já existe um cadastro com este e-mail");
     }
 
-    return this.prisma.usuario.update({
+    const atualizado = await this.prisma.usuario.update({
       where: { id },
       select: CAMPOS_DO_CADASTRO,
       data: {
@@ -300,6 +301,50 @@ export class UsuariosService {
         ativo: data.ativo,
         modalidadeProfessorId,
       },
+    });
+
+    /**
+     * Desativar pela ficha tem que tirar das turmas igual ao botão de
+     * desativar.
+     *
+     * Este é o caminho que o estúdio realmente usa: a dona abre o cadastro,
+     * marca "Inativo" e salva. Se a limpeza morasse só no DELETE, o aluno
+     * continuaria ocupando vaga em toda turma — que era exatamente o que
+     * estava acontecendo.
+     */
+    const desligou = atual.ativo && data.ativo === false;
+    if (desligou) {
+      const limpeza = await this.tirarDasTurmas(id);
+      return { ...atualizado, ...limpeza };
+    }
+
+    return atualizado;
+  }
+
+  /**
+   * Desliga os horários fixos e cancela as aulas futuras de quem saiu.
+   *
+   * Não gera crédito de reposição: o aluno está saindo do estúdio, não perdeu
+   * uma aula que precise repor.
+   */
+  private async tirarDasTurmas(usuarioId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const { count: horariosFixosRemovidos } = await tx.horarioFixo.updateMany({
+        where: { usuarioId, ativo: true },
+        data: { ativo: false },
+      });
+
+      // Só as futuras: aula que já aconteceu é histórico e não se apaga.
+      const { count: aulasCanceladas } = await tx.agendamento.updateMany({
+        where: {
+          usuarioId,
+          status: "CONFIRMADO",
+          dataAula: { gte: dayjs().startOf("day").toDate() },
+        },
+        data: { status: "CANCELADO" },
+      });
+
+      return { horariosFixosRemovidos, aulasCanceladas };
     });
   }
 
@@ -331,10 +376,77 @@ export class UsuariosService {
     });
   }
 
+  /**
+   * Desativa o cadastro E o tira das turmas.
+   *
+   * Antes isto só marcava `ativo: false`, e o resto ficava de pé: os horários
+   * fixos continuavam ativos, as aulas futuras continuavam CONFIRMADAS, e o
+   * cron das 3h seguia gerando aulas novas para quem já tinha saído do
+   * estúdio. Como a lotação conta agendamento confirmado sem olhar se a
+   * pessoa ainda é aluna, as turmas iam enchendo de gente que não treina mais
+   * — e a dona, ao tentar colocar alguém num horário fixo, recebia "turma
+   * lotada" e concluía que o sistema não estava fixando ninguém. Era esse o
+   * problema do horário fixo que não pegava.
+   *
+   * Não gera crédito de reposição: o aluno está saindo, não perdeu aula.
+   *
+   * Reativar depois NÃO devolve os horários fixos — eles precisam ser
+   * recadastrados. É o comportamento previsível: as turmas mudam, e devolver
+   * automaticamente alguém a um horário de meses atrás causaria surpresa pior.
+   */
   async excluir(id: string) {
-    await this.buscarPorId(id);
+    const usuario = await this.buscarPorId(id);
+    const { horariosFixosRemovidos, aulasCanceladas } = await this.tirarDasTurmas(id);
     await this.prisma.usuario.update({ where: { id }, data: { ativo: false } });
-    return { mensagem: "Usuário desativado" };
+
+    const partes: string[] = [];
+    if (horariosFixosRemovidos > 0) partes.push(`${horariosFixosRemovidos} horário(s) fixo(s) removido(s)`);
+    if (aulasCanceladas > 0) partes.push(`${aulasCanceladas} aula(s) futura(s) cancelada(s)`);
+
+    return {
+      mensagem:
+        partes.length > 0
+          ? `${usuario.nome} foi desativado. ${partes.join(" e ")} — as vagas voltaram para as turmas.`
+          : `${usuario.nome} foi desativado.`,
+      horariosFixosRemovidos,
+      aulasCanceladas,
+    };
+  }
+
+  /**
+   * Apaga o aluno de vez.
+   *
+   * Desativar guarda o cadastro para quem pode voltar; isto é para quem não
+   * volta — o estúdio pediu porque a lista ia acumulando gente de anos atrás.
+   *
+   * "Definitivo" aqui é sobre a PESSOA, não sobre a contabilidade: os dados
+   * pessoais e o conteúdo dela somem (nome, CPF, contato, treinos, cargas,
+   * créditos, acessos), e as aulas e pagamentos ficam como histórico anônimo.
+   * Apagar a linha inteira quebraria o financeiro e a frequência de meses
+   * fechados — o estúdio perderia o próprio passado para tirar um nome de uma
+   * lista.
+   *
+   * É a mesma rotina que o aluno usa para excluir a própria conta pelo app
+   * (exigência das lojas e da LGPD), agora acessível ao estúdio.
+   */
+  async excluirDefinitivamente(id: string) {
+    const usuario = await this.buscarPorId(id);
+    if (usuario.tipoUsuario === "ADMIN") {
+      throw new ForbiddenException(
+        "Contas de administrador não podem ser excluídas por aqui.",
+      );
+    }
+
+    // Antes de anonimizar, tira das turmas — senão as vagas ficariam ocupadas
+    // por um registro que nem nome tem mais.
+    await this.excluir(id);
+    const r = await this.authService.excluirMinhaConta(id);
+
+    // "O cadastro de Fulana" e não "Fulana foi excluído": o sistema não sabe o
+    // gênero de ninguém, e metade do estúdio é mulher.
+    return {
+      mensagem: `O cadastro de ${usuario.nome} foi excluído definitivamente. ${r.mensagem.replace(/^Sua conta foi excluída\. /, "")}`,
+    };
   }
 
   async saldoSemanal(usuarioId: string) {

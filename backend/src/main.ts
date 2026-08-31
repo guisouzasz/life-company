@@ -7,6 +7,7 @@ import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import { garantirEsquema } from './prisma/garantir-esquema';
 import { garantirDono } from './prisma/garantir-dono';
+import { limparInativos } from './prisma/limpar-inativos';
 
 /** Origens do app web autorizadas a chamar a API (CORS_ORIGINS separa por vírgula). */
 const ORIGENS_PADRAO = [
@@ -73,6 +74,14 @@ async function bootstrap() {
    */
   await garantirDono(app.get(PrismaService)).catch((e) =>
     console.error('não consegui garantir o usuário dono:', e?.message),
+  );
+
+  /**
+   * Devolve às turmas as vagas de alunos já desativados. Falha aqui não
+   * derruba o boot: é arrumação de dados, e o estúdio funciona sem ela.
+   */
+  await limparInativos(app.get(PrismaService)).catch((e) =>
+    console.error('não consegui limpar as turmas dos alunos inativos:', e?.message),
   );
 
   const port = process.env.PORT || 3000;

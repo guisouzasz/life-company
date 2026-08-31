@@ -44,6 +44,20 @@ export class AutoAgendamentoService {
         ativo: true,
         dataInicio: { lte: fimJanela.toDate() },
         OR: [{ dataFim: null }, { dataFim: { gte: hoje.toDate() } }],
+        /**
+         * Não gera para quem a dona desativou.
+         *
+         * Desativar já remove os horários fixos, então em tese não sobra nada
+         * para este filtro pegar — ele é a segunda tranca, para um fixo órfão
+         * não voltar a encher a turma toda madrugada.
+         *
+         * O critério NÃO é só `ativo: false`: cadastro novo nasce inativo e só
+         * vira ativo no primeiro acesso do aluno. Filtrar por `ativo` sozinho
+         * pararia de gerar as aulas de quem a dona acabou de cadastrar — que é
+         * o caminho mais comum do estúdio. Quem já tem senha E está inativo é
+         * quem foi desativado de verdade.
+         */
+        NOT: { usuario: { ativo: false, senhaHash: { not: null } } },
       },
       include: { horario: true },
     });
