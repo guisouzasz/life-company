@@ -14,6 +14,7 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio",
     "auditoria:limite": "ts-node scripts/varredura-limite-semanal.ts",
+    "auditoria:fixos": "node scripts/varredura-horarios-fixos.js",
     "diagnostico": "bash scripts/diagnostico-api.sh"
   },
   "dependencies": {
