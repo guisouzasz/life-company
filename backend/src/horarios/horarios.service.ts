@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { capacidadeEfetiva, tetoDaModalidade } from './capacidade';
+import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -13,7 +14,10 @@ const DIA_PARA_NUMERO: Record<string, number> = {
 
 @Injectable()
 export class HorariosService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private autoAgendamento: AutoAgendamentoService,
+  ) {}
 
   /** Próxima vez que este dia da semana acontece (hoje conta). */
   private proximaDataDo(diaSemana: string): Date {
@@ -43,6 +47,11 @@ export class HorariosService {
     const base = inicio ? dayjs(inicio) : dayjs();
     const segunda = base.startOf('isoWeek').startOf('day');
     const sexta = segunda.add(4, 'day');
+
+    await this.autoAgendamento.gerarAgendamentosFixosNoPeriodo(
+      segunda.toDate(),
+      sexta.endOf('day').toDate(),
+    );
 
     const [horarios, agendamentos] = await Promise.all([
       this.prisma.horario.findMany({
