@@ -51,6 +51,10 @@ function somarResultado(total: ResultadoGeracao, parcial: ResultadoGeracao) {
   }
 }
 
+function chaveAgendamento(usuarioId: string, horarioId: string, dataAula: Date | string) {
+  return `${usuarioId}|${horarioId}|${dayjs(dataAula).format('YYYY-MM-DD')}`;
+}
+
 @Injectable()
 export class AutoAgendamentoService {
   private readonly logger = new Logger(AutoAgendamentoService.name);
@@ -86,8 +90,36 @@ export class AutoAgendamentoService {
       include: { horario: true },
     });
 
+    if (fixos.length === 0) return total;
+
+    const existentes = await this.prisma.agendamento.findMany({
+      where: {
+        status: 'CONFIRMADO',
+        dataAula: { gte: inicioPeriodo.toDate(), lte: fimPeriodo.toDate() },
+        OR: fixos.map((fixo) => ({
+          usuarioId: fixo.usuarioId,
+          horarioId: fixo.horarioId,
+        })),
+      },
+      select: { usuarioId: true, horarioId: true, dataAula: true },
+    });
+    const jaConfirmados = new Set(
+      existentes.map((agendamento) =>
+        chaveAgendamento(
+          agendamento.usuarioId,
+          agendamento.horarioId,
+          agendamento.dataAula,
+        ),
+      ),
+    );
+
     for (const fixo of fixos) {
-      const r = await this.gerarParaFixo(fixo, inicioPeriodo, fimPeriodo);
+      const r = await this.gerarParaFixo(
+        fixo,
+        inicioPeriodo,
+        fimPeriodo,
+        jaConfirmados,
+      );
       somarResultado(total, r);
     }
 
@@ -116,6 +148,7 @@ export class AutoAgendamentoService {
     },
     inicioPeriodo = dayjs().startOf('day'),
     fimPeriodo = inicioPeriodo.add(JANELA_DIAS, 'day'),
+    jaConfirmados = new Set<string>(),
   ) {
     let criados = 0;
     let ignorados = 0;
@@ -148,6 +181,11 @@ export class AutoAgendamentoService {
       if (DIA_MAP[dia.isoWeekday()] !== fixo.horario.diaSemana) continue;
 
       const dataAula = dia.format('YYYY-MM-DD');
+      const chave = chaveAgendamento(fixo.usuarioId, fixo.horarioId, dataAula);
+      if (jaConfirmados.has(chave)) {
+        ignorados++;
+        continue;
+      }
 
       try {
         /**
@@ -175,6 +213,7 @@ export class AutoAgendamentoService {
         });
         criados++;
         datas.push(dataAula);
+        jaConfirmados.add(chave);
       } catch (e) {
         if (e instanceof ConflictException) {
           ignorados++;
