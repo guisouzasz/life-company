@@ -8,7 +8,26 @@ import { AgendamentosService } from '../agendamentos/agendamentos.service';
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
 const DIA_MAP: Record<number, string> = { 1: 'SEGUNDA', 2: 'TERCA', 3: 'QUARTA', 4: 'QUINTA', 5: 'SEXTA' };
-const JANELA_DIAS = 14;
+
+/**
+ * Até onde as aulas do horário fixo já ficam criadas.
+ *
+ * O horário fixo em si não tem prazo: enquanto estiver ativo e sem `dataFim`,
+ * ele vale para sempre. Isto aqui é só até onde as aulas ficam PRONTAS no
+ * banco antes de alguém pedir.
+ *
+ * Eram 14 dias, e duas semanas é pouco para quem paga mensalidade: o aluno
+ * abria o app, via duas aulas e concluía que a combinação dele tinha prazo de
+ * validade. Oito semanas cobrem o mês inteiro e o seguinte, que é o horizonte
+ * em que o estúdio pensa.
+ *
+ * Não precisa ser infinito, e não deve: cada aula criada é uma vaga ocupada de
+ * verdade. Materializar um ano à frente deixaria todas as turmas lotadas até
+ * 2027 e a dona sem conseguir encaixar ninguém. O cron das 3h empurra a janela
+ * um dia por vez, então na prática ela nunca acaba — e a agenda da semana
+ * materializa sob demanda quando a dona navega para além disto.
+ */
+const JANELA_DIAS = 56;
 
 type ResultadoGeracao = {
   criados: number;
