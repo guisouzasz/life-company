@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -20,8 +20,6 @@ import { TreinosModule } from './treinos/treinos.module';
 import { CargasModule } from './cargas/cargas.module';
 import { AnamneseModule } from './anamnese/anamnese.module';
 import { TermosModule } from './termos/termos.module';
-import { LogsModule } from './logs/logs.module';
-import { LogsInterceptor } from './logs/logs.interceptor';
 
 @Module({
   imports: [
@@ -47,19 +45,7 @@ import { LogsInterceptor } from './logs/logs.interceptor';
     CargasModule,
     AnamneseModule,
     TermosModule,
-    LogsModule,
   ],
-  providers: [
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
-    /**
-     * Auditoria global: registra toda escrita feita pelo estúdio.
-     *
-     * Global de propósito. Ligado controller a controller, bastaria um módulo
-     * novo esquecer de incluí-lo para uma parte do sistema virar invisível no
-     * registro — e um registro com buraco é pior que nenhum, porque leva a
-     * concluir que a ação nunca aconteceu.
-     */
-    { provide: APP_INTERCEPTOR, useClass: LogsInterceptor },
-  ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

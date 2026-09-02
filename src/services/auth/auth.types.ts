@@ -43,8 +43,6 @@ export interface UsuarioLogado {
   cpf?: string;
   telefone?: string | null;
   tipo: TipoUsuario;
-  /** Dono do sistema: ADMIN que também vê o registro de ações. */
-  dono?: boolean;
   /** Modalidade do professor (null para admin/aluno). */
   modalidadeProfessor?: { id: string; nome: string } | null;
 }

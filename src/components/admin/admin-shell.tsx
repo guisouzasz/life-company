@@ -12,7 +12,6 @@ import { ConfirmModal } from '../ui/modal';
 import { ADMIN_TABS } from '../tab-bar';
 import { useAuthStore } from '../../store/auth';
 import { useLogout } from '../../services/auth/auth.mutations';
-import { useMe } from '../../services/auth/auth.queries';
 import { formatDate } from '../../services/date';
 
 /**
@@ -23,9 +22,6 @@ import { formatDate } from '../../services/date';
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const nome = useAuthStore((s) => s.nome);
-  const me = useMe();
-  const ehDono = me.data?.dono === true;
-  const logsAtivo = pathname.startsWith('/admin/logs');
   const logout = useLogout();
   const [busca, setBusca] = useState('');
   const [confirmarSaida, setConfirmarSaida] = useState(false);
@@ -69,28 +65,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </View>
-
-        {/*
-          O registro de ações fica FORA da lista de abas, e só aparece para o
-          dono. Não é navegação do dia a dia do estúdio — é ferramenta de
-          quem administra o sistema, e uma sexta aba deixaria os rótulos
-          ilegíveis na barra do celular.
-        */}
-        {ehDono && (
-          <Pressable
-            style={({ pressed }) => [s.navItem, s.navDono, logsAtivo && s.navItemActive, pressed && s.pressed]}
-            onPress={() => router.replace('/admin/logs')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: logsAtivo }}
-          >
-            <Icon
-              name={logsAtivo ? 'document-text' : 'document-text-outline'}
-              size={20}
-              color={logsAtivo ? LC.primary : LC.textSecondary}
-            />
-            <Text style={[s.navLabel, logsAtivo && s.navLabelActive]}>O que foi feito</Text>
-          </Pressable>
-        )}
 
         <View style={s.footer}>
           <Avatar nome={nome ?? 'Admin'} size={36} />
@@ -144,8 +118,6 @@ const s = StyleSheet.create({
   root: { flex: 1, flexDirection: 'row', backgroundColor: LC.bg },
 
   sidebar: { width: 250, backgroundColor: LC.bgCard, borderRightWidth: 1, borderRightColor: LC.border },
-  /** Separado da navegação normal por uma linha: é outra natureza de item. */
-  navDono: { marginTop: 4, marginHorizontal: 10, borderTopWidth: 1, borderTopColor: LC.border, paddingTop: 12 },
   logoBox: { alignItems: 'center', paddingVertical: 22, gap: 4 },
   logo: { width: 110, height: 64 },
   studioName: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.85)', letterSpacing: 0.6, textTransform: 'uppercase' },

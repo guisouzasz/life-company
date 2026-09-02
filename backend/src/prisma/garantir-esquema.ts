@@ -63,52 +63,6 @@ const AJUSTES: { descricao: string; sql: string }[] = [
               ON DELETE RESTRICT ON UPDATE CASCADE;
           EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
   },
-  {
-    // A marca do dono. Coluna com DEFAULT false: no Postgres moderno isso não
-    // reescreve a tabela, então o lock é instantâneo mesmo com gente usando.
-    descricao: 'usuarios: marca de dono (vê o registro de ações)',
-    sql: `ALTER TABLE "usuarios"
-            ADD COLUMN IF NOT EXISTS "dono" BOOLEAN NOT NULL DEFAULT false`,
-  },
-  {
-    // Sem esta tabela o interceptador de auditoria falharia em toda escrita —
-    // e escrita é justamente o que o estúdio faz o dia inteiro.
-    descricao: 'logs_acao: registro do que o estúdio fez',
-    sql: `CREATE TABLE IF NOT EXISTS "logs_acao" (
-            "id" TEXT NOT NULL,
-            "usuario_id" TEXT,
-            "usuario_nome" TEXT NOT NULL,
-            "usuario_tipo" TEXT NOT NULL,
-            "metodo" TEXT NOT NULL,
-            "rota" TEXT NOT NULL,
-            "resumo" TEXT NOT NULL,
-            "entidade_id" TEXT,
-            "detalhe" TEXT,
-            "status" INTEGER NOT NULL,
-            "ip" TEXT,
-            "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT "logs_acao_pkey" PRIMARY KEY ("id")
-          )`,
-  },
-  {
-    // Um comando por ajuste: `$executeRawUnsafe` roda UMA instrução, e dois
-    // CREATE INDEX separados por ponto e vírgula fazem o boot falhar.
-    descricao: 'logs_acao: índice de data (a lista do mais recente)',
-    sql: `CREATE INDEX IF NOT EXISTS "logs_acao_criado_em_idx" ON "logs_acao"("criado_em")`,
-  },
-  {
-    descricao: 'logs_acao: índice de autor + data (o filtro por pessoa)',
-    sql: `CREATE INDEX IF NOT EXISTS "logs_acao_usuario_id_criado_em_idx" ON "logs_acao"("usuario_id", "criado_em")`,
-  },
-  {
-    descricao: 'logs_acao: chave estrangeira para usuarios',
-    sql: `DO $$ BEGIN
-            ALTER TABLE "logs_acao"
-              ADD CONSTRAINT "logs_acao_usuario_id_fkey"
-              FOREIGN KEY ("usuario_id") REFERENCES "usuarios"("id")
-              ON DELETE SET NULL ON UPDATE CASCADE;
-          EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
-  },
 ];
 
 /**
