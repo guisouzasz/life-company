@@ -19,6 +19,7 @@ import { formatarReal, valorOuNulo } from '../../services/mascaras';
 import { ApiError } from '../../services/http';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { linkWhatsapp, mensagemVencimento, telefoneParaWhatsapp } from '../../services/whatsapp';
+import { nomeCurto } from '../../services/nome';
 
 /**
  * Aviso de mensalidade pelo WhatsApp. Vale para quem está a vencer ou
@@ -37,7 +38,7 @@ function useAvisoWhatsapp() {
     const numero = telefoneParaWhatsapp(a.telefone);
     if (!numero) {
       setErro(
-        `${a.nome.split(' ')[0]} não tem telefone válido no cadastro. ` +
+        `${nomeCurto(a.nome)} não tem telefone válido no cadastro. ` +
           'Vá em Alunos, toque em Editar e informe o número com DDD.',
       );
       return;
@@ -104,7 +105,7 @@ export default function AdminFinanceiro() {
         title="Desfazer pagamento"
         message={
           desfazendo
-            ? `Desmarcar o pagamento de ${desfazendo.nome.split(' ')[0]} deste mês? Use se foi marcado por engano.`
+            ? `Desmarcar o pagamento de ${nomeCurto(desfazendo.nome)} deste mês? Use se foi marcado por engano.`
             : ''
         }
         confirmLabel="Desfazer"
@@ -225,7 +226,7 @@ export default function AdminFinanceiro() {
                   <View key={a.usuarioId} style={s.tRow}>
                     <View style={[s.tCol, s.tColAluno, s.tAlunoWrap]}>
                       <Avatar nome={a.nome} size={34} />
-                      <Text style={s.tNome} numberOfLines={1}>{a.nome}</Text>
+                      <Text style={s.tNome} numberOfLines={1}>{nomeCurto(a.nome)}</Text>
                     </View>
                     <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>{a.plano?.nome ?? '—'}</Text>
                     <View style={[s.tCol, s.tColValor]}>
@@ -318,7 +319,7 @@ export default function AdminFinanceiro() {
                 <View style={s.cardTop}>
                   <Avatar nome={a.nome} size={42} />
                   <View style={{ flex: 1 }}>
-                    <Text style={s.cardNome}>{a.nome}</Text>
+                    <Text style={s.cardNome}>{nomeCurto(a.nome)}</Text>
                     <Text style={s.cardSub}>
                       {a.plano?.nome ?? 'Sem plano'} • vence dia {a.diaVencimento}
                     </Text>

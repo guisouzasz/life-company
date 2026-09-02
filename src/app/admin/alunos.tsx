@@ -18,6 +18,7 @@ import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import { useGerarLink, useAtualizarAluno, useExcluirAlunoDefinitivamente } from '../../services/usuarios/usuarios.mutations';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import { ApiError } from '../../services/http';
+import { nomeCurto } from '../../services/nome';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, dataParaIso, isoParaData, soDigitos } from '../../services/mascaras';
 import { openBrowserAsync } from 'expo-web-browser';
@@ -258,7 +259,7 @@ export default function AdminAlunos() {
                     <View style={[s.tCol, s.tColNome, s.tNomeWrap]}>
                       <Avatar nome={aluno.nome} size={34} />
                       <View style={{ flex: 1 }}>
-                        <Text style={s.tNome} numberOfLines={1}>{aluno.nome}</Text>
+                        <Text style={s.tNome} numberOfLines={1}>{nomeCurto(aluno.nome)}</Text>
                         <Text style={s.tCpf}>CPF {aluno.cpf}</Text>
                       </View>
                     </View>
@@ -325,7 +326,7 @@ export default function AdminAlunos() {
                   <View style={s.cardTop}>
                     <Avatar nome={aluno.nome} size={46} />
                     <View style={s.cardInfo}>
-                      <Text style={s.nome}>{aluno.nome}</Text>
+                      <Text style={s.nome}>{nomeCurto(aluno.nome)}</Text>
                       <Text style={s.email} numberOfLines={1}>{aluno.email ?? 'Sem e-mail — aguardando ativação'}</Text>
                       {plano?.plano ? <Text style={s.plano}>{plano.plano.nome}</Text> : null}
                     </View>
