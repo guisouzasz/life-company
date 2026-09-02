@@ -290,22 +290,22 @@ export default function AdminAlunos() {
                         <Text style={s.tAcaoText}>Link</Text>
                       </Pressable>
                       {/*
-                        Só para quem já está inativo. Excluir de vez é o fim de
-                        um caminho — desativa primeiro, e se a pessoa não
-                        voltar mesmo, apaga. Oferecer isso ao lado de "Editar"
-                        num aluno em atividade é convite a um toque errado que
-                        não tem volta.
+                        Aparece para qualquer aluno, ativo ou não.
+                        Antes só saía em quem já estava inativo, para obrigar a
+                        desativar primeiro — mas isso escondia a opção de quem
+                        estava procurando por ela, e a dona ficava sem saber se
+                        o sistema tinha ou não. A trava certa é a confirmação,
+                        não sumir com o botão: ela diz o que some, o que fica e
+                        oferece "Inativo" como a saída com volta.
                       */}
-                      {!aluno.ativo && (
-                        <Pressable
-                          style={s.tAcao}
-                          onPress={() => setExcluindo(aluno)}
-                          accessibilityLabel={`Excluir ${aluno.nome} definitivamente`}
-                        >
-                          <Icon name="trash-outline" size={15} color={LC.danger} />
-                          <Text style={[s.tAcaoText, { color: LC.danger }]}>Excluir</Text>
-                        </Pressable>
-                      )}
+                      <Pressable
+                        style={s.tAcao}
+                        onPress={() => setExcluindo(aluno)}
+                        accessibilityLabel={`Excluir ${aluno.nome} definitivamente`}
+                      >
+                        <Icon name="trash-outline" size={15} color={LC.danger} />
+                        <Text style={[s.tAcaoText, { color: LC.danger }]}>Excluir</Text>
+                      </Pressable>
                     </View>
                   </View>
                 );
@@ -360,6 +360,20 @@ export default function AdminAlunos() {
                   <Pressable style={s.credLink} onPress={() => setPlanoHorarioAluno(aluno)}>
                     <Icon name="calendar-outline" size={16} color={LC.primary} />
                     <Text style={s.credLinkText}>Editar plano e horário fixo</Text>
+                  </Pressable>
+                  {/*
+                    No celular não havia como excluir de jeito nenhum — só no
+                    computador. E é do celular que o estúdio é tocado.
+                    Fica por último e em vermelho: perto dos outros, um polegar
+                    apressado acerta o errado.
+                  */}
+                  <Pressable
+                    style={[s.credLink, s.credLinkPerigo]}
+                    onPress={() => setExcluindo(aluno)}
+                    accessibilityLabel={`Excluir ${aluno.nome} definitivamente`}
+                  >
+                    <Icon name="trash-outline" size={16} color={LC.danger} />
+                    <Text style={[s.credLinkText, { color: LC.danger }]}>Excluir aluno definitivamente</Text>
                   </Pressable>
                 </Card>
               );
@@ -477,13 +491,22 @@ export default function AdminAlunos() {
         Excluir de vez. O texto diz exatamente o que some e o que fica: sem
         isso a escolha entre "desativar" e "excluir" seria um chute, e só uma
         delas tem volta.
+
+        Agora que o botão aparece em qualquer aluno, o aviso carrega o peso
+        que antes estava em esconder a opção: quem ainda está ATIVO leva uma
+        primeira linha dizendo isso, porque é o caso em que o toque errado
+        custa caro — alguém que treina amanhã.
       */}
       <ConfirmModal
         visible={!!excluindo}
         title="Excluir definitivamente?"
         message={
           excluindo
-            ? `${excluindo.nome} vai sair da lista para sempre. Somem os dados pessoais (contato, ` +
+            ? (excluindo.ativo
+                ? `Atenção: ${nomeCurto(excluindo.nome)} ainda está em atividade — o cadastro está ` +
+                  `ATIVO e pode ter aulas marcadas.\n\n`
+                : '') +
+              `${excluindo.nome} vai sair da lista para sempre. Somem os dados pessoais (contato, ` +
               `documento), os treinos e os créditos. As aulas e os pagamentos ficam no histórico do ` +
               `estúdio, sem o nome. NÃO TEM VOLTA.\n\nSe ele pode voltar a treinar um dia, use ` +
               `"Inativo" no cadastro em vez disto.`
@@ -548,6 +571,8 @@ const s = StyleSheet.create({
   fichaLinha: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   fichaTexto: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 17 },
   credLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 6 },
+  /** Separado do resto por uma linha: o que não tem volta não fica colado no que tem. */
+  credLinkPerigo: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: LC.border },
   credLinkText: { fontSize: 13, fontWeight: '600', color: LC.primary },
   fab: {
     position: 'absolute', right: 20, bottom: 92, width: 56, height: 56, borderRadius: 28,
