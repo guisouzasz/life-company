@@ -17,7 +17,7 @@ import { useTreinoDia } from '../../services/treinos/treinos.queries';
 import { useSalvarTreinoDia, useRemoverTreinoDia } from '../../services/treinos/treinos.mutations';
 import { getProximosDiasUteis, formatDate } from '../../services/date';
 import { ApiError } from '../../services/http';
-import { primeiroNome } from '../../services/nome';
+import { nomeCurto } from '../../services/nome';
 
 type Dia = ReturnType<typeof getProximosDiasUteis>[number];
 
@@ -106,7 +106,7 @@ function TreinoDoDia() {
             <View style={s.diaInfoRow}>
               <Icon name="calendar-outline" size={15} color={LC.primary} />
               <Text style={s.diaInfo}>
-                {diaSel.diaNome}, {diaSel.diaNum} — {treinoDia.data ? `salvo por ${primeiroNome(treinoDia.data.professor.nome)} (${formatDate(treinoDia.data.updatedAt, 'DD/MM HH:mm')})` : 'ainda sem treino'}
+                {diaSel.diaNome}, {diaSel.diaNum} — {treinoDia.data ? `salvo por ${nomeCurto(treinoDia.data.professor.nome)} (${formatDate(treinoDia.data.updatedAt, 'DD/MM HH:mm')})` : 'ainda sem treino'}
               </Text>
             </View>
 

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../constants/theme';
+import { nomeCurto } from '../services/nome';
 import { nomeModalidade } from '../constants/assets';
 import { TabBar } from '../components/tab-bar';
 import { Card } from '../components/ui/card';
@@ -68,7 +69,7 @@ export default function MeusTreinos() {
           <Text style={s.cardTitulo}>{t.titulo}</Text>
           <Text style={s.cardMeta}>
             {t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}
-            com {t.professor.nome.split(' ')[0]}
+            com {nomeCurto(t.professor.nome)}
           </Text>
         </View>
         {t.concluido ? <Badge label="Concluída" variant="neutral" /> : <Badge label="Ativa" variant="success" />}
@@ -163,7 +164,7 @@ export default function MeusTreinos() {
                 <Badge label={nomeModalidade(td.modalidade.nome)} variant="primary" />
               </View>
               <Text style={s.conteudo}>{td.conteudo}</Text>
-              <Text style={s.cardMeta}>com {td.professor.nome.split(' ')[0]}</Text>
+              <Text style={s.cardMeta}>com {nomeCurto(td.professor.nome)}</Text>
             </Card>
           ))}
 
