@@ -69,17 +69,22 @@ export class AgendamentosService {
   async criarComoAdmin(dto: CriarAgendamentoAdminDto) {
     const aluno = await this.prisma.usuario.findUnique({
       where: { id: dto.usuarioId },
-      select: { id: true, nome: true, ativo: true, tipoUsuario: true },
+      select: { id: true, nome: true, ativo: true, senhaHash: true, tipoUsuario: true },
     });
     if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
 
     /**
-     * `ativo` não barra aqui de propósito. O cadastro novo nasce inativo e só
-     * vira ativo quando o aluno faz o primeiro acesso — barrar por isso
-     * quebraria justamente o caminho mais comum: cadastrar o aluno e já
-     * colocar na turma dele, antes de ele abrir o app. O horário fixo também
-     * marca aula de aluno inativo; a tela mostra o selo para a dona ver.
+     * Cadastro novo nasce `ativo=false` até o primeiro acesso, mas ainda pode
+     * receber horário fixo e aula pelo estúdio. Diferente disso é o aluno que
+     * já criou senha e depois foi desligado: esse não deve voltar para a agenda
+     * por engano, porque o desligamento remove as turmas e libera as vagas.
      */
+    if (!aluno.ativo && aluno.senhaHash) {
+      throw new BadRequestException(
+        `${nomeCurto(aluno.nome)} está inativo/desligado. Reative o cadastro antes de marcar aula.`,
+      );
+    }
+
     return this.agendar(dto.usuarioId, dto, {
       admin: true,
       nome: nomeCurto(aluno.nome),
