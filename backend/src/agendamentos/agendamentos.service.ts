@@ -216,7 +216,11 @@ export class AgendamentosService {
       const cabem = capacidadeEfetiva(horario.capacidadeMaxima, horario.modalidade?.nome);
       const ocupacao = await tx.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
       if (ocupacao >= cabem) {
-        throw new BadRequestException(ctx.admin ? `Turma lotada (${ocupacao}/${cabem}). Tire alguém antes de colocar ${quem}.` : 'Horário lotado');
+        throw new BadRequestException(
+          ctx.admin
+            ? `Horário cheio (${ocupacao}/${cabem}). Não é possível marcar ${quem} nesta turma. Tire alguém antes de colocar outro aluno.`
+            : 'Horário lotado',
+        );
       }
 
       /**

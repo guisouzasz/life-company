@@ -4,6 +4,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
 import { CriarHorarioFixoDto } from './dto/criar-horario-fixo.dto';
 
+function temErroDeLotacao(motivos: string[]) {
+  return motivos.some((motivo) => /lotad|cheio/i.test(motivo));
+}
+
 @Injectable()
 export class HorariosFixosService {
   constructor(
@@ -70,12 +74,13 @@ export class HorariosFixosService {
      * A geração das aulas fica FORA daqui de propósito: ela abre transação
      * própria e tranca esta mesma linha do plano.
      */
-    const fixo = await this.prisma.$transaction(async (tx) => {
+    const { registro: fixo, jaEstavaAtivo } = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
 
       const existente = await tx.horarioFixo.findUnique({
         where: { usuarioId_horarioId: { usuarioId, horarioId: dto.horarioId } },
       });
+      const jaEstavaAtivo = !!existente?.ativo;
 
       if (!existente || !existente.ativo) {
         const ativosCount = await tx.horarioFixo.count({ where: { usuarioId, ativo: true } });
@@ -86,20 +91,24 @@ export class HorariosFixosService {
         }
       }
 
-      return existente
-        ? tx.horarioFixo.update({
+      const registro = existente
+        ? await tx.horarioFixo.update({
             where: { id: existente.id },
             data: { ativo: true, dataInicio, dataFim },
             include: { horario: { include: { modalidade: true } } },
           })
-        : tx.horarioFixo.create({
+        : await tx.horarioFixo.create({
             data: { usuarioId, horarioId: dto.horarioId, dataInicio, dataFim },
             include: { horario: { include: { modalidade: true } } },
           });
+
+      return { registro, jaEstavaAtivo };
     });
 
     // Gera as próximas aulas na hora — sem esperar o cron das 3h. Falha na
-    // geração (ex: sem saldo na semana) não desfaz o horário fixo criado.
+    // geração por turma cheia agora desfaz o fixo recém-criado: salvar a
+    // combinação sem conseguir colocar o aluno em nenhuma aula fazia a dona
+    // achar que marcou, mas a agenda continuava vazia.
     let geracao: { criados: number; ignorados: number; erros: number; motivos: string[]; datas: string[] } = {
       criados: 0, ignorados: 0, erros: 0, motivos: [], datas: [],
     };
@@ -107,6 +116,13 @@ export class HorariosFixosService {
       geracao = await this.autoAgendamento.gerarParaHorarioFixoId(fixo.id);
     } catch {
       // cron diário cobre depois
+    }
+
+    if (!jaEstavaAtivo && geracao.criados === 0 && geracao.erros > 0 && temErroDeLotacao(geracao.motivos ?? [])) {
+      await this.prisma.horarioFixo.update({ where: { id: fixo.id }, data: { ativo: false } });
+      throw new BadRequestException(
+        `Horário cheio. Não foi possível colocar ${aluno.nome} nesse horário fixo porque a turma não tem vaga. Tire alguém da turma ou escolha outro horário.`,
+      );
     }
 
     return { ...fixo, geracao };

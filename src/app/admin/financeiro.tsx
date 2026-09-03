@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { openBrowserAsync } from 'expo-web-browser';
 import { LC } from '../../constants/theme';
@@ -81,9 +81,22 @@ export default function AdminFinanceiro() {
   const [configurando, setConfigurando] = useState<AlunoFinanceiro | null>(null);
   const [desfazendo, setDesfazendo] = useState<AlunoFinanceiro | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [diaVencimentoFiltro, setDiaVencimentoFiltro] = useState<number | null>(null);
   const aviso = useAvisoWhatsapp();
 
   const dados = resumo.data;
+  const alunosFinanceiro = dados?.alunos ?? [];
+  const diasVencimento = useMemo(
+    () => [...new Set(alunosFinanceiro.map((a) => a.diaVencimento))].sort((a, b) => a - b),
+    [alunosFinanceiro],
+  );
+  const alunosFiltrados = useMemo(
+    () =>
+      diaVencimentoFiltro === null
+        ? alunosFinanceiro
+        : alunosFinanceiro.filter((a) => a.diaVencimento === diaVencimentoFiltro),
+    [alunosFinanceiro, diaVencimentoFiltro],
+  );
 
   const confirmarDesfazer = () => {
     if (!desfazendo?.pagamento) return;
@@ -187,6 +200,44 @@ export default function AdminFinanceiro() {
     </View>
   ) : null;
 
+  const filtroVencimento = dados && diasVencimento.length > 0 ? (
+    <Card style={s.filtroCard} padding={12}>
+      <View style={s.filtroTopo}>
+        <View style={s.filtroTituloLinha}>
+          <Icon name="calendar-number-outline" size={16} color={LC.primary} />
+          <Text style={s.filtroTitulo}>Vencimento</Text>
+        </View>
+        <Text style={s.filtroResumo}>
+          {diaVencimentoFiltro === null
+            ? `${alunosFiltrados.length} alunos`
+            : `${alunosFiltrados.length} no dia ${diaVencimentoFiltro}`}
+        </Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filtroChips}>
+        <Pressable
+          style={[s.filtroChip, diaVencimentoFiltro === null && s.filtroChipSel]}
+          onPress={() => setDiaVencimentoFiltro(null)}
+          accessibilityRole="button"
+        >
+          <Text style={[s.filtroChipText, diaVencimentoFiltro === null && s.filtroChipTextSel]}>Todos</Text>
+        </Pressable>
+        {diasVencimento.map((dia) => {
+          const sel = diaVencimentoFiltro === dia;
+          return (
+            <Pressable
+              key={dia}
+              style={[s.filtroChip, sel && s.filtroChipSel]}
+              onPress={() => setDiaVencimentoFiltro(sel ? null : dia)}
+              accessibilityRole="button"
+            >
+              <Text style={[s.filtroChipText, sel && s.filtroChipTextSel]}>Dia {dia}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </Card>
+  ) : null;
+
   const header = (
     <View style={isDesktop ? s.deskHeader : s.header}>
       <Text style={s.title}>Financeiro</Text>
@@ -211,6 +262,7 @@ export default function AdminFinanceiro() {
           <ScrollView contentContainerStyle={s.deskScroll} showsVerticalScrollIndicator={false}>
             {cardDinheiro}
             {statCards}
+            {filtroVencimento}
             <Card style={s.tabela} padding={0}>
               <View style={[s.tRow, s.tHead]}>
                 <Text style={[s.tCol, s.tColAluno, s.tHeadText]}>Aluno</Text>
@@ -220,74 +272,80 @@ export default function AdminFinanceiro() {
                 <Text style={[s.tCol, s.tColStatus, s.tHeadText]}>Situação</Text>
                 <Text style={[s.tCol, s.tColAcoes, s.tHeadText]}>Ações</Text>
               </View>
-              {dados!.alunos.map((a) => {
-                const st = statusInfo(a);
-                return (
-                  <View key={a.usuarioId} style={s.tRow}>
-                    <View style={[s.tCol, s.tColAluno, s.tAlunoWrap]}>
-                      <Avatar nome={a.nome} size={34} />
-                      <Text style={s.tNome} numberOfLines={1}>{nomeCurto(a.nome)}</Text>
-                    </View>
-                    <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>{a.plano?.nome ?? '—'}</Text>
-                    <View style={[s.tCol, s.tColValor]}>
-                      <Text style={valorOuNulo(a.valorMensalidade) === null ? s.tSemValor : s.tValor}>
-                        {valorOuNulo(a.valorMensalidade) === null
-                          ? 'a definir'
-                          : formatarReal(a.valorMensalidade)}
-                      </Text>
-                      {valorOuNulo(a.pagamento?.valor) !== null &&
-                      a.pagamento!.valor > 0 &&
-                      a.pagamento!.valor !== a.valorMensalidade ? (
-                        <Text style={s.tPagoEm}>recebido {formatarReal(a.pagamento!.valor)}</Text>
-                      ) : null}
-                    </View>
-                    <Text style={[s.tCol, s.tColVenc, s.tTexto]}>Dia {a.diaVencimento}</Text>
-                    <View style={[s.tCol, s.tColStatus]}>
-                      <Badge label={st.label} variant={st.variant} />
-                      {a.pagamento ? (
-                        <Text style={s.tPagoEm}>em {formatDate(a.pagamento.pagoEm, 'DD/MM')}</Text>
-                      ) : null}
-                    </View>
-                    <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
-                      {a.pagamento ? (
-                        <Pressable style={s.acaoBtn} hitSlop={4} onPress={() => setDesfazendo(a)}>
-                          <Icon name="arrow-undo-outline" size={16} color={LC.textSecondary} />
-                        </Pressable>
-                      ) : (
+              {alunosFiltrados.length === 0 ? (
+                <View style={s.tVazio}>
+                  <Text style={s.tVazioText}>Nenhum aluno vence nesse dia.</Text>
+                </View>
+              ) : (
+                alunosFiltrados.map((a) => {
+                  const st = statusInfo(a);
+                  return (
+                    <View key={a.usuarioId} style={s.tRow}>
+                      <View style={[s.tCol, s.tColAluno, s.tAlunoWrap]}>
+                        <Avatar nome={a.nome} size={34} />
+                        <Text style={s.tNome} numberOfLines={1}>{nomeCurto(a.nome)}</Text>
+                      </View>
+                      <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>{a.plano?.nome ?? '—'}</Text>
+                      <View style={[s.tCol, s.tColValor]}>
+                        <Text style={valorOuNulo(a.valorMensalidade) === null ? s.tSemValor : s.tValor}>
+                          {valorOuNulo(a.valorMensalidade) === null
+                            ? 'a definir'
+                            : formatarReal(a.valorMensalidade)}
+                        </Text>
+                        {valorOuNulo(a.pagamento?.valor) !== null &&
+                        a.pagamento!.valor > 0 &&
+                        a.pagamento!.valor !== a.valorMensalidade ? (
+                          <Text style={s.tPagoEm}>recebido {formatarReal(a.pagamento!.valor)}</Text>
+                        ) : null}
+                      </View>
+                      <Text style={[s.tCol, s.tColVenc, s.tTexto]}>Dia {a.diaVencimento}</Text>
+                      <View style={[s.tCol, s.tColStatus]}>
+                        <Badge label={st.label} variant={st.variant} />
+                        {a.pagamento ? (
+                          <Text style={s.tPagoEm}>em {formatDate(a.pagamento.pagoEm, 'DD/MM')}</Text>
+                        ) : null}
+                      </View>
+                      <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
+                        {a.pagamento ? (
+                          <Pressable style={s.acaoBtn} hitSlop={4} onPress={() => setDesfazendo(a)}>
+                            <Icon name="arrow-undo-outline" size={16} color={LC.textSecondary} />
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            style={[s.acaoBtn, s.acaoBtnPrimary]}
+                            hitSlop={4}
+                            onPress={() => setRegistrando(a)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Marcar ${a.nome} como pago`}
+                          >
+                            <Icon name="checkmark" size={16} color="#fff" />
+                          </Pressable>
+                        )}
                         <Pressable
-                          style={[s.acaoBtn, s.acaoBtnPrimary]}
+                          style={s.acaoBtn}
                           hitSlop={4}
-                          onPress={() => setRegistrando(a)}
+                          onPress={() => setConfigurando(a)}
                           accessibilityRole="button"
-                          accessibilityLabel={`Marcar ${a.nome} como pago`}
+                          accessibilityLabel={`Mensalidade de ${a.nome}`}
                         >
-                          <Icon name="checkmark" size={16} color="#fff" />
+                          <Icon name="calendar-outline" size={16} color={LC.primary} />
                         </Pressable>
-                      )}
-                      <Pressable
-                        style={s.acaoBtn}
-                        hitSlop={4}
-                        onPress={() => setConfigurando(a)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Mensalidade de ${a.nome}`}
-                      >
-                        <Icon name="calendar-outline" size={16} color={LC.primary} />
-                      </Pressable>
-                      {aviso.cabeAviso(a) ? (
-                        <Pressable
-                          style={[s.acaoBtn, s.acaoBtnZap]}
-                          hitSlop={4}
-                          onPress={() => aviso.avisar(a)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Avisar ${a.nome} no WhatsApp`}
-                        >
-                          <Icon name="logo-whatsapp" size={16} color="#fff" />
-                        </Pressable>
-                      ) : null}
+                        {aviso.cabeAviso(a) ? (
+                          <Pressable
+                            style={[s.acaoBtn, s.acaoBtnZap]}
+                            hitSlop={4}
+                            onPress={() => aviso.avisar(a)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Avisar ${a.nome} no WhatsApp`}
+                          >
+                            <Icon name="logo-whatsapp" size={16} color="#fff" />
+                          </Pressable>
+                        ) : null}
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
+                  );
+                })
+              )}
               <View style={s.tLegenda}>
                 <Text style={s.tLegendaText}>
                   Ações: ✓ marcar como pago • ↩ desfazer • 📅 dia do vencimento{'\n'}
@@ -312,69 +370,76 @@ export default function AdminFinanceiro() {
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
           {cardDinheiro}
           {statCards}
-          {dados!.alunos.map((a) => {
-            const st = statusInfo(a);
-            return (
-              <Card key={a.usuarioId} style={s.card} padding={14}>
-                <View style={s.cardTop}>
-                  <Avatar nome={a.nome} size={42} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.cardNome}>{nomeCurto(a.nome)}</Text>
-                    <Text style={s.cardSub}>
-                      {a.plano?.nome ?? 'Sem plano'} • vence dia {a.diaVencimento}
-                    </Text>
-                    {/* O valor combinado é a informação principal. O recebido
-                        só entra quando foi informado e é diferente — pagamento
-                        antigo veio sem valor, e "R$ 0,00 recebido" mentiria. */}
-                    <Text style={valorOuNulo(a.valorMensalidade) === null ? s.cardSemValor : s.cardValor}>
-                      {valorOuNulo(a.valorMensalidade) === null
-                        ? 'Sem valor definido'
-                        : formatarReal(a.valorMensalidade)}
-                      {valorOuNulo(a.pagamento?.valor) !== null &&
-                      a.pagamento!.valor > 0 &&
-                      a.pagamento!.valor !== a.valorMensalidade
-                        ? ` · ${formatarReal(a.pagamento!.valor)} recebido`
-                        : ''}
-                    </Text>
+          {filtroVencimento}
+          {alunosFiltrados.length === 0 ? (
+            <Card style={s.card} padding={14}>
+              <Text style={s.cardVazio}>Nenhum aluno vence nesse dia.</Text>
+            </Card>
+          ) : (
+            alunosFiltrados.map((a) => {
+              const st = statusInfo(a);
+              return (
+                <Card key={a.usuarioId} style={s.card} padding={14}>
+                  <View style={s.cardTop}>
+                    <Avatar nome={a.nome} size={42} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.cardNome}>{nomeCurto(a.nome)}</Text>
+                      <Text style={s.cardSub}>
+                        {a.plano?.nome ?? 'Sem plano'} • vence dia {a.diaVencimento}
+                      </Text>
+                      {/* O valor combinado é a informação principal. O recebido
+                          só entra quando foi informado e é diferente — pagamento
+                          antigo veio sem valor, e "R$ 0,00 recebido" mentiria. */}
+                      <Text style={valorOuNulo(a.valorMensalidade) === null ? s.cardSemValor : s.cardValor}>
+                        {valorOuNulo(a.valorMensalidade) === null
+                          ? 'Sem valor definido'
+                          : formatarReal(a.valorMensalidade)}
+                        {valorOuNulo(a.pagamento?.valor) !== null &&
+                        a.pagamento!.valor > 0 &&
+                        a.pagamento!.valor !== a.valorMensalidade
+                          ? ` · ${formatarReal(a.pagamento!.valor)} recebido`
+                          : ''}
+                      </Text>
+                    </View>
+                    <Badge label={st.label} variant={st.variant} />
                   </View>
-                  <Badge label={st.label} variant={st.variant} />
-                </View>
-                <View style={s.cardActions}>
-                  {a.pagamento ? (
-                    <Button
-                      title={`Pago em ${formatDate(a.pagamento.pagoEm, 'DD/MM')} — desfazer`}
-                      variant="outline"
-                      size="sm"
-                      onPress={() => setDesfazendo(a)}
-                      style={{ flex: 1 }}
-                    />
-                  ) : (
-                    <Button title="Marcar como pago" size="sm" onPress={() => setRegistrando(a)} style={{ flex: 1 }} />
-                  )}
-                  <Pressable
-                    style={s.cardConfig}
-                    hitSlop={6}
-                    onPress={() => setConfigurando(a)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Mensalidade de ${a.nome}`}
-                  >
-                    <Icon name="calendar-outline" size={18} color={LC.primary} />
-                  </Pressable>
-                </View>
-                {aviso.cabeAviso(a) ? (
-                  <Pressable
-                    style={({ pressed }) => [s.zapBtn, pressed && { opacity: 0.75 }]}
-                    onPress={() => aviso.avisar(a)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Avisar ${a.nome} no WhatsApp`}
-                  >
-                    <Icon name="logo-whatsapp" size={17} color="#fff" />
-                    <Text style={s.zapBtnText}>Avisar no WhatsApp</Text>
-                  </Pressable>
-                ) : null}
-              </Card>
-            );
-          })}
+                  <View style={s.cardActions}>
+                    {a.pagamento ? (
+                      <Button
+                        title={`Pago em ${formatDate(a.pagamento.pagoEm, 'DD/MM')} — desfazer`}
+                        variant="outline"
+                        size="sm"
+                        onPress={() => setDesfazendo(a)}
+                        style={{ flex: 1 }}
+                      />
+                    ) : (
+                      <Button title="Marcar como pago" size="sm" onPress={() => setRegistrando(a)} style={{ flex: 1 }} />
+                    )}
+                    <Pressable
+                      style={s.cardConfig}
+                      hitSlop={6}
+                      onPress={() => setConfigurando(a)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Mensalidade de ${a.nome}`}
+                    >
+                      <Icon name="calendar-outline" size={18} color={LC.primary} />
+                    </Pressable>
+                  </View>
+                  {aviso.cabeAviso(a) ? (
+                    <Pressable
+                      style={({ pressed }) => [s.zapBtn, pressed && { opacity: 0.75 }]}
+                      onPress={() => aviso.avisar(a)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Avisar ${a.nome} no WhatsApp`}
+                    >
+                      <Icon name="logo-whatsapp" size={17} color="#fff" />
+                      <Text style={s.zapBtnText}>Avisar no WhatsApp</Text>
+                    </Pressable>
+                  ) : null}
+                </Card>
+              );
+            })
+          )}
           <View style={{ height: 8 }} />
         </ScrollView>
       )}
@@ -415,6 +480,21 @@ const s = StyleSheet.create({
   statValor: { fontSize: 20, fontWeight: '800', color: LC.textPrimary },
   statLabel: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
 
+  // ── Filtro de vencimento ───────────────────────────────────────
+  filtroCard: { marginBottom: 12 },
+  filtroTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
+  filtroTituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  filtroTitulo: { fontSize: 13.5, fontWeight: '800', color: LC.textPrimary },
+  filtroResumo: { fontSize: 12, color: LC.textSecondary },
+  filtroChips: { gap: 8, paddingRight: 4 },
+  filtroChip: {
+    paddingHorizontal: 13, paddingVertical: 8, borderRadius: LC.radius.full,
+    backgroundColor: LC.bg, borderWidth: 1.5, borderColor: LC.border,
+  },
+  filtroChipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
+  filtroChipText: { fontSize: 12.5, fontWeight: '700', color: LC.textSecondary },
+  filtroChipTextSel: { color: LC.primary },
+
   // ── Tabela desktop ──────────────────────────────────────────────
   tabela: { overflow: 'hidden' },
   tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: LC.border },
@@ -437,6 +517,8 @@ const s = StyleSheet.create({
   acaoBtnZap: { backgroundColor: '#25D366', borderColor: '#25D366' },
   tLegenda: { paddingHorizontal: 16, paddingVertical: 10 },
   tLegendaText: { fontSize: 11, color: LC.textMuted },
+  tVazio: { paddingVertical: 24, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: LC.border },
+  tVazioText: { fontSize: 13, color: LC.textSecondary },
 
   // ── Cards mobile ────────────────────────────────────────────────
   card: { marginBottom: 10 },
@@ -445,6 +527,7 @@ const s = StyleSheet.create({
   cardSub: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
   cardConfig: { width: 40, height: 40, borderRadius: 20, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  cardVazio: { fontSize: 13, color: LC.textSecondary, textAlign: 'center' },
   zapBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     marginTop: 10, paddingVertical: 11, borderRadius: LC.radius.md, backgroundColor: '#25D366',
