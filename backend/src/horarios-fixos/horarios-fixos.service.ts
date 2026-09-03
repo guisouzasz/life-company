@@ -3,6 +3,7 @@ import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
 import { CriarHorarioFixoDto } from './dto/criar-horario-fixo.dto';
+import { nomeCurto } from '../comum/nome';
 
 function temErroDeLotacao(motivos: string[]) {
   return motivos.some((motivo) => /lotad|cheio/i.test(motivo));
@@ -43,7 +44,7 @@ export class HorariosFixosService {
     if (!aluno) throw new NotFoundException('Aluno não encontrado');
     if (!aluno.ativo && aluno.senhaHash) {
       throw new BadRequestException(
-        `O cadastro de ${aluno.nome} está inativo. Reative antes de colocar num horário fixo.`,
+        `O cadastro de ${nomeCurto(aluno.nome)} está inativo. Reative antes de colocar num horário fixo.`,
       );
     }
 
@@ -121,7 +122,8 @@ export class HorariosFixosService {
     if (!jaEstavaAtivo && geracao.criados === 0 && geracao.erros > 0 && temErroDeLotacao(geracao.motivos ?? [])) {
       await this.prisma.horarioFixo.update({ where: { id: fixo.id }, data: { ativo: false } });
       throw new BadRequestException(
-        `Horário cheio. Não foi possível colocar ${aluno.nome} nesse horário fixo porque a turma não tem vaga. Tire alguém da turma ou escolha outro horário.`,
+        `Horário cheio. Não foi possível colocar ${nomeCurto(aluno.nome)} nesse horário fixo ` +
+          'porque a turma não tem vaga. Tire alguém da turma ou escolha outro horário.',
       );
     }
 

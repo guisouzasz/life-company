@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ConflictException, ForbiddenException,
 import * as dayjs from 'dayjs';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { PrismaService } from '../prisma/prisma.service';
+import { nomeCurto } from '../comum/nome';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
 import { CriarAgendamentoAdminDto } from './dto/criar-agendamento-admin.dto';
 import {
@@ -24,30 +25,6 @@ const DIA_MAP: Record<number, string> = { 1: 'SEGUNDA', 2: 'TERCA', 3: 'QUARTA',
  * remaneja para onde precisar.
  */
 const DIAS_MAXIMOS_ANTECEDENCIA = 60;
-
-/** "da", "de", "dos"... continuam minúsculas ao formatar o nome. */
-const CONECTIVOS = new Set(['da', 'de', 'di', 'do', 'das', 'des', 'dos', 'e']);
-
-/**
- * Como o sistema chama o aluno nas mensagens: primeiro nome + último
- * sobrenome. "CARLOS EDUARDO RAVAGLIO DA ROCHA" → "Carlos Rocha".
- *
- * Só o primeiro nome não serve. O estúdio tem três Carlos, e o aviso "Carlos
- * já tem 1 aula nesta semana" fez a dona achar que o sistema tinha misturado
- * os cadastros — ela leu como se estivesse falando de OUTRO Carlos. É como
- * ela chama cada um ("o Carlos Rocha"), então é como o sistema deve falar.
- */
-function nomeCurto(nome: string): string {
-  const partes = nome.trim().split(/\s+/).filter(Boolean);
-  const capitaliza = (p: string) =>
-    CONECTIVOS.has(p.toLowerCase()) ? p.toLowerCase() : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-  if (partes.length === 0) return nome;
-  const primeiro = capitaliza(partes[0]);
-  // Último token que não seja conectivo ("... DA ROCHA" → "Rocha").
-  const sobrenome = [...partes].reverse().find((x) => !CONECTIVOS.has(x.toLowerCase()));
-  if (partes.length === 1 || !sobrenome || sobrenome === partes[0]) return primeiro;
-  return `${primeiro} ${capitaliza(sobrenome)}`;
-}
 
 @Injectable()
 export class AgendamentosService {

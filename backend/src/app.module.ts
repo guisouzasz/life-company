@@ -21,6 +21,7 @@ import { CargasModule } from './cargas/cargas.module';
 import { AnamneseModule } from './anamnese/anamnese.module';
 import { TermosModule } from './termos/termos.module';
 import { LogsModule } from './logs/logs.module';
+import { DiagnosticoModule } from './diagnostico/diagnostico.module';
 import { LogsInterceptor } from './logs/logs.interceptor';
 
 @Module({
@@ -48,6 +49,7 @@ import { LogsInterceptor } from './logs/logs.interceptor';
     AnamneseModule,
     TermosModule,
     LogsModule,
+    DiagnosticoModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

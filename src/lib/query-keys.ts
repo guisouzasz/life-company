@@ -31,4 +31,5 @@ export const queryKeys = {
   anamneseAluno: (alunoId?: string) => ['anamnese', 'aluno', alunoId ?? 'all'] as const,
   logs: (filtros: object) => ['logs', filtros] as const,
   logsAutores: ['logs', 'autores'] as const,
+  diagnosticoHorariosFixos: ['diagnostico', 'horarios-fixos'] as const,
 };

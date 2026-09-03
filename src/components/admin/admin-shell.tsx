@@ -26,6 +26,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const me = useMe();
   const ehDono = me.data?.dono === true;
   const logsAtivo = pathname.startsWith('/admin/logs');
+  const diagAtivo = pathname.startsWith('/admin/diagnostico');
   const logout = useLogout();
   const [busca, setBusca] = useState('');
   const [confirmarSaida, setConfirmarSaida] = useState(false);
@@ -89,6 +90,26 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               color={logsAtivo ? LC.primary : LC.textSecondary}
             />
             <Text style={[s.navLabel, logsAtivo && s.navLabelActive]}>O que foi feito</Text>
+          </Pressable>
+        )}
+
+        {/*
+          A conferência dos horários fixos, do lado do registro: as duas são
+          ferramenta de quem administra o sistema, não do dia a dia do estúdio.
+        */}
+        {ehDono && (
+          <Pressable
+            style={({ pressed }) => [s.navItem, s.navDono, diagAtivo && s.navItemActive, pressed && s.pressed]}
+            onPress={() => router.replace('/admin/diagnostico')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: diagAtivo }}
+          >
+            <Icon
+              name={diagAtivo ? 'shield-checkmark' : 'shield-checkmark-outline'}
+              size={20}
+              color={diagAtivo ? LC.primary : LC.textSecondary}
+            />
+            <Text style={[s.navLabel, diagAtivo && s.navLabelActive]}>Conferir horários</Text>
           </Pressable>
         )}
 
