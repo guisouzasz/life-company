@@ -325,6 +325,34 @@ export class UsuariosService {
       return { ...atualizado, ...limpeza };
     }
 
+    /**
+     * Reativar devolve os horários fixos.
+     *
+     * Desligar tirava das turmas e ligar de volta não devolvia nada: a
+     * operação era de mão única. Quem inativasse alguém por engano — ou
+     * passasse a lista inteira para inativo sem saber o que isso faz —
+     * perdia a grade e teria que remontar aluno por aluno.
+     *
+     * Devolve o que o próprio desligamento apagou e nada além: só os fixos
+     * que estão desligados. Um horário que a dona removeu de propósito
+     * também está desligado, então ele volta junto — o preço de a tabela não
+     * guardar QUANDO cada um foi desligado. Preferimos errar para o lado de
+     * devolver: um horário a mais aparece na agenda e se remove num toque; um
+     * a menos é um aluno que chega e não está na lista.
+     *
+     * As aulas não são recriadas aqui. Elas nascem sozinhas ao abrir a agenda
+     * ou no cron das 3h, e por lá passam pela lotação e pela cota do plano —
+     * regras que uma recriação direta furaria.
+     */
+    const religou = !atual.ativo && data.ativo === true;
+    if (religou) {
+      const { count } = await this.prisma.horarioFixo.updateMany({
+        where: { usuarioId: id, ativo: false },
+        data: { ativo: true },
+      });
+      return { ...atualizado, horariosFixosDevolvidos: count };
+    }
+
     return atualizado;
   }
 

@@ -160,13 +160,28 @@ export default function AdminAlunos() {
           // A API devolve o que foi liberado quando o aluno é desativado.
           const fixos = r?.horariosFixosRemovidos ?? 0;
           const aulas = r?.aulasCanceladas ?? 0;
+          const devolvidos = r?.horariosFixosDevolvidos ?? 0;
           if (fixos > 0 || aulas > 0) {
             const partes = [];
             if (fixos > 0) partes.push(`${fixos} horário(s) fixo(s)`);
             if (aulas > 0) partes.push(`${aulas} aula(s) futura(s)`);
             setAviso({
               titulo: 'Aluno desligado',
-              texto: `Foram liberados: ${partes.join(' e ')}. As vagas voltaram para as turmas.`,
+              texto:
+                `Foram liberados: ${partes.join(' e ')}. As vagas voltaram para as turmas.\n\n` +
+                'Se foi engano, é só marcar "Ativo" de novo — os horários fixos voltam junto.',
+            });
+          } else if (devolvidos > 0) {
+            /*
+              O outro sentido. Sem este recado a dona reativa o aluno, não vê
+              nada acontecer na tela e acha que precisa remontar a grade dele
+              na mão.
+            */
+            setAviso({
+              titulo: 'Aluno reativado',
+              texto:
+                `${devolvidos} horário(s) fixo(s) voltaram para ele. As aulas aparecem na agenda ` +
+                'assim que você abrir a Agenda da semana.',
             });
           }
         },
