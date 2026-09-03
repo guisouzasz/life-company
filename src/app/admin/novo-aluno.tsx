@@ -59,23 +59,29 @@ export default function NovoAluno() {
         setErro('Escolha o plano do aluno.');
         return;
       }
-      const faltando: string[] = [];
-      if (rg.trim().length < 5) faltando.push('RG');
-      if (endereco.trim().length < 5) faltando.push('endereço');
-      if (soDigitos(cep).length !== 8) faltando.push('CEP');
-      if (!email.trim()) faltando.push('e-mail');
-      if (faltando.length > 0) {
-        setErro(`Preencha ${faltando.join(', ')}.`);
+      /*
+        A ficha do aluno é preenchida por ELE, no primeiro acesso.
+        Aqui só o que o estúdio realmente tem no balcão: nome, CPF e o plano.
+        Exigir RG e CEP na hora do cadastro parava a dona com o aluno na
+        frente — e ela acabava inventando dado para o formulário deixar salvar.
+
+        O que vier preenchido é aproveitado; o que estiver em branco o aluno
+        completa depois. Só o formato é conferido, nunca a presença.
+      */
+      const erros: string[] = [];
+      if (rg.trim() && rg.trim().length < 5) erros.push('RG muito curto');
+      if (endereco.trim() && endereco.trim().length < 5) erros.push('endereço muito curto');
+      if (cep.trim() && soDigitos(cep).length !== 8) erros.push('CEP precisa de 8 dígitos');
+      if (erros.length > 0) {
+        setErro(`Confira: ${erros.join(', ')}.`);
         return;
       }
-      nascimentoIso = dataParaIso(nascimento) ?? undefined;
-      if (!nascimentoIso) {
-        setErro(
-          soDigitos(nascimento).length === 8
-            ? 'Data de nascimento inválida — confira o dia, o mês e o ano.'
-            : 'Preencha a data de nascimento (DD/MM/AAAA).',
-        );
-        return;
+      if (nascimento.trim()) {
+        nascimentoIso = dataParaIso(nascimento) ?? undefined;
+        if (!nascimentoIso) {
+          setErro('Data de nascimento inválida — confira o dia, o mês e o ano.');
+          return;
+        }
       }
     }
     // O plano dá acesso a todas as modalidades; o backend exige um modalidadeId
@@ -182,21 +188,32 @@ export default function NovoAluno() {
           {/* Dados pessoais */}
           <Card style={s.section} padding={16}>
             <Text style={s.sectionTitle}>Dados pessoais</Text>
+            {/*
+              Só nome e CPF são obrigatórios. O resto o próprio aluno preenche
+              no primeiro acesso — a dona cadastra no balcão, com ele na
+              frente, e não tem RG nem CEP à mão.
+            */}
+            {ehProfessor ? null : (
+              <Text style={s.sectionHint}>
+                Só o nome e o CPF são obrigatórios. O resto o aluno preenche sozinho no primeiro
+                acesso — preencha aqui só o que já tiver em mãos.
+              </Text>
+            )}
             <View style={s.fields}>
               <Input label="Nome completo *" placeholder={ehProfessor ? 'Nome do professor' : 'Nome do aluno'} value={nome} onChangeText={setNome} autoCapitalize="words" />
               {ehProfessor ? null : (
-                <Input label="RG *" placeholder="00.000.000-0" value={rg} onChangeText={setRg} autoCapitalize="characters" />
+                <Input label="RG" placeholder="00.000.000-0" value={rg} onChangeText={setRg} autoCapitalize="characters" />
               )}
               <Input label="CPF *" placeholder="000.000.000-00" value={cpf} onChangeText={(t) => setCpf(mascaraCpf(t))} keyboardType="numeric" />
               {ehProfessor ? null : (
                 <>
-                  <Input label="Endereço *" placeholder="Rua, número, complemento, bairro, cidade" value={endereco} onChangeText={setEndereco} autoCapitalize="words" />
-                  <Input label="CEP *" placeholder="00000-000" value={cep} onChangeText={(t) => setCep(mascaraCep(t))} keyboardType="numeric" />
+                  <Input label="Endereço" placeholder="Rua, número, complemento, bairro, cidade" value={endereco} onChangeText={setEndereco} autoCapitalize="words" />
+                  <Input label="CEP" placeholder="00000-000" value={cep} onChangeText={(t) => setCep(mascaraCep(t))} keyboardType="numeric" />
                 </>
               )}
               <Input
-                label={ehProfessor ? 'E-mail (opcional)' : 'E-mail *'}
-                placeholder={ehProfessor ? 'o professor cadastra ao ativar a conta' : 'email@exemplo.com'}
+                label="E-mail"
+                placeholder={ehProfessor ? 'o professor cadastra ao ativar a conta' : 'o aluno cadastra ao ativar a conta'}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -204,7 +221,7 @@ export default function NovoAluno() {
                 autoCorrect={false}
               />
               {ehProfessor ? null : (
-                <Input label="Data de nascimento *" placeholder="DD/MM/AAAA" value={nascimento} onChangeText={(t) => setNascimento(mascaraData(t))} keyboardType="numeric" />
+                <Input label="Data de nascimento" placeholder="DD/MM/AAAA" value={nascimento} onChangeText={(t) => setNascimento(mascaraData(t))} keyboardType="numeric" />
               )}
               <Input label="Telefone" placeholder="(00) 00000-0000" value={telefone} onChangeText={(t) => setTelefone(mascaraTelefone(t))} keyboardType="phone-pad" />
             </View>
@@ -367,6 +384,7 @@ const s = StyleSheet.create({
   linhaDupla: { flexDirection: 'row', gap: 10 },
   prefixo: { fontSize: 15, fontWeight: '700', color: LC.textSecondary },
   sectionTitle: { fontSize: 13, fontWeight: '800', color: LC.textPrimary, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 },
+  sectionHint: { fontSize: 12, color: LC.textSecondary, lineHeight: 18, marginTop: -8, marginBottom: 14 },
   fields: { gap: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: LC.radius.full, backgroundColor: LC.bg, borderWidth: 1.5, borderColor: LC.border },

@@ -1,4 +1,4 @@
-import { IsString, MinLength, Matches, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, Matches, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PrimeiroAcessoDto {
@@ -26,4 +26,34 @@ export class PrimeiroAcessoDto {
   @IsOptional()
   @IsString()
   termoVersao?: string;
+
+  /*
+    A ficha cadastral. Vale para os dois caminhos de ativação — com link e
+    sem link — porque o cadastro feito pela dona agora pede só nome e CPF.
+    Opcionais aqui e exigidas no serviço quando quem ativa é ALUNO: professor
+    e admin usam a mesma rota e não têm ficha de matrícula.
+  */
+  @ApiProperty({ required: false, example: 'maria@gmail.com' })
+  @IsOptional() @IsEmail()
+  email?: string;
+
+  @ApiProperty({ required: false, example: '11999998888' })
+  @IsOptional() @IsString() @MinLength(10, { message: 'Telefone precisa do DDD' }) @MaxLength(20)
+  telefone?: string;
+
+  @ApiProperty({ required: false, example: '12.345.678-9' })
+  @IsOptional() @IsString() @MinLength(5) @MaxLength(20)
+  rg?: string;
+
+  @ApiProperty({ required: false, example: 'Rua das Flores, 100, Centro' })
+  @IsOptional() @IsString() @MinLength(5) @MaxLength(200)
+  endereco?: string;
+
+  @ApiProperty({ required: false, example: '01001-000' })
+  @IsOptional() @Matches(/^\d{5}-?\d{3}$/, { message: 'CEP deve ter 8 dígitos (00000-000)' })
+  cep?: string;
+
+  @ApiProperty({ required: false, example: '1995-05-20', description: 'YYYY-MM-DD' })
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Data de nascimento deve estar em YYYY-MM-DD' })
+  dataNascimento?: string;
 }

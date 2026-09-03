@@ -69,3 +69,14 @@ export function useLogout() {
     onSettled: () => logout(),
   });
 }
+
+/**
+ * Trocar a própria senha. Não mexe no cache de sessão: o token atual continua
+ * válido — quem cai são as OUTRAS sessões, do lado do servidor.
+ */
+export function useAlterarSenha() {
+  return useMutation({
+    mutationFn: (payload: { senhaAtual: string; novaSenha: string }) =>
+      authService.alterarSenha(payload),
+  });
+}

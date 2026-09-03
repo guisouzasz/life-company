@@ -23,6 +23,11 @@ export const authService = {
     return data;
   },
 
+  async alterarSenha(payload: { senhaAtual: string; novaSenha: string }): Promise<{ mensagem: string }> {
+    const { data } = await http.post<{ mensagem: string }>('/auth/alterar-senha', payload);
+    return data;
+  },
+
   async me(): Promise<UsuarioLogado> {
     const { data } = await http.get<UsuarioLogado>('/auth/me');
     return data;

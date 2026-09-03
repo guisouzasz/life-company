@@ -13,6 +13,7 @@ import * as dayjs from "dayjs";
 import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
 import { AtivarContaDto, erroDeEmail } from "./dto/ativar-conta.dto";
 import { segredoJwt } from "./jwt.config";
@@ -20,6 +21,20 @@ import { VERSAO_TERMO } from "../termos/termo";
 
 /** Domínio público do estúdio — destino dos links de primeiro acesso. */
 const APP_URL_PUBLICA = "https://www.academialifecompany.com.br";
+
+/**
+ * O que os dois caminhos de ativação têm em comum na ficha do aluno.
+ * `AtivarContaDto` (sem link) e `PrimeiroAcessoDto` (com link) declaram os
+ * mesmos campos; este tipo deixa uma função só atender aos dois.
+ */
+type FichaDoPrimeiroAcesso = {
+  email?: string;
+  telefone?: string;
+  rg?: string;
+  endereco?: string;
+  cep?: string;
+  dataNascimento?: string;
+};
 
 @Injectable()
 export class AuthService {
@@ -116,20 +131,46 @@ export class AuthService {
     const cpfCad = registro.usuario.cpf.replace(/\D/g, "");
     if (cpfNorm !== cpfCad)
       throw new UnauthorizedException("CPF não corresponde");
-    if (registro.usuario.senhaHash)
-      throw new ConflictException("Conta já ativada");
-    this.conferirAceiteDoTermo(registro.usuario.tipoUsuario, dto.termoVersao);
+    /**
+     * Conta que já tem senha não é erro — é quem esqueceu a senha.
+     *
+     * Antes isto recusava com "Conta já ativada", e não havia MAIS NENHUM
+     * caminho de volta: o estúdio não manda e-mail, então não existe link de
+     * recuperação, e a rota que define senha de professor recusa admin. Quem
+     * esquecia a senha ficava fora do app para sempre.
+     *
+     * Agora o mesmo link serve para as duas coisas. Quem manda continua sendo
+     * a dona, pelo botão "Link" no cadastro do aluno — ninguém redefine a
+     * própria senha sozinho, e o link expira.
+     */
+    const redefinindo = !!registro.usuario.senhaHash;
+    // O termo é assinado uma vez, na entrada. Redefinir senha não é reassinar.
+    if (!redefinindo) this.conferirAceiteDoTermo(registro.usuario.tipoUsuario, dto.termoVersao);
+    /*
+      Quem está redefinindo já preencheu a ficha um dia — não faz sentido
+      pedir RG e CEP de novo para quem só quer voltar a entrar.
+    */
+    const ficha = redefinindo ? {} : await this.fichaDaAtivacao(registro.usuario, dto);
     const senhaHash = await bcrypt.hash(dto.senha, 12);
     await this.prisma.$transaction([
       this.prisma.usuario.update({
         where: { id: registro.usuarioId },
-        data: { senhaHash, ativo: true },
+        data: { senhaHash, ativo: true, ...ficha },
       }),
       this.prisma.primeiroAcesso.update({
         where: { id: registro.id },
         data: { usado: true },
       }),
-      ...this.gravarAceiteDoTermo(registro.usuarioId, registro.usuario.tipoUsuario),
+      /*
+        Senha nova derruba as sessões antigas: se a pessoa está redefinindo
+        porque perdeu o aparelho, deixar o token velho valendo não adiantaria
+        nada.
+      */
+      this.prisma.refreshToken.updateMany({
+        where: { usuarioId: registro.usuarioId, revogado: false },
+        data: { revogado: true },
+      }),
+      ...(redefinindo ? [] : this.gravarAceiteDoTermo(registro.usuarioId, registro.usuario.tipoUsuario)),
     ]);
     return this.gerarTokens(
       registro.usuarioId,
@@ -156,21 +197,13 @@ export class AuthService {
     if (usuario.senhaHash)
       throw new ConflictException("Conta já ativada. Faça login com sua senha.");
 
-    const email = dto.email.trim().toLowerCase();
-    const erroEmail = erroDeEmail(email);
-    if (erroEmail) throw new BadRequestException(erroEmail);
-    const emailEmUso = await this.prisma.usuario.findFirst({
-      where: { email: { equals: email, mode: "insensitive" }, id: { not: usuario.id } },
-    });
-    if (emailEmUso)
-      throw new ConflictException("Este e-mail já está em uso por outra conta.");
-
     this.conferirAceiteDoTermo(usuario.tipoUsuario, dto.termoVersao);
+    const ficha = await this.fichaDaAtivacao(usuario, dto);
     const senhaHash = await bcrypt.hash(dto.senha, 12);
     await this.prisma.$transaction([
       this.prisma.usuario.update({
         where: { id: usuario.id },
-        data: { email, senhaHash, ativo: true },
+        data: { senhaHash, ativo: true, ...ficha },
       }),
       // Invalida qualquer link de primeiro acesso pendente para esta conta
       this.prisma.primeiroAcesso.updateMany({
@@ -180,6 +213,70 @@ export class AuthService {
       ...this.gravarAceiteDoTermo(usuario.id, usuario.tipoUsuario),
     ]);
     return this.gerarTokens(usuario.id, usuario.tipoUsuario, usuario.nome);
+  }
+
+  /**
+   * A ficha cadastral que o ALUNO preenche no primeiro acesso.
+   *
+   * O cadastro feito pela dona pede só nome e CPF — ela cadastra no balcão,
+   * com o aluno na frente, e não tem RG nem CEP à mão. Os dados pessoais são
+   * exigidos aqui, onde quem digita é o dono deles.
+   *
+   * Professor e admin ativam pela mesma rota e não têm ficha: para eles isto
+   * devolve vazio e nada é gravado.
+   */
+  private async fichaDaAtivacao(
+    usuario: { id: string; tipoUsuario: string },
+    dto: FichaDoPrimeiroAcesso,
+  ) {
+    const tipoUsuario = usuario.tipoUsuario;
+    if (tipoUsuario !== "ALUNO") return {};
+
+    const cep = dto.cep?.replace(/\D/g, "");
+    const faltando: string[] = [];
+    if (!dto.email?.trim()) faltando.push("e-mail");
+    if (!dto.telefone?.trim()) faltando.push("telefone");
+    if (!dto.rg?.trim()) faltando.push("RG");
+    if (!dto.endereco?.trim()) faltando.push("endereço");
+    if (!cep || cep.length !== 8) faltando.push("CEP");
+    if (!dto.dataNascimento) faltando.push("data de nascimento");
+    if (faltando.length > 0) {
+      throw new BadRequestException(
+        `Para concluir o cadastro, informe: ${faltando.join(", ")}.`,
+      );
+    }
+
+    const nascimento = new Date(`${dto.dataNascimento}T00:00:00`);
+    const [ano, mes, dia] = dto.dataNascimento!.split("-").map(Number);
+    const dataInvalida =
+      Number.isNaN(nascimento.getTime()) ||
+      nascimento.getFullYear() !== ano ||
+      nascimento.getMonth() + 1 !== mes ||
+      nascimento.getDate() !== dia ||
+      ano < 1900 ||
+      nascimento > new Date();
+    if (dataInvalida) {
+      throw new BadRequestException("Data de nascimento inválida — confira o dia, o mês e o ano.");
+    }
+
+    const email = dto.email!.trim().toLowerCase();
+    const erroEmail = erroDeEmail(email);
+    if (erroEmail) throw new BadRequestException(erroEmail);
+    const emailEmUso = await this.prisma.usuario.findFirst({
+      where: { email: { equals: email, mode: "insensitive" }, id: { not: usuario.id } },
+    });
+    if (emailEmUso) {
+      throw new ConflictException("Este e-mail já está em uso por outra conta.");
+    }
+
+    return {
+      email,
+      telefone: dto.telefone!.replace(/\D/g, ""),
+      rg: dto.rg!.trim(),
+      endereco: dto.endereco!.trim(),
+      cep,
+      dataNascimento: nascimento,
+    };
   }
 
   /**
@@ -258,6 +355,45 @@ export class AuthService {
       }),
     ]);
     return { mensagem: "Senha definida. A conta está ativa." };
+  }
+
+  /**
+   * Troca a própria senha, sabendo a atual.
+   *
+   * Existe porque não havia NENHUMA forma de um admin trocar a própria senha:
+   * a rota que define senha de aluno e professor recusa contas de
+   * administrador de propósito, e o estúdio não manda e-mail de recuperação.
+   * A senha inicial do dono, colocada por variável de ambiente na primeira
+   * subida, ficaria valendo para sempre — guardada em texto no painel da
+   * hospedagem.
+   *
+   * Vale para qualquer conta com senha, inclusive ADMIN e dono.
+   */
+  async alterarSenha(usuarioId: string, dto: AlterarSenhaDto) {
+    const usuario = await this.prisma.usuario.findUnique({ where: { id: usuarioId } });
+    if (!usuario?.senhaHash) throw new NotFoundException("Conta não encontrada");
+
+    const confere = await bcrypt.compare(dto.senhaAtual, usuario.senhaHash);
+    if (!confere) throw new UnauthorizedException("A senha atual não confere.");
+    if (dto.senhaAtual === dto.novaSenha) {
+      throw new BadRequestException("A senha nova precisa ser diferente da atual.");
+    }
+
+    const senhaHash = await bcrypt.hash(dto.novaSenha, 12);
+    await this.prisma.$transaction([
+      this.prisma.usuario.update({ where: { id: usuarioId }, data: { senhaHash } }),
+      /*
+        Derruba as outras sessões. Quem troca a senha quase sempre está
+        trocando porque desconfia de alguém — deixar o token antigo valendo
+        esvaziaria o gesto. A sessão atual continua: o app renova com o token
+        que acabou de receber.
+      */
+      this.prisma.refreshToken.updateMany({
+        where: { usuarioId, revogado: false },
+        data: { revogado: true },
+      }),
+    ]);
+    return { mensagem: "Senha alterada. As outras sessões foram desconectadas." };
   }
 
   async refreshToken(token: string) {

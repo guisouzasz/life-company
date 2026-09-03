@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { useAuthStore } from '../../store/auth';
 import { LC } from '../../constants/theme';
 import { nomeModalidade } from '../../constants/assets';
@@ -82,6 +83,19 @@ export default function ProfessorPerfil() {
         </Card>
         ) : null}
 
+        {/*
+          Trocar a senha vem ANTES de sair e de excluir: é a ação que a pessoa
+          procura quando desconfia de alguém, e ficar no meio das duas
+          destrutivas convidava ao toque errado.
+        */}
+        <Pressable
+          style={({ pressed }) => [s.logout, s.trocarSenha, pressed && s.pressed]}
+          onPress={() => router.push('/alterar-senha' as any)}
+        >
+          <Icon name="key-outline" size={20} color={LC.primary} />
+          <Text style={[s.logoutText, { color: LC.primary }]}>Alterar minha senha</Text>
+        </Pressable>
+
         <Pressable style={({ pressed }) => [s.logout, pressed && s.pressed]} onPress={() => setConfirmarSaida(true)}>
           <Icon name="log-out-outline" size={20} color={LC.danger} />
           <Text style={s.logoutText}>Sair da conta</Text>
@@ -150,6 +164,7 @@ const s = StyleSheet.create({
     marginHorizontal: 16, marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 15, borderRadius: LC.radius.lg, backgroundColor: LC.dangerBg,
   },
+  trocarSenha: { borderColor: LC.primaryLight, backgroundColor: LC.primaryLight, marginBottom: 12 },
   logoutText: { fontSize: 15, fontWeight: '700', color: LC.danger },
   excluir: { marginHorizontal: 16, marginTop: 14, alignItems: 'center', paddingVertical: 8 },
   excluirText: { fontSize: 13, fontWeight: '600', color: LC.textMuted, textDecorationLine: 'underline' },

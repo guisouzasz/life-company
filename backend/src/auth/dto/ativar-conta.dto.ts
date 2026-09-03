@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, Matches, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -54,14 +54,51 @@ export class AtivarContaDto {
   @IsString()
   cpf: string;
 
-  @ApiProperty({ example: 'maria@gmail.com', description: 'E-mail escolhido pelo aluno (fica salvo no cadastro)' })
-  @IsEmail()
-  email: string;
+  /*
+    Opcional aqui e exigido no serviço para ALUNO, junto com o resto da ficha.
+    Deixá-lo obrigatório no DTO fazia o pedido morrer antes, com o "email must
+    be an email" cru do validador — em inglês e sem dizer que faltavam também
+    telefone, RG, endereço e CEP.
+  */
+  @ApiProperty({ required: false, example: 'maria@gmail.com', description: 'E-mail escolhido pelo aluno (fica salvo no cadastro)' })
+  @IsOptional() @IsEmail()
+  email?: string;
 
   @ApiProperty({ example: 'minhasenha123' })
   @IsString()
   @MinLength(6)
   senha: string;
+
+  /*
+    A ficha cadastral saiu do balcão e veio para cá.
+
+    Quem sabe o próprio RG, endereço e telefone é o aluno — a dona não tem
+    esses dados na mão quando ele chega no estúdio. Aqui é o momento em que
+    quem digita é o dono do dado.
+
+    Opcionais no DTO e exigidos no serviço quando quem ativa é ALUNO, igual ao
+    `termoVersao` logo abaixo: professor e admin ativam por esta mesma rota e
+    não têm ficha de matrícula.
+  */
+  @ApiProperty({ required: false, example: '11999998888' })
+  @IsOptional() @IsString() @MinLength(10, { message: 'Telefone precisa do DDD' }) @MaxLength(20)
+  telefone?: string;
+
+  @ApiProperty({ required: false, example: '12.345.678-9' })
+  @IsOptional() @IsString() @MinLength(5) @MaxLength(20)
+  rg?: string;
+
+  @ApiProperty({ required: false, example: 'Rua das Flores, 100, Centro, São Paulo' })
+  @IsOptional() @IsString() @MinLength(5) @MaxLength(200)
+  endereco?: string;
+
+  @ApiProperty({ required: false, example: '01001-000' })
+  @IsOptional() @Matches(/^\d{5}-?\d{3}$/, { message: 'CEP deve ter 8 dígitos (00000-000)' })
+  cep?: string;
+
+  @ApiProperty({ required: false, example: '1995-05-20', description: 'YYYY-MM-DD' })
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Data de nascimento deve estar em YYYY-MM-DD' })
+  dataNascimento?: string;
 
   /**
    * Versão do termo que o aluno declarou aceitar.

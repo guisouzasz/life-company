@@ -3,6 +3,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { PrimeiroAcessoDto } from './dto/primeiro-acesso.dto';
 import { AtivarContaDto } from './dto/ativar-conta.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -33,6 +34,14 @@ export class AuthController {
   @Throttle(LIMITE_TENTATIVAS)
   @ApiOperation({ summary: 'Ativar conta com CPF + e-mail (sem link)' })
   ativarConta(@Body() dto: AtivarContaDto) { return this.authService.ativarConta(dto); }
+
+  @Post('alterar-senha')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Trocar a própria senha (sabendo a atual)' })
+  alterarSenha(@Request() req, @Body() dto: AlterarSenhaDto) {
+    return this.authService.alterarSenha(req.user.id, dto);
+  }
 
   @Post('refresh')
   @ApiOperation({ summary: 'Renovar access token' })

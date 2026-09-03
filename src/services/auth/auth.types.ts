@@ -5,7 +5,24 @@ export interface LoginPayload {
   senha: string;
 }
 
-export interface PrimeiroAcessoPayload {
+/**
+ * A ficha que o aluno preenche ao ativar a conta.
+ *
+ * O cadastro feito pela dona pede só nome e CPF — ela cadastra no balcão e
+ * não tem RG nem CEP à mão. Estes campos são exigidos pela API quando quem
+ * ativa é ALUNO; professor e admin usam a mesma rota e não têm ficha.
+ */
+export interface FichaDoPrimeiroAcesso {
+  email?: string;
+  telefone?: string;
+  rg?: string;
+  endereco?: string;
+  cep?: string;
+  /** YYYY-MM-DD */
+  dataNascimento?: string;
+}
+
+export interface PrimeiroAcessoPayload extends FichaDoPrimeiroAcesso {
   token: string;
   cpf: string;
   senha: string;
@@ -17,10 +34,9 @@ export interface PrimeiroAcessoPayload {
   termoVersao?: string;
 }
 
-/** POST /auth/ativar-conta — ativação sem link, com CPF + e-mail. */
-export interface AtivarContaPayload {
+/** POST /auth/ativar-conta — ativação sem link, pelo CPF. */
+export interface AtivarContaPayload extends FichaDoPrimeiroAcesso {
   cpf: string;
-  email: string;
   senha: string;
   /** Idem: obrigatória para ALUNO. */
   termoVersao?: string;

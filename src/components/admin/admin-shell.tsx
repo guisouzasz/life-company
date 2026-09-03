@@ -113,6 +113,17 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           </Pressable>
         )}
 
+        {/* A troca de senha vale para qualquer papel, não só para o dono. */}
+        <Pressable
+          style={({ pressed }) => [s.navItem, s.navDono, pressed && s.pressed]}
+          onPress={() => router.push('/alterar-senha' as any)}
+          accessibilityRole="button"
+          accessibilityLabel="Alterar minha senha"
+        >
+          <Icon name="key-outline" size={20} color={LC.textSecondary} />
+          <Text style={s.navLabel}>Alterar minha senha</Text>
+        </Pressable>
+
         <View style={s.footer}>
           <Avatar nome={nome ?? 'Admin'} size={36} />
           <View style={{ flex: 1 }}>

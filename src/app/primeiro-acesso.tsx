@@ -15,6 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LC } from '../constants/theme';
 import { erroDeEmail } from '../constants/app';
+import { mascaraCep, mascaraData, mascaraTelefone, dataParaIso } from '../services/mascaras';
 import { Button } from '../components/ui/button';
 import { Input, PasswordToggle } from '../components/ui/input';
 import { Icon } from '../components/ui/icon';
@@ -36,18 +37,35 @@ const RULES = [
  *  - sem token (aluno abriu "Primeiro acesso" no app): o CPF identifica o
  *    cadastro e o aluno escolhe o próprio e-mail (qualquer domínio serve).
  */
-function makeSchema(comToken: boolean) {
+function makeSchema(_comToken: boolean) {
   return z
     .object({
-      email: comToken
-        ? z.string().optional()
-        : z
-            .string()
-            .email('Informe um e-mail válido')
-            .superRefine((v, ctx) => {
-              const erro = erroDeEmail(v);
-              if (erro) ctx.addIssue({ code: z.ZodIssueCode.custom, message: erro });
-            }),
+      /*
+        O e-mail e a ficha valem para os DOIS caminhos, com link e sem link.
+        O cadastro feito pela dona passou a pedir só nome e CPF — ela cadastra
+        no balcão e não tem RG nem CEP do aluno à mão. Quem preenche é quem
+        sabe, aqui.
+      */
+      email: z
+        .string()
+        .email('Informe um e-mail válido')
+        .superRefine((v, ctx) => {
+          const erro = erroDeEmail(v);
+          if (erro) ctx.addIssue({ code: z.ZodIssueCode.custom, message: erro });
+        }),
+      telefone: z
+        .string()
+        .transform((v) => v.replace(/\D/g, ''))
+        .refine((v) => v.length >= 10, 'Informe o telefone com DDD'),
+      rg: z.string().trim().min(5, 'Informe o RG'),
+      endereco: z.string().trim().min(5, 'Informe o endereço'),
+      cep: z
+        .string()
+        .transform((v) => v.replace(/\D/g, ''))
+        .refine((v) => v.length === 8, 'CEP precisa de 8 dígitos'),
+      nascimento: z
+        .string()
+        .refine((v) => !!dataParaIso(v), 'Informe a data no formato DD/MM/AAAA'),
       cpf: z
         .string()
         .transform((v) => v.replace(/\D/g, ''))
@@ -100,7 +118,7 @@ export default function PrimeiroAcesso() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(makeSchema(comToken)),
-    defaultValues: { email: '', cpf: '', senha: '', confirmar: '' },
+    defaultValues: { email: '', telefone: '', rg: '', endereco: '', cep: '', nascimento: '', cpf: '', senha: '', confirmar: '' },
   });
 
   const senhaAtual = watch('senha') ?? '';
@@ -122,14 +140,22 @@ export default function PrimeiroAcesso() {
       return;
     }
     const cpf = values.cpf.replace(/\D/g, '');
+    const ficha = {
+      email: (values.email ?? '').trim(),
+      telefone: (values.telefone ?? '').replace(/\D/g, ''),
+      rg: (values.rg ?? '').trim(),
+      endereco: (values.endereco ?? '').trim(),
+      cep: (values.cep ?? '').replace(/\D/g, ''),
+      dataNascimento: dataParaIso(values.nascimento ?? '') ?? undefined,
+    };
     if (comToken) {
       primeiroAcesso.mutate(
-        { token: tokenFromLink, cpf, senha: values.senha, termoVersao: versaoAceita },
+        { token: tokenFromLink, cpf, senha: values.senha, termoVersao: versaoAceita, ...ficha },
         { onSuccess: irParaApp },
       );
     } else {
       ativarConta.mutate(
-        { cpf, email: (values.email ?? '').trim(), senha: values.senha, termoVersao: versaoAceita },
+        { cpf, senha: values.senha, termoVersao: versaoAceita, ...ficha },
         { onSuccess: irParaApp },
       );
     }
@@ -184,26 +210,109 @@ export default function PrimeiroAcesso() {
               )}
             />
 
-            {!comToken ? (
-              <Controller
-                control={control}
-                name="email"
-                render={({ field: { onChange, onBlur, value } }) => (
-                  <Input
-                    label="Seu e-mail"
-                    placeholder="seuemail@gmail.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.email?.message}
-                    leftIcon={<Icon name="mail-outline" size={18} color={LC.textMuted} />}
-                  />
-                )}
-              />
-            ) : null}
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Seu e-mail"
+                  placeholder="seuemail@gmail.com"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.email?.message}
+                  leftIcon={<Icon name="mail-outline" size={18} color={LC.textMuted} />}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="telefone"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Telefone com DDD"
+                  placeholder="(00) 00000-0000"
+                  keyboardType="phone-pad"
+                  value={value}
+                  onChangeText={(t) => onChange(mascaraTelefone(t))}
+                  onBlur={onBlur}
+                  error={errors.telefone?.message}
+                  leftIcon={<Icon name="call-outline" size={18} color={LC.textMuted} />}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="nascimento"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Data de nascimento"
+                  placeholder="DD/MM/AAAA"
+                  keyboardType="numeric"
+                  value={value}
+                  onChangeText={(t) => onChange(mascaraData(t))}
+                  onBlur={onBlur}
+                  error={errors.nascimento?.message}
+                  leftIcon={<Icon name="calendar-number-outline" size={18} color={LC.textMuted} />}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="rg"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="RG"
+                  placeholder="00.000.000-0"
+                  autoCapitalize="characters"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.rg?.message}
+                  leftIcon={<Icon name="id-card-outline" size={18} color={LC.textMuted} />}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="endereco"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="Endereço"
+                  placeholder="Rua, número, bairro, cidade"
+                  autoCapitalize="words"
+                  value={value}
+                  onChangeText={onChange}
+                  onBlur={onBlur}
+                  error={errors.endereco?.message}
+                  leftIcon={<Icon name="location-outline" size={18} color={LC.textMuted} />}
+                />
+              )}
+            />
+
+            <Controller
+              control={control}
+              name="cep"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <Input
+                  label="CEP"
+                  placeholder="00000-000"
+                  keyboardType="numeric"
+                  value={value}
+                  onChangeText={(t) => onChange(mascaraCep(t))}
+                  onBlur={onBlur}
+                  error={errors.cep?.message}
+                  leftIcon={<Icon name="map-outline" size={18} color={LC.textMuted} />}
+                />
+              )}
+            />
 
             <Controller
               control={control}

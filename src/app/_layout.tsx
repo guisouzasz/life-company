@@ -27,8 +27,24 @@ function RootNavigator() {
   //  - logado em área de OUTRO papel (ex: aluno em /admin) → home do papel.
   useEffect(() => {
     if (isLoading) return;
+    /*
+      "Esqueci minha senha" é pública por definição: quem precisa dela está
+      deslogado. Sem isto o app mandava a pessoa de volta para as boas-vindas
+      no instante em que ela tocava no link.
+    */
     const rotaPublica =
-      pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/primeiro-acesso');
+      pathname === '/' ||
+      pathname.startsWith('/login') ||
+      pathname.startsWith('/primeiro-acesso') ||
+      pathname.startsWith('/esqueci-senha');
+
+    /*
+      Rotas que valem para QUALQUER papel. A troca de senha é da pessoa, não
+      do papel dela — deixá-la só na área do aluno era o que impedia a dona e
+      o dono de trocarem a própria senha, que é o buraco que esta tela veio
+      fechar.
+    */
+    const rotaDeQualquerPapel = pathname.startsWith('/alterar-senha');
 
     if (!isAuthenticated) {
       if (!rotaPublica) router.replace('/');
@@ -40,7 +56,8 @@ function RootNavigator() {
       : tipoUsuario === 'PROFESSOR' ? '/professor/agenda'
       : '/dashboard';
     const areaCorreta =
-      tipoUsuario === 'ADMIN' ? pathname.startsWith('/admin')
+      rotaDeQualquerPapel ? true
+      : tipoUsuario === 'ADMIN' ? pathname.startsWith('/admin')
       : tipoUsuario === 'PROFESSOR' ? pathname.startsWith('/professor')
       : !pathname.startsWith('/admin') && !pathname.startsWith('/professor');
 

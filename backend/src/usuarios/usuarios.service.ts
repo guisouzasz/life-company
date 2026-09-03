@@ -83,15 +83,22 @@ export class UsuariosService {
   }
 
   /** A ficha cadastral completa é exigida do ALUNO; do PROFESSOR, não. */
+  /**
+   * A ficha do aluno é preenchida por ELE, no primeiro acesso — não pela dona.
+   *
+   * Antes o cadastro exigia RG, endereço, CEP, e-mail e nascimento na hora de
+   * criar. Isso parava a dona no balcão: chega aluno novo, ela quer cadastrar
+   * e já colocar na turma, e não tem o CEP nem o RG dele à mão. Ela acabava
+   * inventando dado só para o formulário deixar salvar — e dado inventado é
+   * pior do que campo vazio, porque parece verdade.
+   *
+   * Nome e CPF continuam obrigatórios: o CPF é como o aluno se identifica no
+   * primeiro acesso, e sem ele não há como ligar a pessoa ao cadastro. O resto
+   * é exigido em `ativarConta`, onde quem digita é o dono do dado.
+   */
   private exigirFichaDoAluno(dto: CriarUsuarioDto) {
-    const faltando: string[] = [];
-    if (!dto.rg?.trim()) faltando.push("RG");
-    if (!dto.endereco?.trim()) faltando.push("endereço");
-    if (!this.normalizarCep(dto.cep)) faltando.push("CEP");
-    if (!dto.email?.trim()) faltando.push("e-mail");
-    if (!dto.dataNascimento) faltando.push("data de nascimento");
-    if (faltando.length > 0) {
-      throw new ConflictException(`Cadastro do aluno exige: ${faltando.join(", ")}`);
+    if (!dto.nome?.trim()) {
+      throw new ConflictException("Cadastro do aluno exige: nome");
     }
   }
 

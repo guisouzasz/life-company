@@ -563,9 +563,25 @@ export default function AdminDashboard() {
               <Text style={s.heroTitle}>Painel Admin</Text>
               <Text style={s.heroSub}>Olá, {nome?.split(' ')[0] || 'Admin'}</Text>
             </View>
-            <Pressable style={s.logoutBtn} onPress={() => logout.mutate()} hitSlop={8}>
-              <Icon name="log-out-outline" size={20} color="#fff" />
-            </Pressable>
+            <View style={s.heroAcoes}>
+              {/*
+                A chave fica ao lado do sair, no cabeçalho: é o único caminho
+                da dona até a própria senha — o painel não tem tela de perfil,
+                e a rota que define senha de aluno e professor recusa conta de
+                administrador de propósito.
+              */}
+              <Pressable
+                style={s.logoutBtn}
+                onPress={() => router.push('/alterar-senha' as any)}
+                hitSlop={8}
+                accessibilityLabel="Alterar minha senha"
+              >
+                <Icon name="key-outline" size={20} color="#fff" />
+              </Pressable>
+              <Pressable style={s.logoutBtn} onPress={() => logout.mutate()} hitSlop={8} accessibilityLabel="Sair da conta">
+                <Icon name="log-out-outline" size={20} color="#fff" />
+              </Pressable>
+            </View>
           </View>
 
           {relatorio.isError ? null : <ProximasAulasHero d={d} />}
@@ -696,6 +712,7 @@ const s = StyleSheet.create({
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   heroTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
   heroSub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  heroAcoes: { flexDirection: 'row', gap: 8 },
   logoutBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   ocupacaoCard: { marginTop: 22, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: LC.radius.lg, padding: 18 },
   ocupacaoHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
