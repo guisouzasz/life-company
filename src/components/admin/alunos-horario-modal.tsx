@@ -140,6 +140,9 @@ export function AlunosHorarioModal({
   const ocupacao = agendamentos.data?.length ?? 0;
   const cabem = horario?.capacidadeMaxima;
   const lotado = cabem !== undefined && ocupacao >= cabem;
+  const mensagemLotado = cabem !== undefined
+    ? `Horário cheio (${ocupacao}/${cabem}). Não é possível marcar aluno nesta turma. Tire alguém para abrir vaga.`
+    : 'Horário cheio. Não é possível marcar aluno nesta turma.';
   /**
    * Aula de dia passado: a API recusa marcar (distorceria a cota da semana do
    * aluno por uma aula que ele não teve). A agenda semanal deixa abrir dias
@@ -188,6 +191,10 @@ export function AlunosHorarioModal({
 
   const adicionarAluno = (aluno: AlunoAdmin, substituirAgendamentoId?: string) => {
     if (!horario || !data) return;
+    if (lotado) {
+      setFeedback(mensagemLotado);
+      return;
+    }
     setConflito(null);
     setFeedback(null);
     adicionar.mutate(
@@ -232,6 +239,13 @@ export function AlunosHorarioModal({
           Quem entra na aula de {data ? formatDate(data, 'dddd, DD/MM') : ''}
           {cabem !== undefined ? ` • ${ocupacao} de ${cabem}` : ''}
         </Text>
+
+        {lotado ? (
+          <View style={[s.feedback, s.feedbackErro]}>
+            <Icon name="alert-circle-outline" size={16} color={LC.danger} />
+            <Text style={[s.feedbackText, s.feedbackTextErro]}>{mensagemLotado}</Text>
+          </View>
+        ) : null}
 
         <Input
           placeholder="Buscar por nome ou CPF"
@@ -313,14 +327,14 @@ export function AlunosHorarioModal({
                     <Text style={s.rowSub}>{plano ? plano.nome : 'Sem plano ativo'}</Text>
                   </View>
                   <Pressable
-                    style={s.addBtn}
+                    style={[s.addBtn, (lotado || adicionar.isPending) && s.addBtnDisabled]}
                     hitSlop={6}
                     accessibilityRole="button"
                     accessibilityLabel={`Colocar ${aluno.nome} nesta aula`}
-                    disabled={adicionar.isPending}
+                    disabled={lotado || adicionar.isPending}
                     onPress={() => adicionarAluno(aluno)}
                   >
-                    <Icon name="add" size={18} color={LC.primary} />
+                    <Icon name="add" size={18} color={lotado ? LC.textMuted : LC.primary} />
                   </Pressable>
                 </View>
               );
@@ -398,7 +412,7 @@ export function AlunosHorarioModal({
       ) : lotado ? (
         <View style={s.lotadoRow}>
           <Icon name="alert-circle-outline" size={14} color={LC.danger} />
-          <Text style={s.lotadoText}>Turma lotada ({ocupacao}/{cabem}). Tire alguém para abrir vaga.</Text>
+          <Text style={s.lotadoText}>{mensagemLotado}</Text>
         </View>
       ) : (
         <Pressable
@@ -496,7 +510,9 @@ const s = StyleSheet.create({
     backgroundColor: LC.primaryLight, borderRadius: LC.radius.md,
     paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12,
   },
+  feedbackErro: { backgroundColor: LC.dangerBg },
   feedbackText: { flex: 1, fontSize: 13, color: LC.primaryDark, lineHeight: 18 },
+  feedbackTextErro: { color: LC.danger },
   loading: { height: 80 },
   empty: { fontSize: 14, color: LC.textSecondary, textAlign: 'center', paddingVertical: 16 },
   list: { maxHeight: 300 },
@@ -515,6 +531,7 @@ const s = StyleSheet.create({
   escolhaSub: { fontSize: 12.5, color: LC.textSecondary, lineHeight: 18, marginTop: 3 },
   cancelBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.dangerBg, alignItems: 'center', justifyContent: 'center' },
   addBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
+  addBtnDisabled: { backgroundColor: LC.neutralBg, opacity: 0.65 },
 
   // ── Adicionar aluno ────────────────────────────────────────────────
   addAlunoBtn: {
