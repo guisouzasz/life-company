@@ -80,3 +80,13 @@ export function useAlterarSenha() {
       authService.alterarSenha(payload),
   });
 }
+
+/**
+ * Pede o link de redefinir senha por e-mail. Rota pública — não mexe em
+ * nenhum cache, porque não há sessão para atualizar.
+ */
+export function useEsqueciSenha() {
+  return useMutation({
+    mutationFn: (payload: { email: string }) => authService.esqueciSenha(payload),
+  });
+}

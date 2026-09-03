@@ -23,6 +23,11 @@ export const authService = {
     return data;
   },
 
+  async esqueciSenha(payload: { email: string }): Promise<{ mensagem: string; enviado?: boolean }> {
+    const { data } = await http.post<{ mensagem: string; enviado?: boolean }>('/auth/esqueci-senha', payload);
+    return data;
+  },
+
   async alterarSenha(payload: { senhaAtual: string; novaSenha: string }): Promise<{ mensagem: string }> {
     const { data } = await http.post<{ mensagem: string }>('/auth/alterar-senha', payload);
     return data;

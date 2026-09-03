@@ -14,6 +14,9 @@ import { v4 as uuidv4 } from "uuid";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { EmailService } from '../email/email.service';
+import { modeloRedefinirSenha } from '../email/modelo-redefinir-senha';
+import { nomeCurto } from '../comum/nome';
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
 import { AtivarContaDto, erroDeEmail } from "./dto/ativar-conta.dto";
 import { segredoJwt } from "./jwt.config";
@@ -36,12 +39,16 @@ type FichaDoPrimeiroAcesso = {
   dataNascimento?: string;
 };
 
+/** Quanto vale o link de acesso. O e-mail avisa o mesmo número. */
+const HORAS_DO_LINK = 72;
+
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private config: ConfigService,
+    private email: EmailService,
   ) {}
 
   /**
@@ -423,9 +430,65 @@ export class AuthService {
     return { mensagem: "Logout realizado" };
   }
 
+  /**
+   * "Esqueci minha senha": manda o link para o e-mail do próprio aluno.
+   *
+   * O e-mail é o canal certo AQUI, e só aqui. O estúdio fala por WhatsApp,
+   * mas o WhatsApp da dona não prova quem está do outro lado — e um link de
+   * senha tem que chegar numa caixa que só o dono da conta abre.
+   *
+   * A resposta é a MESMA existindo ou não o e-mail. Esta rota é pública e
+   * fica na internet: responder "não achei" a transformaria numa forma de
+   * descobrir quem treina no estúdio, um e-mail por vez.
+   *
+   * Sem SMTP configurado, ela diz isso em vez de fingir que mandou — a tela
+   * então oferece o caminho antigo, de pedir o link à dona.
+   */
+  async esqueciMinhaSenha(email: string) {
+    const generico = {
+      mensagem:
+        'Se este e-mail estiver num cadastro, o link para criar uma senha nova chega em alguns minutos. ' +
+        'Confira também a caixa de spam.',
+    };
+
+    if (!this.email.ligado) {
+      return {
+        mensagem:
+          'O envio de e-mail ainda não está ligado neste estúdio. ' +
+          'Peça o link de acesso direto à recepção — ela gera na hora, pelo cadastro.',
+        enviado: false,
+      };
+    }
+
+    const alvo = email.trim().toLowerCase();
+    const usuario = await this.prisma.usuario.findFirst({
+      where: { email: { equals: alvo, mode: 'insensitive' } },
+      select: { id: true, nome: true, email: true, ativo: true, senhaHash: true },
+    });
+
+    /*
+      Conta desligada não recebe link: devolver o acesso a quem o estúdio
+      desativou é decisão da dona, não de quem digita um e-mail. O aluno que
+      ainda não fez o primeiro acesso PASSA — para ele o link é justamente o
+      caminho de entrada.
+    */
+    const desligado = usuario && !usuario.ativo && usuario.senhaHash;
+    if (!usuario || desligado) return generico;
+
+    const { link } = await this.gerarLinkPrimeiroAcesso(usuario.id);
+    const linkRedefinir = `${link}&redefinir=1`;
+    const { assunto, texto, html } = modeloRedefinirSenha(
+      nomeCurto(usuario.nome),
+      linkRedefinir,
+      HORAS_DO_LINK,
+    );
+    await this.email.enviar(usuario.email!, assunto, texto, html);
+    return generico;
+  }
+
   async gerarLinkPrimeiroAcesso(usuarioId: string) {
     const token = uuidv4();
-    const expiraEm = dayjs().add(72, "hour").toDate();
+    const expiraEm = dayjs().add(HORAS_DO_LINK, "hour").toDate();
     await this.prisma.primeiroAcesso.upsert({
       where: { usuarioId },
       update: { token, expiraEm, usado: false },

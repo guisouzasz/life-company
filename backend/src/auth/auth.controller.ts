@@ -4,6 +4,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { AlterarSenhaDto } from './dto/alterar-senha.dto';
+import { EsqueciSenhaDto } from './dto/esqueci-senha.dto';
 import { PrimeiroAcessoDto } from './dto/primeiro-acesso.dto';
 import { AtivarContaDto } from './dto/ativar-conta.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -34,6 +35,17 @@ export class AuthController {
   @Throttle(LIMITE_TENTATIVAS)
   @ApiOperation({ summary: 'Ativar conta com CPF + e-mail (sem link)' })
   ativarConta(@Body() dto: AtivarContaDto) { return this.authService.ativarConta(dto); }
+
+  /*
+    Limite bem apertado: é rota pública que dispara e-mail. Sem isso, alguém
+    de fora poderia usá-la para encher a caixa de um aluno.
+  */
+  @Post('esqueci-senha')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Pedir o link de redefinir senha por e-mail' })
+  esqueciSenha(@Body() dto: EsqueciSenhaDto) {
+    return this.authService.esqueciMinhaSenha(dto.email);
+  }
 
   @Post('alterar-senha')
   @UseGuards(JwtAuthGuard)

@@ -37,7 +37,7 @@ const RULES = [
  *  - sem token (aluno abriu "Primeiro acesso" no app): o CPF identifica o
  *    cadastro e o aluno escolhe o próprio e-mail (qualquer domínio serve).
  */
-function makeSchema(_comToken: boolean) {
+function makeSchema(redefinindo: boolean) {
   return z
     .object({
       /*
@@ -46,26 +46,32 @@ function makeSchema(_comToken: boolean) {
         no balcão e não tem RG nem CEP do aluno à mão. Quem preenche é quem
         sabe, aqui.
       */
-      email: z
-        .string()
-        .email('Informe um e-mail válido')
-        .superRefine((v, ctx) => {
-          const erro = erroDeEmail(v);
-          if (erro) ctx.addIssue({ code: z.ZodIssueCode.custom, message: erro });
-        }),
-      telefone: z
-        .string()
-        .transform((v) => v.replace(/\D/g, ''))
-        .refine((v) => v.length >= 10, 'Informe o telefone com DDD'),
-      rg: z.string().trim().min(5, 'Informe o RG'),
-      endereco: z.string().trim().min(5, 'Informe o endereço'),
-      cep: z
-        .string()
-        .transform((v) => v.replace(/\D/g, ''))
-        .refine((v) => v.length === 8, 'CEP precisa de 8 dígitos'),
-      nascimento: z
-        .string()
-        .refine((v) => !!dataParaIso(v), 'Informe a data no formato DD/MM/AAAA'),
+      email: redefinindo
+        ? z.string().optional()
+        : z
+            .string()
+            .email('Informe um e-mail válido')
+            .superRefine((v, ctx) => {
+              const erro = erroDeEmail(v);
+              if (erro) ctx.addIssue({ code: z.ZodIssueCode.custom, message: erro });
+            }),
+      telefone: redefinindo
+        ? z.string().optional()
+        : z
+            .string()
+            .transform((v) => v.replace(/\D/g, ''))
+            .refine((v) => v.length >= 10, 'Informe o telefone com DDD'),
+      rg: redefinindo ? z.string().optional() : z.string().trim().min(5, 'Informe o RG'),
+      endereco: redefinindo ? z.string().optional() : z.string().trim().min(5, 'Informe o endereço'),
+      cep: redefinindo
+        ? z.string().optional()
+        : z
+            .string()
+            .transform((v) => v.replace(/\D/g, ''))
+            .refine((v) => v.length === 8, 'CEP precisa de 8 dígitos'),
+      nascimento: redefinindo
+        ? z.string().optional()
+        : z.string().refine((v) => !!dataParaIso(v), 'Informe a data no formato DD/MM/AAAA'),
       cpf: z
         .string()
         .transform((v) => v.replace(/\D/g, ''))
@@ -91,9 +97,16 @@ function formatCpf(v: string) {
 }
 
 export default function PrimeiroAcesso() {
-  const params = useLocalSearchParams<{ token?: string }>();
+  const params = useLocalSearchParams<{ token?: string; redefinir?: string }>();
   const tokenFromLink = typeof params.token === 'string' ? params.token : '';
   const comToken = !!tokenFromLink;
+  /*
+    O mesmo link serve para ativar conta nova e para redefinir senha, e o
+    e-mail de "esqueci minha senha" marca qual é. Quem está redefinindo já
+    preencheu a ficha e já assinou o termo um dia — pedir tudo de novo para
+    quem só quer voltar a entrar seria castigo, não segurança.
+  */
+  const redefinindo = params.redefinir === '1';
   const [showSenha, setShowSenha] = useState(false);
   const primeiroAcesso = usePrimeiroAcesso();
   const ativarConta = useAtivarConta();
@@ -117,7 +130,7 @@ export default function PrimeiroAcesso() {
     watch,
     formState: { errors },
   } = useForm<FormData>({
-    resolver: zodResolver(makeSchema(comToken)),
+    resolver: zodResolver(makeSchema(redefinindo)),
     defaultValues: { email: '', telefone: '', rg: '', endereco: '', cep: '', nascimento: '', cpf: '', senha: '', confirmar: '' },
   });
 
@@ -135,12 +148,13 @@ export default function PrimeiroAcesso() {
   const onSubmit = handleSubmit((values) => {
     // Sem aceite não conclui. A API recusa do mesmo jeito; aqui é só para o
     // aluno ver o motivo na hora, em vez de levar um erro do servidor.
-    if (!versaoAceita) {
+    // O termo é assinado uma vez, na entrada. Redefinir senha não é reassinar.
+    if (!redefinindo && !versaoAceita) {
       setFaltaAceitar(true);
       return;
     }
     const cpf = values.cpf.replace(/\D/g, '');
-    const ficha = {
+    const ficha = redefinindo ? {} : {
       email: (values.email ?? '').trim(),
       telefone: (values.telefone ?? '').replace(/\D/g, ''),
       rg: (values.rg ?? '').trim(),
@@ -150,12 +164,12 @@ export default function PrimeiroAcesso() {
     };
     if (comToken) {
       primeiroAcesso.mutate(
-        { token: tokenFromLink, cpf, senha: values.senha, termoVersao: versaoAceita, ...ficha },
+        { token: tokenFromLink, cpf, senha: values.senha, termoVersao: versaoAceita ?? undefined, ...ficha },
         { onSuccess: irParaApp },
       );
     } else {
       ativarConta.mutate(
-        { cpf, senha: values.senha, termoVersao: versaoAceita, ...ficha },
+        { cpf, senha: values.senha, termoVersao: versaoAceita ?? undefined, ...ficha },
         { onSuccess: irParaApp },
       );
     }
@@ -210,6 +224,13 @@ export default function PrimeiroAcesso() {
               )}
             />
 
+            {/*
+              Ao redefinir a senha, a ficha não aparece: quem chega aqui pelo
+              e-mail de "esqueci minha senha" já preencheu tudo um dia e só
+              quer voltar a entrar.
+            */}
+            {redefinindo ? null : (
+              <>
             <Controller
               control={control}
               name="email"
@@ -314,6 +335,8 @@ export default function PrimeiroAcesso() {
               )}
             />
 
+              </>
+            )}
             <Controller
               control={control}
               name="senha"
@@ -371,6 +394,7 @@ export default function PrimeiroAcesso() {
             </View>
 
             {/* ── Termo do estúdio ─────────────────────────────────── */}
+            {redefinindo ? null : (
             <View style={[s.termoBox, faltaAceitar && !versaoAceita && s.termoBoxErro]}>
               <Pressable
                 style={s.termoLinha}
@@ -412,8 +436,14 @@ export default function PrimeiroAcesso() {
                 </Text>
               ) : null}
             </View>
+            )}
 
-            <Button title={comToken ? 'Criar senha' : 'Ativar conta'} size="lg" loading={pendente} onPress={onSubmit} />
+            <Button
+              title={redefinindo ? 'Salvar senha nova' : comToken ? 'Criar senha' : 'Ativar conta'}
+              size="lg"
+              loading={pendente}
+              onPress={onSubmit}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

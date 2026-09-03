@@ -20,6 +20,7 @@ import { TreinosModule } from './treinos/treinos.module';
 import { CargasModule } from './cargas/cargas.module';
 import { AnamneseModule } from './anamnese/anamnese.module';
 import { TermosModule } from './termos/termos.module';
+import { EmailModule } from './email/email.module';
 import { LogsModule } from './logs/logs.module';
 import { DiagnosticoModule } from './diagnostico/diagnostico.module';
 import { LogsInterceptor } from './logs/logs.interceptor';
@@ -48,6 +49,7 @@ import { LogsInterceptor } from './logs/logs.interceptor';
     CargasModule,
     AnamneseModule,
     TermosModule,
+    EmailModule,
     LogsModule,
     DiagnosticoModule,
   ],
