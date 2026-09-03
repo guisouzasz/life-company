@@ -7,7 +7,7 @@ import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
 import { Avatar } from '../../components/ui/avatar';
-import { Badge } from '../../components/ui/badge';
+import { Badge, type BadgeVariant } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { AppModal, ConfirmModal, InfoModal } from '../../components/ui/modal';
@@ -54,6 +54,12 @@ function FichaCadastral({ aluno }: { aluno: AlunoAdmin }) {
       ))}
     </View>
   );
+}
+
+function statusDoAluno(aluno: AlunoAdmin): { label: string; variant: BadgeVariant } {
+  if (!aluno.ativado) return { label: 'Pendente 1º acesso', variant: 'warning' };
+  if (!aluno.ativo) return { label: 'Inativo/desligado', variant: 'danger' };
+  return { label: 'Ativo', variant: 'success' };
 }
 
 export default function AdminAlunos() {
@@ -159,7 +165,7 @@ export default function AdminAlunos() {
             if (fixos > 0) partes.push(`${fixos} horário(s) fixo(s)`);
             if (aulas > 0) partes.push(`${aulas} aula(s) futura(s)`);
             setAviso({
-              titulo: 'Aluno desativado',
+              titulo: 'Aluno desligado',
               texto: `Foram liberados: ${partes.join(' e ')}. As vagas voltaram para as turmas.`,
             });
           }
@@ -254,6 +260,7 @@ export default function AdminAlunos() {
               </View>
               {alunos.data.map((aluno) => {
                 const plano = aluno.usuarioPlanos?.[0];
+                const status = statusDoAluno(aluno);
                 return (
                   <View key={aluno.id} style={s.tRow}>
                     <View style={[s.tCol, s.tColNome, s.tNomeWrap]}>
@@ -270,7 +277,7 @@ export default function AdminAlunos() {
                       {plano?.plano?.nome ?? '—'}
                     </Text>
                     <View style={[s.tCol, s.tColStatus]}>
-                      <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
+                      <Badge label={status.label} variant={status.variant} />
                     </View>
                     <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
                       <Pressable style={s.tAcao} onPress={() => abrirEdicao(aluno)} accessibilityLabel="Editar dados do aluno">
@@ -289,15 +296,6 @@ export default function AdminAlunos() {
                         <Icon name="link-outline" size={15} color={LC.primary} />
                         <Text style={s.tAcaoText}>Link</Text>
                       </Pressable>
-                      {/*
-                        Aparece para qualquer aluno, ativo ou não.
-                        Antes só saía em quem já estava inativo, para obrigar a
-                        desativar primeiro — mas isso escondia a opção de quem
-                        estava procurando por ela, e a dona ficava sem saber se
-                        o sistema tinha ou não. A trava certa é a confirmação,
-                        não sumir com o botão: ela diz o que some, o que fica e
-                        oferece "Inativo" como a saída com volta.
-                      */}
                       <Pressable
                         style={s.tAcao}
                         onPress={() => setExcluindo(aluno)}
@@ -321,6 +319,7 @@ export default function AdminAlunos() {
           {alunos.data && alunos.data.length > 0 ? (
             alunos.data.map((aluno) => {
               const plano = aluno.usuarioPlanos?.[0];
+              const status = statusDoAluno(aluno);
               return (
                 <Card key={aluno.id} style={s.card} padding={14}>
                   <View style={s.cardTop}>
@@ -330,7 +329,7 @@ export default function AdminAlunos() {
                       <Text style={s.email} numberOfLines={1}>{aluno.email ?? 'Sem e-mail — aguardando ativação'}</Text>
                       {plano?.plano ? <Text style={s.plano}>{plano.plano.nome}</Text> : null}
                     </View>
-                    <Badge label={aluno.ativo ? 'Ativo' : 'Inativo'} variant={aluno.ativo ? 'success' : 'danger'} />
+                    <Badge label={status.label} variant={status.variant} />
                   </View>
 
                   <FichaCadastral aluno={aluno} />
@@ -361,12 +360,6 @@ export default function AdminAlunos() {
                     <Icon name="calendar-outline" size={16} color={LC.primary} />
                     <Text style={s.credLinkText}>Editar plano e horário fixo</Text>
                   </Pressable>
-                  {/*
-                    No celular não havia como excluir de jeito nenhum — só no
-                    computador. E é do celular que o estúdio é tocado.
-                    Fica por último e em vermelho: perto dos outros, um polegar
-                    apressado acerta o errado.
-                  */}
                   <Pressable
                     style={[s.credLink, s.credLinkPerigo]}
                     onPress={() => setExcluindo(aluno)}
@@ -441,29 +434,44 @@ export default function AdminAlunos() {
             <Input label="Telefone" value={form.telefone} onChangeText={(t) => setForm((f) => ({ ...f, telefone: mascaraTelefone(t) }))} keyboardType="phone-pad" placeholder="(00) 00000-0000" />
 
             <Text style={s.editLabel}>Status</Text>
-            <View style={s.editChips}>
-              <Pressable style={[s.editChip, form.ativo && s.editChipAtivo]} onPress={() => setForm((f) => ({ ...f, ativo: true }))}>
-                <View style={[s.editDot, { backgroundColor: form.ativo ? LC.success : LC.textMuted }]} />
-                <Text style={[s.editChipText, form.ativo && { color: LC.successFg, fontWeight: '700' }]}>Ativo</Text>
-              </Pressable>
-              <Pressable style={[s.editChip, !form.ativo && s.editChipInativo]} onPress={() => setForm((f) => ({ ...f, ativo: false }))}>
-                <View style={[s.editDot, { backgroundColor: !form.ativo ? LC.danger : LC.textMuted }]} />
-                <Text style={[s.editChipText, !form.ativo && { color: LC.dangerFg, fontWeight: '700' }]}>Inativo</Text>
-              </Pressable>
-            </View>
-            {!form.ativo ? (
-              /*
-                O aviso precisa dizer o que ACONTECE, não só o que fica
-                proibido. Ao salvar como inativo o aluno sai das turmas — sem
-                isso ele continuaria ocupando vaga, e era assim que as turmas
-                do estúdio ficavam "lotadas" de gente que não treina mais.
-              */
-              <Text style={s.editAviso}>
-                Inativo não entra no app nem agenda aulas. Ao salvar, ele sai dos horários fixos e as
-                aulas futuras dele são canceladas — as vagas voltam para as turmas. Se ele voltar, é
-                preciso cadastrar os horários de novo.
-              </Text>
-            ) : null}
+            {editando && !editando.ativado ? (
+              <>
+                <View style={s.statusPendenteBox}>
+                  <Icon name="time-outline" size={16} color={LC.warningFg} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.statusPendenteTitulo}>Pendente de primeiro acesso</Text>
+                    <Text style={s.statusPendenteTexto}>
+                      Este cadastro ainda não virou conta no app. Ele pode ter plano e horário fixo,
+                      mas só entra como aluno ativo depois de criar a senha.
+                    </Text>
+                  </View>
+                </View>
+                <Text style={s.editAviso}>
+                  Para aluno que já saiu do estúdio, depois que ele estiver ativo use Inativo/desligado.
+                  Essa opção remove os horários fixos e cancela as aulas futuras sem excluir o cadastro.
+                </Text>
+              </>
+            ) : (
+              <>
+                <View style={s.editChips}>
+                  <Pressable style={[s.editChip, form.ativo && s.editChipAtivo]} onPress={() => setForm((f) => ({ ...f, ativo: true }))}>
+                    <View style={[s.editDot, { backgroundColor: form.ativo ? LC.success : LC.textMuted }]} />
+                    <Text style={[s.editChipText, form.ativo && { color: LC.successFg, fontWeight: '700' }]}>Ativo</Text>
+                  </Pressable>
+                  <Pressable style={[s.editChip, !form.ativo && s.editChipInativo]} onPress={() => setForm((f) => ({ ...f, ativo: false }))}>
+                    <View style={[s.editDot, { backgroundColor: !form.ativo ? LC.danger : LC.textMuted }]} />
+                    <Text style={[s.editChipText, !form.ativo && { color: LC.dangerFg, fontWeight: '700' }]}>Inativo/desligado</Text>
+                  </Pressable>
+                </View>
+                {!form.ativo ? (
+                  <Text style={s.editAviso}>
+                    Inativo/desligado não entra no app nem agenda aulas. Ao salvar, ele sai dos horários
+                    fixos e as aulas futuras dele são canceladas — as vagas voltam para as turmas. Se
+                    ele voltar, é preciso cadastrar os horários de novo.
+                  </Text>
+                ) : null}
+              </>
+            )}
 
           </View>
         </ScrollView>
@@ -509,7 +517,7 @@ export default function AdminAlunos() {
               `${excluindo.nome} vai sair da lista para sempre. Somem os dados pessoais (contato, ` +
               `documento), os treinos e os créditos. As aulas e os pagamentos ficam no histórico do ` +
               `estúdio, sem o nome. NÃO TEM VOLTA.\n\nSe ele pode voltar a treinar um dia, use ` +
-              `"Inativo" no cadastro em vez disto.`
+              `"Inativo/desligado" no cadastro em vez disto.`
             : ''
         }
         confirmLabel="Excluir para sempre"
@@ -587,7 +595,7 @@ const s = StyleSheet.create({
   editScroll: { maxHeight: 440, marginBottom: 18 },
   editForm: { gap: 14 },
   editLabel: { fontSize: 12, fontWeight: '700', color: LC.textSecondary, marginBottom: -6 },
-  editChips: { flexDirection: 'row', gap: 8 },
+  editChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   editChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: LC.radius.full,
@@ -597,7 +605,14 @@ const s = StyleSheet.create({
   editChipInativo: { backgroundColor: LC.dangerBg, borderColor: LC.danger },
   editDot: { width: 8, height: 8, borderRadius: 4 },
   editChipText: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
-  editAviso: { fontSize: 12, color: LC.textMuted, marginTop: -4 },
+  editAviso: { fontSize: 12, color: LC.textMuted, marginTop: -4, lineHeight: 17 },
+  statusPendenteBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    padding: 12, borderRadius: 12, backgroundColor: LC.warningBg,
+    borderWidth: 1, borderColor: LC.warning,
+  },
+  statusPendenteTitulo: { fontSize: 13, fontWeight: '800', color: LC.warningFg },
+  statusPendenteTexto: { fontSize: 12, color: LC.warningFg, marginTop: 3, lineHeight: 17 },
   erro: { fontSize: 13, color: LC.danger },
   erroFixo: {
     backgroundColor: LC.dangerBg,
@@ -617,7 +632,7 @@ const s = StyleSheet.create({
   tColNome: { flex: 3 },
   tColEmail: { flex: 3 },
   tColPlano: { flex: 2 },
-  tColStatus: { flex: 1.2 },
+  tColStatus: { flex: 1.5 },
   tColAcoes: { flex: 2.8 },
   tNomeWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   tNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
