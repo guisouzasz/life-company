@@ -144,15 +144,49 @@ export function FichaExercicios({ exercicios, evolucaoDe, onAbrirCarga }: Props)
   );
 }
 
+/**
+ * O respiro entre as colunas, e a razão de ele ser um `gap` da linha inteira e
+ * não um `paddingRight` de cada coluna.
+ *
+ * Antes as colunas de número eram larguras fixas encostadas uma na outra: só o
+ * nome tinha `paddingRight`. Enquanto a repetição era curta (`4 x 12/10/8/8`)
+ * sobrava folga e ninguém via problema. Mas repetição é texto livre, e o
+ * professor escreve coisas como `10"+8-10` (tempo mais repetições, notação de
+ * musculação). Aí a repetição ocupava a coluna inteira e a carga começava
+ * grudada nela: `3 x 10"+8-10` + `30 Kg` virava `3 x 10"+8-1030 Kg` na tela.
+ *
+ * Numa ficha de musculação isso não é só feio — o professor bate o olho e lê
+ * mil e trinta quilos onde são trinta.
+ *
+ * `gap` resolve para sempre porque não depende de a largura ter sido bem
+ * escolhida: por mais comprido que fique o texto, as colunas nunca se tocam.
+ * A largura maior da repetição é só acabamento, para o caso comum caber numa
+ * linha só.
+ */
+const COL_GAP = 10;
+
 const s = StyleSheet.create({
   tabela: { marginTop: 12, borderTopWidth: 1, borderTopColor: LC.borderStrong },
 
-  cabecalho: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: LC.borderStrong },
+  cabecalho: {
+    flexDirection: 'row', alignItems: 'center', gap: COL_GAP,
+    paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: LC.borderStrong,
+  },
   colTitulo: { fontSize: 12.5, color: LC.textSecondary },
 
-  // Colunas: nome ocupa o resto; as duas de números têm largura fixa para alinhar
-  colNome: { flex: 1, paddingRight: 8 },
-  colReps: { width: 78 },
+  /*
+    Colunas: o nome ocupa o resto, as de número têm largura fixa para alinhar
+    de uma linha para a outra.
+
+    O `minWidth` do nome e o `flexShrink` da repetição são para telas
+    estreitas. Larguras fixas somadas ao gap não cabiam num aparelho de 320px:
+    sobrava tão pouco para o nome que ele partia no meio da palavra —
+    "EXTEN/SOR", "ABDU/TOR". Num aparelho apertado é a repetição que cede
+    espaço e quebra em duas linhas; o nome do exercício continua legível, que é
+    por onde o professor acha a linha que procura.
+  */
+  colNome: { flex: 1, minWidth: 96 },
+  colReps: { width: 92, flexShrink: 1 },
   colCarga: { width: 66 },
   colAcao: { width: 22, alignItems: 'flex-end' },
 
@@ -168,7 +202,7 @@ const s = StyleSheet.create({
   grupoContagem: { fontSize: 11.5, color: LC.textMuted },
 
   linha: {
-    flexDirection: 'row', alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center', gap: COL_GAP,
     paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: LC.border,
   },
   linhaPressionada: { backgroundColor: LC.neutralBg },
