@@ -58,7 +58,9 @@ export class FinanceiroService {
         where: {
           tipoUsuario: 'ALUNO',
           NOT: { cpf: { startsWith: 'REMOVIDO-' } },
-          OR: [{ ativo: true }, { ativo: false, senhaHash: null }],
+          // Quem treina entra na conta. Cadastro novo já nasce treinando,
+          // então não precisa mais da segunda condição para incluí-lo.
+          ativo: true,
         },
         select: {
           // telefone alimenta o aviso de vencimento pelo WhatsApp, no painel

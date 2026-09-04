@@ -141,7 +141,22 @@ export class UsuariosService {
               ...(dto.diaVencimento !== undefined ? { diaVencimento: dto.diaVencimento } : {}),
             }
           : {}),
-        ativo: false,
+        /**
+         * Cadastro novo já nasce TREINANDO.
+         *
+         * `ativo` quer dizer uma coisa só: a pessoa treina aqui. Quem a dona
+         * acabou de cadastrar treina — ela está com o aluno na frente.
+         *
+         * Antes isto nascia `false` para dizer "ainda não fez o primeiro
+         * acesso", e o campo acabava com dois significados no mesmo booleano.
+         * Quem nunca abriu o app aparecia como desligado, e não havia como
+         * marcar "parou de treinar" em quem ainda nem tinha entrado.
+         *
+         * Não abre porta nenhuma: `login()` recusa antes quem não tem senha.
+         * "Já fez o primeiro acesso" é `senhaHash != null`, e é assim que a
+         * lista mostra o selo.
+         */
+        ativo: true,
       },
     });
     if (tipo === "ALUNO") {

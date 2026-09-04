@@ -7,6 +7,7 @@ import { AppModule } from './app.module';
 import { PrismaService } from './prisma/prisma.service';
 import { garantirEsquema } from './prisma/garantir-esquema';
 import { garantirDono } from './prisma/garantir-dono';
+import { corrigirMatricula } from './prisma/corrigir-matricula';
 import { limparInativos } from './prisma/limpar-inativos';
 
 /** Origens do app web autorizadas a chamar a API (CORS_ORIGINS separa por vírgula). */
@@ -74,6 +75,15 @@ async function bootstrap() {
    */
   await garantirDono(app.get(PrismaService)).catch((e) =>
     console.error('não consegui garantir o usuário dono:', e?.message),
+  );
+
+  /**
+   * ANTES da limpeza, e a ordem importa: a limpeza agora olha só `ativo`, e
+   * sem esta correção ela tiraria das turmas quem está inativo apenas por
+   * ainda não ter aberto o app.
+   */
+  await corrigirMatricula(app.get(PrismaService)).catch((e) =>
+    console.error('não consegui corrigir a matrícula dos cadastros antigos:', e?.message),
   );
 
   /**

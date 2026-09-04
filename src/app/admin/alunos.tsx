@@ -56,10 +56,20 @@ function FichaCadastral({ aluno }: { aluno: AlunoAdmin }) {
   );
 }
 
-function statusDoAluno(aluno: AlunoAdmin): { label: string; variant: BadgeVariant } {
-  if (!aluno.ativado) return { label: 'Pendente 1º acesso', variant: 'warning' };
-  if (!aluno.ativo) return { label: 'Inativo/desligado', variant: 'danger' };
-  return { label: 'Ativo', variant: 'success' };
+/**
+ * O selo do canto responde a OUTRA pergunta que não a do botão.
+ *
+ * São duas coisas independentes: `ativo` = treina aqui (é o botão, que a dona
+ * controla) e `ativado` = já abriu o app pela primeira vez (é isto, que
+ * depende do aluno). Antes as duas viviam no mesmo campo, e quem nunca tinha
+ * entrado aparecia como desligado — sem jeito de dizer que ele treina.
+ *
+ * Some quando não há o que dizer: repetir "Ativo" ao lado de um botão que já
+ * diz "Treina" é ruído, e ruído em toda linha esconde o que importa.
+ */
+function statusDoAluno(aluno: AlunoAdmin): { label: string; variant: BadgeVariant } | null {
+  if (aluno.ativado) return null;
+  return { label: 'Ainda não abriu o app', variant: 'warning' };
 }
 
 export default function AdminAlunos() {
@@ -97,7 +107,64 @@ export default function AdminAlunos() {
   const [aviso, setAviso] = useState<{ titulo: string; texto: string } | null>(null);
   /** Aluno que a dona quer apagar de vez — precisa confirmar. */
   const [excluindo, setExcluindo] = useState<AlunoAdmin | null>(null);
+  /** Quem está no meio da troca treina/não treina, para o botão dar retorno. */
+  const [mudandoMatricula, setMudandoMatricula] = useState<string | null>(null);
   const excluirDefinitivo = useExcluirAlunoDefinitivamente();
+
+  /**
+   * Liga e desliga a matrícula num toque, direto na lista.
+   *
+   * Antes isso morava no fundo do modal de edição, junto com RG e CEP, e a
+   * dona tinha que abrir o cadastro para dizer que alguém parou de treinar.
+   * É a operação que ela mais faz — aluno some, aluno volta — e por isso
+   * fica ao lado do nome.
+   *
+   * Vale para qualquer aluno, inclusive quem nunca abriu o app: "treina aqui"
+   * e "já fez o primeiro acesso" são perguntas diferentes.
+   */
+  const alternarMatricula = (aluno: AlunoAdmin) => {
+    setMudandoMatricula(aluno.id);
+    atualizar.mutate(
+      { id: aluno.id, payload: { ativo: !aluno.ativo } },
+      {
+        onSuccess: (r: any) => {
+          setMudandoMatricula(null);
+          const fixos = r?.horariosFixosRemovidos ?? 0;
+          const aulas = r?.aulasCanceladas ?? 0;
+          const devolvidos = r?.horariosFixosDevolvidos ?? 0;
+          const quem = nomeCurto(aluno.nome);
+          if (aluno.ativo) {
+            const partes = [];
+            if (fixos > 0) partes.push(`${fixos} horário(s) fixo(s)`);
+            if (aulas > 0) partes.push(`${aulas} aula(s) futura(s)`);
+            setAviso({
+              titulo: `${quem} não treina mais`,
+              texto:
+                (partes.length
+                  ? `Foram liberados: ${partes.join(' e ')}. As vagas voltaram para as turmas.\n\n`
+                  : 'Ele sai das turmas e não entra mais no app.\n\n') +
+                'Se foi engano, toque de novo — os horários fixos voltam junto.',
+            });
+          } else {
+            setAviso({
+              titulo: `${quem} voltou a treinar`,
+              texto: devolvidos > 0
+                ? `${devolvidos} horário(s) fixo(s) voltaram para ele. As aulas aparecem assim que ` +
+                  'você abrir a Agenda da semana.'
+                : 'Ele já pode entrar no app e ser colocado numa turma.',
+            });
+          }
+        },
+        onError: (e) => {
+          setMudandoMatricula(null);
+          setAviso({
+            titulo: 'Não consegui mudar',
+            texto: e instanceof ApiError ? e.message : 'Tente de novo.',
+          });
+        },
+      },
+    );
+  };
 
   const abrirEdicao = (aluno: AlunoAdmin) => {
     setEditando(aluno);
@@ -291,8 +358,37 @@ export default function AdminAlunos() {
                     <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>
                       {plano?.plano?.nome ?? '—'}
                     </Text>
-                    <View style={[s.tCol, s.tColStatus]}>
-                      <Badge label={status.label} variant={status.variant} />
+                    <View style={[s.tCol, s.tColStatus, s.tStatusWrap]}>
+{/*
+                        Fica na coluna Status, que é exatamente o que ele diz —
+                        e clicável, porque é a operação que a dona mais faz.
+                        Um toque, sem abrir cadastro nenhum. No nome ele
+                        espremia o texto e quebrava o CPF em duas linhas.
+                      */}
+                      <Pressable
+                        style={({ pressed }) => [
+                          s.chaveMatricula,
+                          aluno.ativo ? s.chaveTreina : s.chaveParou,
+                          pressed && { opacity: 0.6 },
+                        ]}
+                        onPress={() => alternarMatricula(aluno)}
+                        disabled={mudandoMatricula === aluno.id}
+                        accessibilityLabel={
+                          aluno.ativo
+                            ? `Marcar que ${aluno.nome} não treina mais`
+                            : `Marcar que ${aluno.nome} voltou a treinar`
+                        }
+                      >
+                        <Icon
+                          name={aluno.ativo ? 'checkmark-circle' : 'pause-circle'}
+                          size={14}
+                          color={aluno.ativo ? LC.successFg : LC.dangerFg}
+                        />
+                        <Text style={[s.chaveTexto, { color: aluno.ativo ? LC.successFg : LC.dangerFg }]}>
+                          {mudandoMatricula === aluno.id ? '…' : aluno.ativo ? 'Treina' : 'Não treina'}
+                        </Text>
+                      </Pressable>
+                      {status ? <Badge label={status.label} variant={status.variant} /> : null}
                     </View>
                     <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
                       <Pressable style={s.tAcao} onPress={() => abrirEdicao(aluno)} accessibilityLabel="Editar dados do aluno">
@@ -342,9 +438,38 @@ export default function AdminAlunos() {
                     <View style={s.cardInfo}>
                       <Text style={s.nome}>{nomeCurto(aluno.nome)}</Text>
                       <Text style={s.email} numberOfLines={1}>{aluno.email ?? 'Sem e-mail — aguardando ativação'}</Text>
+                      <View style={s.chaveLinha}>
+                      {/*
+                            O botão fica colado no nome porque é a operação que a
+                            dona mais faz. Um toque, sem abrir cadastro nenhum.
+                        */}
+                        <Pressable
+                            style={({ pressed }) => [
+                              s.chaveMatricula,
+                              aluno.ativo ? s.chaveTreina : s.chaveParou,
+                              pressed && { opacity: 0.6 },
+                            ]}
+                            onPress={() => alternarMatricula(aluno)}
+                            disabled={mudandoMatricula === aluno.id}
+                            accessibilityLabel={
+                              aluno.ativo
+                                ? `Marcar que ${aluno.nome} não treina mais`
+                                : `Marcar que ${aluno.nome} voltou a treinar`
+                            }
+                        >
+                            <Icon
+                              name={aluno.ativo ? 'checkmark-circle' : 'pause-circle'}
+                              size={14}
+                              color={aluno.ativo ? LC.successFg : LC.dangerFg}
+                            />
+                            <Text style={[s.chaveTexto, { color: aluno.ativo ? LC.successFg : LC.dangerFg }]}>
+                              {mudandoMatricula === aluno.id ? '…' : aluno.ativo ? 'Treina' : 'Não treina'}
+                            </Text>
+                        </Pressable>
+                      </View>
                       {plano?.plano ? <Text style={s.plano}>{plano.plano.nome}</Text> : null}
                     </View>
-                    <Badge label={status.label} variant={status.variant} />
+                    {status ? <Badge label={status.label} variant={status.variant} /> : null}
                   </View>
 
                   <FichaCadastral aluno={aluno} />
@@ -593,6 +718,16 @@ const s = StyleSheet.create({
   ficha: { gap: 5, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: LC.border },
   fichaLinha: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
   fichaTexto: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 17 },
+  chaveMatricula: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    alignSelf: 'flex-start', marginTop: 5,
+    paddingVertical: 4, paddingHorizontal: 9,
+    borderRadius: 999, borderWidth: 1,
+  },
+  chaveTreina: { backgroundColor: LC.successBg, borderColor: LC.success },
+  chaveParou: { backgroundColor: LC.dangerBg, borderColor: LC.danger },
+  chaveTexto: { fontSize: 12, fontWeight: '700' },
+  chaveLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   credLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 6 },
   /** Separado do resto por uma linha: o que não tem volta não fica colado no que tem. */
   credLinkPerigo: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: LC.border },
@@ -648,6 +783,7 @@ const s = StyleSheet.create({
   tColEmail: { flex: 3 },
   tColPlano: { flex: 2 },
   tColStatus: { flex: 1.5 },
+  tStatusWrap: { alignItems: 'flex-start', gap: 4 },
   tColAcoes: { flex: 2.8 },
   tNomeWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   tNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },

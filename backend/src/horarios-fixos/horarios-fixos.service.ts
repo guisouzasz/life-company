@@ -33,18 +33,19 @@ export class HorariosFixosService {
      * que é exatamente o buraco que enchia as turmas do estúdio. Melhor
      * recusar com um aviso do que deixar a vaga sumir em silêncio.
      *
-     * O critério é `inativo E já tem senha`, o mesmo do resto do sistema:
-     * cadastro novo nasce inativo e só vira ativo no primeiro acesso do aluno,
-     * e o caminho mais comum da dona é cadastrar e já colocar na turma.
+     * Basta olhar `ativo`: o campo quer dizer só "treina aqui". Quem a dona
+     * acabou de cadastrar já nasce treinando, então continua podendo entrar
+     * na turma antes de abrir o app pela primeira vez.
      */
     const aluno = await this.prisma.usuario.findUnique({
       where: { id: usuarioId },
       select: { nome: true, ativo: true, senhaHash: true },
     });
     if (!aluno) throw new NotFoundException('Aluno não encontrado');
-    if (!aluno.ativo && aluno.senhaHash) {
+    if (!aluno.ativo) {
       throw new BadRequestException(
-        `O cadastro de ${nomeCurto(aluno.nome)} está inativo. Reative antes de colocar num horário fixo.`,
+        `${nomeCurto(aluno.nome)} está marcado como "não treina mais". ` +
+          'Marque como treinando antes de colocar num horário fixo.',
       );
     }
 

@@ -75,9 +75,11 @@ export class RelatoriosController {
         where: { usado: false, revogado: false, expiraEm: { gt: new Date() } },
         include: { usuario: { select: { nome: true } } },
       }),
-      // Alunos cadastrados que ainda não ativaram a conta
+      // Alunos cadastrados que ainda não ativaram a conta.
+      // "Ainda não ativou" é só não ter senha — `ativo` diz outra coisa
+      // (se treina aqui), e quem acabou de ser cadastrado já treina.
       this.prisma.usuario.findMany({
-        where: { tipoUsuario: 'ALUNO', ativo: false, senhaHash: null },
+        where: { tipoUsuario: 'ALUNO', senhaHash: null },
         select: { nome: true },
       }),
     ]);

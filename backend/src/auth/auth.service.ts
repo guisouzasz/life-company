@@ -162,7 +162,10 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.usuario.update({
         where: { id: registro.usuarioId },
-        data: { senhaHash, ativo: true, ...ficha },
+        // Não mexe em `ativo`: primeiro acesso é sobre senha, não sobre
+        // matrícula. Quem a dona marcou como "não treina mais" não volta a
+        // treinar só por abrir o app.
+        data: { senhaHash, ...ficha },
       }),
       this.prisma.primeiroAcesso.update({
         where: { id: registro.id },
@@ -210,7 +213,10 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.usuario.update({
         where: { id: usuario.id },
-        data: { senhaHash, ativo: true, ...ficha },
+        // Não mexe em `ativo`: primeiro acesso é sobre senha, não sobre
+        // matrícula. Quem a dona marcou como "não treina mais" não volta a
+        // treinar só por abrir o app.
+        data: { senhaHash, ...ficha },
       }),
       // Invalida qualquer link de primeiro acesso pendente para esta conta
       this.prisma.primeiroAcesso.updateMany({
@@ -350,7 +356,8 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.usuario.update({
         where: { id: usuarioId },
-        data: { senhaHash, ativo: true },
+        // Idem: definir a senha pelo painel não religa matrícula.
+        data: { senhaHash },
       }),
       this.prisma.primeiroAcesso.updateMany({
         where: { usuarioId, usado: false },

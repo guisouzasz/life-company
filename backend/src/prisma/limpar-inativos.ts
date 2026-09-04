@@ -16,16 +16,15 @@ import { PrismaService } from './prisma.service';
  * boot porque é barata e idempotente: depois da primeira vez não há mais nada
  * para corrigir e ela não faz nada.
  *
- * Quem NÃO entra: cadastro novo que ainda não fez o primeiro acesso. Ele nasce
- * com `ativo: false` e `senhaHash` nulo, e o horário fixo dele precisa
- * continuar gerando — é o caminho mais comum do estúdio (cadastrar e já
- * colocar na turma).
+ * O critério é só `ativo`: o campo quer dizer "treina aqui" e nada mais.
+ * Cadastro novo nasce treinando, então ele não cai aqui por engano — o que
+ * antes exigia checar `senhaHash` junto.
  */
 export async function limparInativos(prisma: PrismaService): Promise<void> {
   const log = new Logger('Inativos');
 
   const desativados = await prisma.usuario.findMany({
-    where: { ativo: false, senhaHash: { not: null }, tipoUsuario: 'ALUNO' },
+    where: { ativo: false, tipoUsuario: 'ALUNO' },
     select: { id: true },
   });
   if (desativados.length === 0) return;

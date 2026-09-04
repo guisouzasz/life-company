@@ -117,13 +117,14 @@ export class AutoAgendamentoService {
          * aulas de quem já saiu do estúdio — o mesmo estrago de antes, só que
          * a cada abertura de tela em vez de uma vez por madrugada.
          *
-         * O critério NÃO é só `ativo: false`: cadastro novo nasce inativo e só
-         * vira ativo no primeiro acesso do aluno. Filtrar por `ativo` sozinho
-         * pararia de gerar as aulas de quem a dona acabou de cadastrar — que é
-         * o caminho mais comum do estúdio. Quem já tem senha E está inativo é
-         * quem foi desativado de verdade.
+         * O critério é só `ativo`, e agora pode ser: o campo quer dizer uma
+         * coisa só — a pessoa treina aqui. Cadastro novo nasce treinando, e
+         * "já fez o primeiro acesso" é `senhaHash != null`, que é outra
+         * pergunta. Antes os dois viviam no mesmo booleano e o filtro
+         * precisava de duas partes para não derrubar quem tinha acabado de
+         * ser cadastrado.
          */
-        NOT: { usuario: { ativo: false, senhaHash: { not: null } } },
+        usuario: { ativo: true },
       },
       include: { horario: true },
     });

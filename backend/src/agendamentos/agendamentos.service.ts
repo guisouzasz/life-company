@@ -51,14 +51,15 @@ export class AgendamentosService {
     if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
 
     /**
-     * Cadastro novo nasce `ativo=false` até o primeiro acesso, mas ainda pode
-     * receber horário fixo e aula pelo estúdio. Diferente disso é o aluno que
-     * já criou senha e depois foi desligado: esse não deve voltar para a agenda
-     * por engano, porque o desligamento remove as turmas e libera as vagas.
+     * Quem parou de treinar não volta para a agenda por engano — desligar
+     * remove as turmas e libera as vagas, e marcar aula desfaria isso em
+     * silêncio. Cadastro novo passa: ele nasce treinando, mesmo antes de
+     * abrir o app.
      */
-    if (!aluno.ativo && aluno.senhaHash) {
+    if (!aluno.ativo) {
       throw new BadRequestException(
-        `${nomeCurto(aluno.nome)} está inativo/desligado. Reative o cadastro antes de marcar aula.`,
+        `${nomeCurto(aluno.nome)} está marcado como "não treina mais". ` +
+          'Marque como treinando antes de marcar aula.',
       );
     }
 
