@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DonoGuard } from '../auth/guards/dono.guard';
@@ -22,5 +22,11 @@ export class DiagnosticoController {
   @ApiOperation({ summary: 'Varredura dos horários fixos (dono)' })
   horariosFixos() {
     return this.service.horariosFixos();
+  }
+
+  @Post('restaurar-horarios-fixos')
+  @ApiOperation({ summary: 'Devolver os horários fixos desligados de quem treina (dono)' })
+  restaurarHorariosFixos() {
+    return this.service.restaurarHorariosFixos();
   }
 }

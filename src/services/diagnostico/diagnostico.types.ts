@@ -10,6 +10,22 @@ export type Achado = {
   titulo: string;
   itens: ItemDoAchado[];
   oQueFazer: string;
+  /**
+   * Quando o próprio sistema consegue desfazer o achado. Os outros dependem
+   * de uma decisão da dona (tirar quem da turma cheia?) e não têm botão.
+   */
+  acao?: 'restaurar-horarios-fixos';
+};
+
+/**
+ * O que voltou de devolver os horários fixos. `aulasRemarcadas` é o que a dona
+ * de fato queria: a combinação de volta é meio caminho, a aula na agenda é o
+ * resultado.
+ */
+export type Restauracao = {
+  devolvidos: number;
+  aulasRemarcadas: number;
+  mensagem: string;
 };
 
 export type Varredura = {

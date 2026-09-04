@@ -25,6 +25,12 @@ export type Achado = {
   titulo: string;
   itens: ItemDoAchado[];
   oQueFazer: string;
+  /**
+   * Quando o próprio sistema consegue desfazer o achado, isto diz qual botão
+   * a tela deve mostrar. Os outros achados dependem de uma decisão da dona
+   * (tirar quem da turma cheia?) e por isso não têm.
+   */
+  acao?: 'restaurar-horarios-fixos';
 };
 
 export type Varredura = {
@@ -317,6 +323,43 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
     oQueFazer:
       'Na prática são fixos, mas o sistema não sabe: se alguém desmarcar, não volta sozinho. ' +
       'E enquanto estão lá ocupam a cota da semana. Vale cadastrar o horário fixo de verdade.',
+  });
+
+  // ── 8. Quem treina mas está com os horários fixos desligados ───────────
+  // A marca do acidente: a dona marcou a lista inteira como inativa, o
+  // sistema tirou todo mundo das turmas, e reativar (antes da correção) não
+  // devolvia nada. A agenda fica com as aulas velhas e nenhuma futura.
+  //
+  // Os outros achados olham fixo LIGADO; este é o único que olha o desligado,
+  // e por isso o problema passava despercebido justamente quando mais doía.
+  const desligadosDeQuemTreina = await prisma.horarioFixo.findMany({
+    where: { ativo: false, usuario: { ativo: true, tipoUsuario: 'ALUNO' } },
+    include: {
+      usuario: { select: { id: true, nome: true } },
+      horario: { include: { modalidade: true } },
+    },
+    orderBy: [{ usuario: { nome: 'asc' } }],
+  });
+
+  const porAlunoDesligado = new Map<string, typeof desligadosDeQuemTreina>();
+  for (const f of desligadosDeQuemTreina) {
+    if (!porAlunoDesligado.has(f.usuarioId)) porAlunoDesligado.set(f.usuarioId, [] as any);
+    porAlunoDesligado.get(f.usuarioId)!.push(f);
+  }
+  anotar({
+    tipo: 'fixo-desligado-de-quem-treina', gravidade: 'grave',
+    titulo: `${porAlunoDesligado.size} aluno(s) que treinam estão com horário fixo desligado`,
+    itens: [...porAlunoDesligado.values()].map((lista) => ({
+      usuarioId: lista[0].usuarioId,
+      texto:
+        `${lista[0].usuario.nome} — ` +
+        lista.map((f) => `${DIA_LEGIVEL[f.horario.diaSemana]} ${f.horario.horaInicio}`).join(', '),
+    })),
+    oQueFazer:
+      'A combinação existe mas está apagada, então nenhuma aula nova nasce — a agenda ' +
+      'fica com as antigas e vazia daqui para frente. O botão abaixo devolve todas de ' +
+      'uma vez e já remarca as aulas dos próximos dois meses.',
+    acao: 'restaurar-horarios-fixos',
   });
 
   const graves = achados.filter((a) => a.gravidade === 'grave');

@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { diagnosticoService } from './diagnostico.service';
 import { queryKeys } from '../../lib/query-keys';
 
@@ -19,4 +19,12 @@ export function useVarreduraDeHorariosFixos(enabled: boolean) {
     staleTime: 0,
     gcTime: 0,
   });
+}
+
+/**
+ * Devolve os horários fixos desligados de quem treina. A tela redispara a
+ * varredura depois, para o dono ver o resultado em vez de acreditar nele.
+ */
+export function useRestaurarHorariosFixos() {
+  return useMutation({ mutationFn: diagnosticoService.restaurarHorariosFixos });
 }
