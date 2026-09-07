@@ -35,15 +35,32 @@ const ACOES: AcaoDef[] = [
   { label: 'Novo aluno', desc: 'Cadastrar e gerar link', icon: 'person-add-outline', route: '/admin/novo-aluno', color: LC.info, bg: LC.infoBg },
 ];
 
-/** Só o dono vê. Fora do ACOES para não vazar na tela de quem não é. */
-const ACAO_DO_DONO: AcaoDef = {
-  label: 'O que foi feito',
-  desc: 'Registro de ações do sistema',
-  icon: 'document-text-outline',
-  route: '/admin/logs',
-  color: '#7C3AED',
-  bg: '#EDE9FE',
-};
+/**
+ * Só o dono vê. Fora do ACOES para não vazar na tela de quem não é.
+ *
+ * As duas moram aqui porque a barra de abas do celular já está cheia — e
+ * porque no desktop elas ficam na barra lateral, que no celular não existe.
+ * Sem esta lista quem administra pelo telefone não tem caminho nenhum até
+ * elas: a tela existe, responde, e mesmo assim é inalcançável.
+ */
+const ACOES_DO_DONO: AcaoDef[] = [
+  {
+    label: 'Conferir horários',
+    desc: 'Achar e desfazer problema nos fixos',
+    icon: 'shield-checkmark-outline',
+    route: '/admin/diagnostico',
+    color: '#0F766E',
+    bg: LC.primaryLight,
+  },
+  {
+    label: 'O que foi feito',
+    desc: 'Registro de ações do sistema',
+    icon: 'document-text-outline',
+    route: '/admin/logs',
+    color: '#7C3AED',
+    bg: '#EDE9FE',
+  },
+];
 
 // ── Blocos reutilizados nos dois layouts ─────────────────────────────
 
@@ -620,10 +637,10 @@ export default function AdminDashboard() {
               <View style={s.acoes}>
                 {/*
                   No celular a barra de abas já está cheia (cinco), e uma sexta
-                  deixaria os rótulos ilegíveis. O registro de ações entra aqui,
-                  na gestão rápida, e só para o dono.
+                  deixaria os rótulos ilegíveis. As ferramentas do dono entram
+                  aqui, na gestão rápida.
                 */}
-                {(ehDono ? [...ACOES, ACAO_DO_DONO] : ACOES).map((a) => (
+                {(ehDono ? [...ACOES, ...ACOES_DO_DONO] : ACOES).map((a) => (
                   <Pressable
                     key={a.label}
                     onPress={() => router.push(a.route as any)}
