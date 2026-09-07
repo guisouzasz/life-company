@@ -5,6 +5,7 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "scripts": {
+    "test:horarios": "npm run build && node --test tests/horarios-fixos.test.cjs",
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",

@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { capacidadeEfetiva, tetoDaModalidade } from './capacidade';
@@ -284,26 +285,47 @@ export class HorariosService {
     }
     const teto = tetoDaModalidade(nomeModalidade);
 
-    return this.prisma.horario.update({
-      where: { id },
-      data: {
-        ...(dto.modalidadeId !== undefined ? { modalidadeId: dto.modalidadeId } : {}),
-        ...(dto.diaSemana !== undefined ? { diaSemana: dto.diaSemana as any } : {}),
-        ...(dto.horaInicio !== undefined ? { horaInicio: dto.horaInicio } : {}),
-        ...(dto.horaFim !== undefined ? { horaFim: dto.horaFim } : {}),
-        // Vale também quando só a modalidade muda: turma que virou Pilates
-        // precisa cair para 3, mesmo sem ninguém mexer na capacidade.
-        capacidadeMaxima: Math.min(dto.capacidadeMaxima ?? h.capacidadeMaxima, teto),
-        ...(dto.ativo !== undefined ? { ativo: dto.ativo } : {}),
-      },
-      include: { modalidade: true },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${id} FOR UPDATE`;
+      if (dto.ativo === false) await this.exigirTurmaSemVinculos(tx, id);
+      return tx.horario.update({
+        where: { id },
+        data: {
+          ...(dto.modalidadeId !== undefined ? { modalidadeId: dto.modalidadeId } : {}),
+          ...(dto.diaSemana !== undefined ? { diaSemana: dto.diaSemana as any } : {}),
+          ...(dto.horaInicio !== undefined ? { horaInicio: dto.horaInicio } : {}),
+          ...(dto.horaFim !== undefined ? { horaFim: dto.horaFim } : {}),
+          // Vale também quando só a modalidade muda: turma que virou Pilates
+          // precisa cair para 3, mesmo sem ninguém mexer na capacidade.
+          capacidadeMaxima: Math.min(dto.capacidadeMaxima ?? h.capacidadeMaxima, teto),
+          ...(dto.ativo !== undefined ? { ativo: dto.ativo } : {}),
+        },
+        include: { modalidade: true },
+      });
     });
   }
 
+  private async exigirTurmaSemVinculos(tx: Prisma.TransactionClient, horarioId: string) {
+    const fixos = await tx.horarioFixo.count({ where: { horarioId, ativo: true } });
+    const aulas = await tx.agendamento.count({
+      where: { horarioId, status: 'CONFIRMADO', dataAula: { gte: dayjs().startOf('day').toDate() } },
+    });
+    if (fixos || aulas) {
+      throw new ConflictException(
+        `Esta turma tem ${fixos} horário(s) fixo(s) e ${aulas} agendamento(s) futuro(s). ` +
+          'Remaneje os alunos e resolva os agendamentos antes de desligar a turma.',
+      );
+    }
+  }
+
   async bloquear(id: string) {
-    const h = await this.prisma.horario.findUnique({ where: { id } });
-    if (!h) throw new NotFoundException('Horário não encontrado');
-    return this.prisma.horario.update({ where: { id }, data: { ativo: !h.ativo } });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${id} FOR UPDATE`;
+      const h = await tx.horario.findUnique({ where: { id } });
+      if (!h) throw new NotFoundException('Horário não encontrado');
+      if (h.ativo) await this.exigirTurmaSemVinculos(tx, id);
+      return tx.horario.update({ where: { id }, data: { ativo: !h.ativo } });
+    });
   }
 
   /**
@@ -315,11 +337,14 @@ export class HorariosService {
    * não fazia nada e ele ficava preso na lista para sempre.
    */
   async excluir(id: string) {
-    const horario = await this.prisma.horario.findUnique({
-      where: { id },
-      include: { _count: { select: { agendamentos: true, horariosFixos: true } } },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${id} FOR UPDATE`;
+      const horario = await tx.horario.findUnique({
+        where: { id },
+        include: { _count: { select: { agendamentos: true, horariosFixos: true } } },
     });
     if (!horario) throw new NotFoundException('Horário não encontrado');
+    await this.exigirTurmaSemVinculos(tx, id);
 
     const { agendamentos, horariosFixos } = horario._count;
     if (agendamentos > 0 || horariosFixos > 0) {
@@ -334,11 +359,12 @@ export class HorariosService {
           `Este horário não pode ser excluído porque tem ${motivo}. Ele fica inativo para preservar o histórico.`,
         );
       }
-      await this.prisma.horario.update({ where: { id }, data: { ativo: false } });
+      await tx.horario.update({ where: { id }, data: { ativo: false } });
       return { mensagem: 'Horário desativado (tem histórico, por isso não foi apagado)' };
     }
 
-    await this.prisma.horario.delete({ where: { id } });
+    await tx.horario.delete({ where: { id } });
     return { mensagem: 'Horário excluído' };
+    });
   }
 }

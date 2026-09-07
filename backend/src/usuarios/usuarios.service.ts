@@ -340,32 +340,11 @@ export class UsuariosService {
       return { ...atualizado, ...limpeza };
     }
 
-    /**
-     * Reativar devolve os horários fixos.
-     *
-     * Desligar tirava das turmas e ligar de volta não devolvia nada: a
-     * operação era de mão única. Quem inativasse alguém por engano — ou
-     * passasse a lista inteira para inativo sem saber o que isso faz —
-     * perdia a grade e teria que remontar aluno por aluno.
-     *
-     * Devolve o que o próprio desligamento apagou e nada além: só os fixos
-     * que estão desligados. Um horário que a dona removeu de propósito
-     * também está desligado, então ele volta junto — o preço de a tabela não
-     * guardar QUANDO cada um foi desligado. Preferimos errar para o lado de
-     * devolver: um horário a mais aparece na agenda e se remove num toque; um
-     * a menos é um aluno que chega e não está na lista.
-     *
-     * As aulas não são recriadas aqui. Elas nascem sozinhas ao abrir a agenda
-     * ou no cron das 3h, e por lá passam pela lotação e pela cota do plano —
-     * regras que uma recriação direta furaria.
-     */
+    // O histórico não distingue inativação de remoção intencional de um fixo.
+    // Reativar o cadastro exige escolher novamente os horários atuais.
     const religou = !atual.ativo && data.ativo === true;
     if (religou) {
-      const { count } = await this.prisma.horarioFixo.updateMany({
-        where: { usuarioId: id, ativo: false },
-        data: { ativo: true },
-      });
-      return { ...atualizado, horariosFixosDevolvidos: count };
+      return { ...atualizado, horariosFixosDevolvidos: 0, revisarHorariosFixos: true };
     }
 
     return atualizado;
@@ -400,12 +379,23 @@ export class UsuariosService {
 
   async atualizarPlano(usuarioId: string, dto: { planoId: string; modalidadeId: string }) {
     await this.buscarPorId(usuarioId);
-    const atual = await this.prisma.usuarioPlano.findFirst({
-      where: { usuarioId, vigenciaFim: null },
-    });
     const agora = new Date();
     const inicioSemana = dayjs().startOf("isoWeek").toDate();
     return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM usuarios WHERE id = ${usuarioId} FOR UPDATE`;
+      const atual = await tx.usuarioPlano.findFirst({ where: { usuarioId, vigenciaFim: null } });
+      if (atual) {
+        await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${atual.id} FOR UPDATE`;
+      }
+      const novoPlano = await tx.plano.findUnique({ where: { id: dto.planoId } });
+      if (!novoPlano) throw new NotFoundException("Plano não encontrado");
+      const fixos = await tx.horarioFixo.count({ where: { usuarioId, ativo: true } });
+      if (fixos > novoPlano.aulasSemanais) {
+        throw new ConflictException(
+          `O aluno tem ${fixos} horários fixos e o plano escolhido permite ${novoPlano.aulasSemanais}x por semana. ` +
+            "Revise os horários fixos antes de mudar o plano.",
+        );
+      }
       if (atual) {
         await tx.usuarioPlano.update({
           where: { id: atual.id },

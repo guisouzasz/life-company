@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
@@ -11,6 +11,7 @@ function temErroDeLotacao(motivos: string[]) {
 
 @Injectable()
 export class HorariosFixosService {
+  private readonly logger = new Logger(HorariosFixosService.name);
   constructor(
     private prisma: PrismaService,
     private autoAgendamento: AutoAgendamentoService,
@@ -58,8 +59,11 @@ export class HorariosFixosService {
     const horario = await this.prisma.horario.findUnique({ where: { id: dto.horarioId } });
     if (!horario || !horario.ativo) throw new NotFoundException('Horário não encontrado ou inativo');
 
-    const dataInicio = dto.dataInicio ? new Date(dto.dataInicio) : new Date();
-    const dataFim = dto.dataFim ? new Date(dto.dataFim) : null;
+    const dataInicio = dayjs(dto.dataInicio).startOf('day').toDate();
+    const dataFim = dto.dataFim ? dayjs(dto.dataFim).endOf('day').toDate() : null;
+    if (dataFim && dataFim < dataInicio) {
+      throw new BadRequestException('A data final não pode ser anterior à data inicial');
+    }
 
     /**
      * Contar os fixos e gravar o novo tem que ser uma coisa só.
@@ -77,7 +81,14 @@ export class HorariosFixosService {
      * própria e tranca esta mesma linha do plano.
      */
     const { registro: fixo, jaEstavaAtivo } = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${dto.horarioId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
+      const turmaAtual = await tx.horario.findUnique({ where: { id: dto.horarioId } });
+      if (!turmaAtual?.ativo) throw new BadRequestException('Turma desligada. Escolha uma turma ativa.');
+      const planoAtual = await tx.usuarioPlano.findUnique({ where: { id: usuarioPlano.id } });
+      if (!planoAtual || planoAtual.vigenciaFim) {
+        throw new BadRequestException('O plano mudou durante a operação. Confira o plano e tente novamente.');
+      }
 
       const existente = await tx.horarioFixo.findUnique({
         where: { usuarioId_horarioId: { usuarioId, horarioId: dto.horarioId } },
@@ -116,8 +127,10 @@ export class HorariosFixosService {
     };
     try {
       geracao = await this.autoAgendamento.gerarParaHorarioFixoId(fixo.id);
-    } catch {
-      // cron diário cobre depois
+    } catch (e) {
+      this.logger.warn(`Falha ao gerar aulas do fixo ${fixo.id}: ${e instanceof Error ? e.message : e}`);
+      geracao.erros = 1;
+      geracao.motivos = ['O horário fixo foi salvo, mas a geração das aulas falhou. Confira a agenda antes de confirmar ao aluno.'];
     }
 
     if (!jaEstavaAtivo && geracao.criados === 0 && geracao.erros > 0 && temErroDeLotacao(geracao.motivos ?? [])) {
@@ -147,17 +160,20 @@ export class HorariosFixosService {
     const hf = await this.prisma.horarioFixo.findUnique({ where: { id } });
     if (!hf) throw new NotFoundException('Horário fixo não encontrado');
 
-    const { count } = await this.prisma.agendamento.updateMany({
-      where: {
-        usuarioId: hf.usuarioId,
-        horarioId: hf.horarioId,
-        status: 'CONFIRMADO',
-        dataAula: { gte: dayjs().startOf('day').toDate() },
-      },
-      data: { status: 'CANCELADO' },
+    const { count } = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${hf.horarioId} FOR UPDATE`;
+      await tx.horarioFixo.update({ where: { id }, data: { ativo: false } });
+      return tx.agendamento.updateMany({
+        where: {
+          usuarioId: hf.usuarioId,
+          horarioId: hf.horarioId,
+          status: 'CONFIRMADO',
+          reposicao: false,
+          dataAula: { gte: dayjs().startOf('day').toDate() },
+        },
+        data: { status: 'CANCELADO' },
+      });
     });
-
-    await this.prisma.horarioFixo.update({ where: { id }, data: { ativo: false } });
     return {
       mensagem:
         count > 0

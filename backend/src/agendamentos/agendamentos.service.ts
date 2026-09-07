@@ -43,7 +43,7 @@ export class AgendamentosService {
    * saída: o fixo aparecia salvo e o aluno não estava na turma, e não havia
    * nenhuma tela onde ela pudesse simplesmente colocá-lo lá.
    */
-  async criarComoAdmin(dto: CriarAgendamentoAdminDto) {
+  async criarComoAdmin(dto: CriarAgendamentoAdminDto, horarioFixoId?: string) {
     const aluno = await this.prisma.usuario.findUnique({
       where: { id: dto.usuarioId },
       select: { id: true, nome: true, ativo: true, senhaHash: true, tipoUsuario: true },
@@ -67,6 +67,7 @@ export class AgendamentosService {
       admin: true,
       nome: nomeCurto(aluno.nome),
       substituirAgendamentoId: dto.substituirAgendamentoId,
+      horarioFixoId,
     });
   }
 
@@ -78,7 +79,7 @@ export class AgendamentosService {
   private async agendar(
     usuarioId: string,
     dto: CriarAgendamentoDto,
-    ctx: { admin: boolean; nome?: string; substituirAgendamentoId?: string },
+    ctx: { admin: boolean; nome?: string; substituirAgendamentoId?: string; horarioFixoId?: string },
   ) {
     const quem = ctx.admin ? (ctx.nome ?? 'O aluno') : 'Você';
     const dataAula = dayjs(dto.dataAula).startOf('day').toDate();
@@ -150,6 +151,22 @@ export class AgendamentosService {
       // Trava a aula (protege a lotação) e o plano do aluno (protege a cota).
       await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${dto.horarioId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
+      const turmaAtual = await tx.horario.findUnique({ where: { id: dto.horarioId }, include: { modalidade: true } });
+      if (!turmaAtual?.ativo) throw new BadRequestException('Turma desligada. Escolha uma turma ativa.');
+      if (turmaAtual.diaSemana !== diaSemana) throw new BadRequestException('O dia da turma mudou. Atualize a agenda.');
+      const planoAtual = await tx.usuarioPlano.findUnique({ where: { id: usuarioPlano.id } });
+      if (!planoAtual || planoAtual.vigenciaFim) {
+        throw new BadRequestException('O plano mudou durante a operação. Atualize a agenda e tente novamente.');
+      }
+      // A geração pode ter lido o fixo antes de a dona removê-lo.
+      if (ctx.horarioFixoId) {
+        const fixoAtual = await tx.horarioFixo.findUnique({ where: { id: ctx.horarioFixoId } });
+        if (!fixoAtual?.ativo || fixoAtual.usuarioId !== usuarioId || fixoAtual.horarioId !== dto.horarioId ||
+            dayjs(dataAula).isBefore(fixoAtual.dataInicio, 'day') ||
+            (fixoAtual.dataFim && dayjs(dataAula).isAfter(fixoAtual.dataFim, 'day'))) {
+          throw new BadRequestException('O horário fixo foi removido ou mudou. Esta aula não será gerada.');
+        }
+      }
 
       /**
        * Validações comuns aos dois fluxos (vaga/duplicidade).
@@ -191,7 +208,7 @@ export class AgendamentosService {
        * Pilates salvo com 4, por exemplo — continuariam aceitando gente a
        * mais, porque a checagem olhava só o número do banco.
        */
-      const cabem = capacidadeEfetiva(horario.capacidadeMaxima, horario.modalidade?.nome);
+      const cabem = capacidadeEfetiva(turmaAtual.capacidadeMaxima, turmaAtual.modalidade?.nome);
       const ocupacao = await tx.agendamento.count({ where: { horarioId: dto.horarioId, dataAula, status: 'CONFIRMADO' } });
       if (ocupacao >= cabem) {
         throw new BadRequestException(

@@ -77,13 +77,9 @@ async function bootstrap() {
     console.error('não consegui garantir o usuário dono:', e?.message),
   );
 
-  /**
-   * ANTES da limpeza, e a ordem importa: a limpeza agora olha só `ativo`, e
-   * sem esta correção ela tiraria das turmas quem está inativo apenas por
-   * ainda não ter aberto o app.
-   */
+  // Apenas informa cadastros legados; nunca reativa alunos no boot.
   await corrigirMatricula(app.get(PrismaService)).catch((e) =>
-    console.error('não consegui corrigir a matrícula dos cadastros antigos:', e?.message),
+    console.error('não consegui conferir a matrícula dos cadastros antigos:', e?.message),
   );
 
   /**

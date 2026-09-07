@@ -125,6 +125,7 @@ export class AutoAgendamentoService {
          * ser cadastrado.
          */
         usuario: { ativo: true },
+        horario: { ativo: true },
       },
       include: { horario: true },
     });
@@ -171,7 +172,7 @@ export class AutoAgendamentoService {
       where: { id: horarioFixoId },
       include: { horario: true },
     });
-    if (!fixo || !fixo.ativo) {
+    if (!fixo || !fixo.ativo || !fixo.horario.ativo) {
       return resultadoVazio();
     }
     return this.gerarParaFixo(fixo);
@@ -179,6 +180,7 @@ export class AutoAgendamentoService {
 
   private async gerarParaFixo(
     fixo: {
+      id: string;
       usuarioId: string;
       horarioId: string;
       dataInicio: Date;
@@ -249,7 +251,7 @@ export class AutoAgendamentoService {
           usuarioId: fixo.usuarioId,
           horarioId: fixo.horarioId,
           dataAula,
-        });
+        }, fixo.id);
         criados++;
         datas.push(dataAula);
         jaConfirmados.add(chave);

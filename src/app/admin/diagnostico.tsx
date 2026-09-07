@@ -8,33 +8,12 @@ import { Icon } from '../../components/ui/icon';
 import { Button } from '../../components/ui/button';
 import { EmptyState, ErrorState } from '../../components/ui/states';
 import { EsqueletoLista } from '../../components/ui/esqueleto';
-import { ConfirmModal, InfoModal } from '../../components/ui/modal';
-import { ApiError } from '../../services/http';
-import { useVarreduraDeHorariosFixos, useRestaurarHorariosFixos } from '../../services/diagnostico/diagnostico.queries';
+import { useVarreduraDeHorariosFixos } from '../../services/diagnostico/diagnostico.queries';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { formatDate } from '../../services/date';
 import type { Achado, ItemDoAchado } from '../../services/diagnostico/diagnostico.types';
 
-/**
- * Conferência dos horários fixos — só para o dono.
- *
- * A mesma varredura do `npm run auditoria:fixos`, para quem não vai abrir um
- * terminal. Ela existe porque o problema que ela acha não aparece sozinho: um
- * aluno ocupando vaga numa turma de onde saiu só se descobre abrindo cadastro
- * por cadastro, e ninguém faz isso com trinta alunos.
- *
- * Não roda ao abrir a tela, de propósito: a conferência varre todos os fixos e
- * todas as aulas de duas semanas. É para apertar quando se está investigando,
- * não a cada vez que alguém passa pela aba.
- *
- * Quase tudo aqui é só leitura: cada achado diz o que fazer, e o conserto
- * acontece na tela do aluno, onde a dona vê o contexto todo.
- *
- * A exceção é devolver os horários fixos desligados. Ela existe porque esse
- * estrago não tem outra saída pela tela — a combinação está apagada, então
- * nenhuma aula nova nasce e não há nada em que tocar para trazê-la de volta.
- * Vem com confirmação e só mexe em quem está marcado como treinando.
- */
+/** Conferência somente leitura; ajustes são feitos no cadastro de cada aluno. */
 
 function ItemDoAchadoLinha({ item }: { item: ItemDoAchado }) {
   /*
@@ -61,7 +40,7 @@ function ItemDoAchadoLinha({ item }: { item: ItemDoAchado }) {
   );
 }
 
-function CartaoDoAchado({ achado, onAgir }: { achado: Achado; onAgir?: () => void }) {
+function CartaoDoAchado({ achado }: { achado: Achado }) {
   const grave = achado.gravidade === 'grave';
   return (
     <Card style={[s.cartao, grave ? s.cartaoGrave : s.cartaoAtencao]} padding={0}>
@@ -82,11 +61,6 @@ function CartaoDoAchado({ achado, onAgir }: { achado: Achado; onAgir?: () => voi
         <Icon name="arrow-forward" size={13} color={LC.textSecondary} />
         <Text style={s.oQueFazerTexto}>{achado.oQueFazer}</Text>
       </View>
-      {achado.acao && onAgir ? (
-        <View style={s.acaoBox}>
-          <Button title="Devolver os horários fixos" onPress={onAgir} />
-        </View>
-      ) : null}
     </Card>
   );
 }
@@ -96,9 +70,6 @@ export default function AdminDiagnostico() {
   /** A varredura só dispara quando o dono pede. */
   const [pediu, setPediu] = useState(false);
   const varredura = useVarreduraDeHorariosFixos(pediu);
-  const restaurar = useRestaurarHorariosFixos();
-  const [confirmando, setConfirmando] = useState(false);
-  const [resultado, setResultado] = useState<string | null>(null);
   const r = varredura.data;
 
   const conteudo = (
@@ -106,9 +77,7 @@ export default function AdminDiagnostico() {
       <View style={s.cabecalho}>
         <Text style={s.titulo}>Conferência dos horários fixos</Text>
         <Text style={s.subtitulo}>
-          Procura aluno ocupando vaga onde não deveria, horário fixo que não está gerando aula e
-          turma acima da capacidade. A conferência em si não muda nada — quando dá para consertar
-          de uma vez, aparece um botão, e aí é você quem decide.
+          Horários fixos, vagas e pendências de agendamento.
         </Text>
       </View>
 
@@ -146,7 +115,7 @@ export default function AdminDiagnostico() {
             <EmptyState
               icon="checkmark-circle-outline"
               title="Está tudo em ordem"
-              description="Todo aluno com horário fixo está na turma dele."
+              description="Nenhuma pendência encontrada nas próximas duas semanas."
             />
           ) : (
             <>
@@ -157,7 +126,6 @@ export default function AdminDiagnostico() {
                 <CartaoDoAchado
                   key={a.tipo}
                   achado={a}
-                  onAgir={a.acao === 'restaurar-horarios-fixos' ? () => setConfirmando(true) : undefined}
                 />
               ))}
             </>
@@ -175,44 +143,6 @@ export default function AdminDiagnostico() {
         {conteudo}
       </ScrollView>
       <TabBar isAdmin />
-
-      {/*
-        Confirmação porque isto escreve no banco e mexe em muita gente de uma
-        vez. O texto diz o número exato antes de acontecer.
-      */}
-      <ConfirmModal
-        visible={confirmando}
-        title="Devolver os horários fixos?"
-        message={
-          'Todos os horários fixos desligados de alunos que TREINAM voltam a valer, ' +
-          'e as aulas dos próximos dois meses são remarcadas na hora. ' +
-          'Quem está marcado como "não treina mais" não é tocado.\n\n' +
-          'Turma que já estiver cheia fica de fora — nessas, escolha quem entra pela Agenda.'
-        }
-        confirmLabel="Devolver"
-        loading={restaurar.isPending}
-        onConfirm={() =>
-          restaurar.mutate(undefined, {
-            onSuccess: (d) => {
-              setConfirmando(false);
-              setResultado(d.mensagem);
-              // Roda a conferência de novo: o dono vê o resultado, não acredita nele.
-              varredura.refetch();
-            },
-            onError: (e) => {
-              setConfirmando(false);
-              setResultado(e instanceof ApiError ? e.message : 'Não consegui devolver. Tente de novo.');
-            },
-          })
-        }
-        onCancel={() => setConfirmando(false)}
-      />
-      <InfoModal
-        visible={!!resultado}
-        title="Pronto"
-        message={resultado ?? ''}
-        onClose={() => setResultado(null)}
-      />
     </View>
   );
 }
@@ -248,5 +178,4 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: LC.border,
   },
   oQueFazerTexto: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 18 },
-  acaoBox: { padding: 14, paddingTop: 0 },
 });

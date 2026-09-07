@@ -102,7 +102,7 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
     `${DIA_LEGIVEL[f.horario.diaSemana]} ${f.horario.horaInicio}`;
 
   // ── 1. Fixo de aluno que a dona desativou ───────────────────────────────
-  const deDesativado = fixos.filter((f) => !f.usuario.ativo && f.usuario.senhaHash);
+  const deDesativado = fixos.filter((f) => !f.usuario.ativo);
   anotar({
     tipo: 'fixo-de-aluno-desativado', gravidade: 'grave',
     titulo: `${deDesativado.length} horário(s) fixo(s) de aluno DESATIVADO ainda ocupando vaga`,
@@ -205,7 +205,7 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
         texto: `${rotulo} — ${lista.length} alunos para ${cap} vagas: ${lista.map((a) => a.usuario.nome).join(', ')}`,
       });
     }
-    const fantasmas = lista.filter((a) => !a.usuario.ativo && a.usuario.senhaHash);
+    const fantasmas = lista.filter((a) => !a.usuario.ativo);
     if (fantasmas.length) {
       comFantasma.push({
         texto: `${rotulo} — ${fantasmas.length} de ${lista.length}: ${fantasmas.map((a) => a.usuario.nome).join(', ')}`,
@@ -238,7 +238,7 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
 
   const emOrdem = fixos.filter((f) => {
     const h = porId.get(f.horarioId);
-    return h && h.ativo && !(!f.usuario.ativo && f.usuario.senhaHash);
+    return h && h.ativo && f.usuario.ativo;
   });
 
   const semMotivo: ItemDoAchado[] = [];
@@ -252,13 +252,7 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
     });
     if (!datas.length) continue;
 
-    const marcadas = await prisma.agendamento.findMany({
-      where: {
-        usuarioId: f.usuarioId, horarioId: f.horarioId,
-        status: 'CONFIRMADO', dataAula: { in: datas },
-      },
-      select: { dataAula: true },
-    });
+    const marcadas = confirmados.filter((a) => a.usuarioId === f.usuarioId && a.horarioId === f.horarioId);
     const tem = new Set(marcadas.map((a) => soData(a.dataAula)));
     const faltando = datas.filter((d) => !tem.has(soData(d)));
     if (!faltando.length) continue;
@@ -325,15 +319,15 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
       'E enquanto estão lá ocupam a cota da semana. Vale cadastrar o horário fixo de verdade.',
   });
 
-  // ── 8. Quem treina mas está com os horários fixos desligados ───────────
-  // A marca do acidente: a dona marcou a lista inteira como inativa, o
-  // sistema tirou todo mundo das turmas, e reativar (antes da correção) não
-  // devolvia nada. A agenda fica com as aulas velhas e nenhuma futura.
-  //
-  // Os outros achados olham fixo LIGADO; este é o único que olha o desligado,
-  // e por isso o problema passava despercebido justamente quando mais doía.
+  // Histórico desligado não prova erro: pode ser uma remoção intencional.
+  // Só sugere revisão se o aluno não tiver nenhum fixo ativo.
   const desligadosDeQuemTreina = await prisma.horarioFixo.findMany({
-    where: { ativo: false, usuario: { ativo: true, tipoUsuario: 'ALUNO' } },
+    where: {
+      ativo: false,
+      horario: { ativo: true },
+      OR: [{ dataFim: null }, { dataFim: { gte: hoje } }],
+      usuario: { ativo: true, tipoUsuario: 'ALUNO', horariosFixos: { none: { ativo: true } } },
+    },
     include: {
       usuario: { select: { id: true, nome: true } },
       horario: { include: { modalidade: true } },
@@ -347,8 +341,8 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
     porAlunoDesligado.get(f.usuarioId)!.push(f);
   }
   anotar({
-    tipo: 'fixo-desligado-de-quem-treina', gravidade: 'grave',
-    titulo: `${porAlunoDesligado.size} aluno(s) que treinam estão com horário fixo desligado`,
+    tipo: 'fixo-desligado-de-quem-treina', gravidade: 'atencao',
+    titulo: `${porAlunoDesligado.size} aluno(s) sem fixo ativo e com histórico para revisar`,
     itens: [...porAlunoDesligado.values()].map((lista) => ({
       usuarioId: lista[0].usuarioId,
       texto:
@@ -356,10 +350,8 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
         lista.map((f) => `${DIA_LEGIVEL[f.horario.diaSemana]} ${f.horario.horaInicio}`).join(', '),
     })),
     oQueFazer:
-      'A combinação existe mas está apagada, então nenhuma aula nova nasce — a agenda ' +
-      'fica com as antigas e vazia daqui para frente. O botão abaixo devolve todas de ' +
-      'uma vez e já remarca as aulas dos próximos dois meses.',
-    acao: 'restaurar-horarios-fixos',
+      'Esses horários podem ter sido removidos de propósito. Abra cada aluno e confirme ' +
+      'os dias atuais em Plano e horários. Não restaure o histórico inteiro.',
   });
 
   const graves = achados.filter((a) => a.gravidade === 'grave');

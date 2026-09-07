@@ -25,7 +25,7 @@ export class DiagnosticoController {
   }
 
   @Post('restaurar-horarios-fixos')
-  @ApiOperation({ summary: 'Devolver os horários fixos desligados de quem treina (dono)' })
+  @ApiOperation({ summary: 'Restauração em lote desativada; revisar os horários por aluno', deprecated: true })
   restaurarHorariosFixos() {
     return this.service.restaurarHorariosFixos();
   }
