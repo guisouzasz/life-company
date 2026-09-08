@@ -10,10 +10,14 @@ import { EmptyState, ErrorState } from '../../components/ui/states';
 import { EsqueletoLista } from '../../components/ui/esqueleto';
 import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { ApiError } from '../../services/http';
-import { useVarreduraDeHorariosFixos, useRestaurarHorariosFixos } from '../../services/diagnostico/diagnostico.queries';
+import {
+  useVarreduraDeHorariosFixos,
+  useRestaurarHorariosFixos,
+  useCadastrosRemovidos,
+} from '../../services/diagnostico/diagnostico.queries';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { formatDate } from '../../services/date';
-import type { Achado, ItemDoAchado } from '../../services/diagnostico/diagnostico.types';
+import type { Achado, CadastroRemovido, ItemDoAchado } from '../../services/diagnostico/diagnostico.types';
 
 /**
  * Conferência dos horários fixos — só para o dono.
@@ -160,6 +164,48 @@ function CartaoDoAchado({
   );
 }
 
+/**
+ * Um cadastro excluído, com o que deu para reconstruir dele.
+ *
+ * Existe para ser lido com o celular numa mão e o formulário de cadastro na
+ * outra: nome, e-mail, plano e — o que mais importa — em que turmas a pessoa
+ * de fato vinha. A exclusão apaga o horário fixo, mas não as aulas que já
+ * aconteceram, e é delas que sai a linha "quarta 19:00 · 14 aulas".
+ */
+function CartaoRemovido({ r }: { r: CadastroRemovido }) {
+  return (
+    <View style={s.removido}>
+      <View style={s.removidoTopo}>
+        <Text style={s.removidoNome}>{r.nome ?? 'Nome não recuperado'}</Text>
+        {r.plano ? <Text style={s.removidoPlano}>{r.plano}</Text> : null}
+      </View>
+      {r.email ? <Text style={s.removidoDado}>{r.email}</Text> : null}
+
+      {r.fixosNoRegistro.length > 0 ? (
+        <Text style={s.removidoTurma}>
+          Horário fixo no registro: {r.fixosNoRegistro.join(' · ')}
+        </Text>
+      ) : null}
+
+      {r.turmas.length > 0 ? (
+        r.turmas.map((t, i) => (
+          <Text key={i} style={[s.removidoTurma, i > 0 && s.removidoTurmaFraca]}>
+            {t.diaSemana} {t.horaInicio}
+            {t.modalidade ? ` · ${t.modalidade}` : ''} — {t.aulas} aula{t.aulas > 1 ? 's' : ''}, a
+            última em {formatDate(t.ultima, 'DD/MM/YYYY')}
+          </Text>
+        ))
+      ) : (
+        <Text style={s.removidoDado}>Sem aulas registradas — não dá para saber o horário.</Text>
+      )}
+
+      {r.temAnamnese ? (
+        <Text style={s.removidoNota}>A ficha de saúde não foi apagada e continua no sistema.</Text>
+      ) : null}
+    </View>
+  );
+}
+
 export default function AdminDiagnostico() {
   const isDesktop = useIsDesktop();
   /** A varredura só dispara quando o dono pede. */
@@ -172,6 +218,8 @@ export default function AdminDiagnostico() {
    * deve voltar.
    */
   const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [pediuRemovidos, setPediuRemovidos] = useState(false);
+  const removidos = useCadastrosRemovidos(pediuRemovidos);
   const [confirmando, setConfirmando] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
   const r = varredura.data;
@@ -266,6 +314,69 @@ export default function AdminDiagnostico() {
           )}
         </>
       ) : null}
+
+      {/*
+        A lista de quem foi excluído fica no fim e só abre quando se pede: ela
+        só interessa depois de um acidente, e no dia a dia seria um lembrete
+        inútil de gente que saiu do estúdio.
+      */}
+      <View style={s.divisor} />
+      <Text style={s.secaoTitulo}>Cadastros excluídos</Text>
+      <Text style={s.secaoSub}>
+        Excluir apaga o cadastro, os horários fixos e as fichas de treino — não tem desfazer. Mas as
+        aulas que já aconteceram ficam, e é delas que sai em qual turma cada pessoa vinha. Use como
+        lista de conferência para recadastrar.
+      </Text>
+      <Button
+        title={removidos.isFetching ? 'Levantando…' : pediuRemovidos ? 'Levantar de novo' : 'Ver quem foi excluído'}
+        onPress={() => (pediuRemovidos ? removidos.refetch() : setPediuRemovidos(true))}
+        loading={removidos.isFetching}
+        variant="secondary"
+        leftIcon={<Icon name="archive-outline" size={17} color={LC.primary} />}
+        style={s.botao}
+      />
+      {pediuRemovidos && removidos.data ? (
+        removidos.data.total === 0 ? (
+          <EmptyState
+            icon="checkmark-circle-outline"
+            title="Nenhum cadastro excluído"
+            description="Ninguém foi excluído definitivamente neste estúdio."
+          />
+        ) : (
+          <>
+            <Text style={s.contagem}>
+              {removidos.data.total} cadastro(s) excluído(s) · {removidos.data.comNome} com nome recuperado
+            </Text>
+            {removidos.data.removidos.map((r) => (
+              <CartaoRemovido key={r.usuarioId} r={r} />
+            ))}
+            {removidos.data.nomesSemVinculo.length > 0 ? (
+              <>
+                <Text style={s.contagem}>
+                  {removidos.data.nomesSemVinculo.length} nome(s) do registro sem cadastro
+                  correspondente
+                </Text>
+                <Text style={s.secaoSub}>
+                  Foram cadastrados no estúdio e não estão mais na lista de alunos, mas o registro
+                  antigo não guardava o id — então não dá para dizer qual é qual. Cruze com os
+                  cartões acima que estão sem nome.
+                </Text>
+                {removidos.data.nomesSemVinculo.map((n, i) => (
+                  <Text key={i} style={s.removidoTurma}>
+                    {n.nome}
+                    {n.email ? ` · ${n.email}` : ''} — cadastrado em {formatDate(n.quando, 'DD/MM/YYYY')}
+                  </Text>
+                ))}
+              </>
+            ) : null}
+            <Text style={s.rodapeAviso}>
+              CPF, telefone, endereço e as fichas de treino não voltam por aqui — só por um backup do
+              banco.
+            </Text>
+          </>
+        )
+      ) : null}
+
       <View style={{ height: isDesktop ? 32 : 90 }} />
     </>
   );
@@ -347,4 +458,22 @@ const s = StyleSheet.create({
   },
   oQueFazerTexto: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 18 },
   acaoBox: { padding: 14, paddingTop: 12 },
+
+  divisor: { height: 1, backgroundColor: LC.border, marginTop: 8, marginBottom: 20 },
+  secaoTitulo: { fontSize: 17, fontWeight: '800', color: LC.textPrimary },
+  secaoSub: { fontSize: 12.5, color: LC.textSecondary, marginTop: 6, marginBottom: 14, lineHeight: 18 },
+  removido: {
+    backgroundColor: LC.bgCard, borderRadius: 10, borderWidth: 1, borderColor: LC.border,
+    padding: 12, marginBottom: 10,
+  },
+  removidoTopo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  removidoNome: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary },
+  removidoPlano: { fontSize: 11.5, color: LC.textSecondary },
+  removidoDado: { fontSize: 12.5, color: LC.textSecondary, marginTop: 3 },
+  /* A turma com mais aulas é o horário de verdade; as outras entram apagadas
+     para não competir com ela na hora de recadastrar. */
+  removidoTurma: { fontSize: 13, color: LC.textPrimary, marginTop: 6, lineHeight: 18 },
+  removidoTurmaFraca: { color: LC.textMuted, fontSize: 12 },
+  removidoNota: { fontSize: 11.5, color: LC.warningFg, marginTop: 7 },
+  rodapeAviso: { fontSize: 12, color: LC.textMuted, marginTop: 6, lineHeight: 18 },
 });

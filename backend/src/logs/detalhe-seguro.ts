@@ -52,7 +52,10 @@ const CAMPOS_PERMITIDOS = new Set([
   'motivo',
 ]);
 
-/** Trunca texto longo: log é índice, não arquivo. */
+/** Até onde o detalhe pode crescer. Log é índice, não arquivo. */
+const LIMITE_DETALHE = 400;
+
+/** Trunca um VALOR longo. O objeto inteiro nunca é cortado — veja abaixo. */
 function encurtar(v: string): string {
   return v.length > 120 ? `${v.slice(0, 117)}...` : v;
 }
@@ -78,5 +81,27 @@ export function detalheSeguro(corpo: unknown): string | null {
 
   const chaves = Object.keys(limpo);
   if (chaves.length === 0) return null;
-  return encurtar(JSON.stringify(limpo));
+
+  /**
+   * Cabe no limite tirando CAMPOS, nunca cortando o texto no meio.
+   *
+   * Antes era `encurtar(JSON.stringify(limpo))`, e o corte caía onde caísse:
+   * `{"nome":"MARINA COSTA","email":"aluno@estudio.com","planoId":"1d0adf...`
+   * sem fechar a chave. Ficava aceitável na tela de logs, que só mostra o
+   * texto, e ilegível para qualquer coisa que tentasse LER o registro — que é
+   * justamente o que se quer fazer quando algo deu errado e se está
+   * reconstruindo o que aconteceu.
+   *
+   * Os campos saem do fim para o começo: a ordem do corpo põe o que
+   * identifica (nome, e-mail) antes da configuração, e é o que identifica que
+   * tem valor num registro.
+   */
+  const restantes = { ...limpo };
+  let json = JSON.stringify(restantes);
+  for (const chave of [...chaves].reverse()) {
+    if (json.length <= LIMITE_DETALHE) break;
+    delete restantes[chave];
+    json = JSON.stringify(restantes);
+  }
+  return Object.keys(restantes).length === 0 ? null : json;
 }

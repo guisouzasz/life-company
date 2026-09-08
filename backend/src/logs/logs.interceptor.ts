@@ -126,6 +126,16 @@ export class LogsInterceptor implements NestInterceptor {
    * `usuarioId` do aluno. Sem olhar o corpo, justamente as ações mais
    * importantes — colocar e tirar aluno da turma — ficariam sem dono, e não
    * daria para responder "o que aconteceu com o Carlos".
+   *
+   * O último caso é a criação, e ele custou caro para aparecer: `POST
+   * /usuarios` não tem id no caminho nem no corpo (o registro ainda não
+   * existe), e a resposta devolve o cadastro DENTRO de `usuario`, junto com o
+   * link de primeiro acesso. Lendo só `resposta.id`, o log do cadastro ficava
+   * órfão — guardava o nome do aluno e nenhuma forma de ligá-lo à pessoa.
+   *
+   * Isso só se percebe quando alguém é excluído e se tenta descobrir quem
+   * era: o nome está no registro, o id está no registro, e não há como saber
+   * que são a mesma pessoa.
    */
   private entidadeDe(rota: string, corpo: any, resposta: any): string | null {
     return (
@@ -133,6 +143,7 @@ export class LogsInterceptor implements NestInterceptor {
       corpo?.usuarioId ??
       corpo?.alunoId ??
       (typeof resposta?.id === 'string' ? resposta.id : null) ??
+      (typeof resposta?.usuario?.id === 'string' ? resposta.usuario.id : null) ??
       null
     );
   }

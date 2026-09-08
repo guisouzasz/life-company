@@ -27,6 +27,16 @@ export class DiagnosticoController {
   }
 
   /**
+   * O que sobrou de quem foi excluído definitivamente — lista de conferência
+   * para recadastrar. Só leitura: a exclusão em si não tem desfazer.
+   */
+  @Get('cadastros-removidos')
+  @ApiOperation({ summary: 'Dados recuperáveis de cadastros excluídos (dono)' })
+  cadastrosRemovidos() {
+    return this.service.cadastrosRemovidos();
+  }
+
+  /**
    * Devolve os horários fixos escolhidos. O corpo é obrigatório: sem lista de
    * ids o ValidationPipe recusa, e é assim que uma versão antiga do app — que
    * chamava esta rota sem corpo esperando "devolve tudo" — para de valer sem

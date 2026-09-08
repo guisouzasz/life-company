@@ -22,6 +22,20 @@ export function useVarreduraDeHorariosFixos(enabled: boolean) {
 }
 
 /**
+ * A lista de quem foi excluído definitivamente, para recadastrar sem depender
+ * da memória de ninguém. Como a varredura, só dispara quando o dono pede.
+ */
+export function useCadastrosRemovidos(enabled: boolean) {
+  return useQuery({
+    queryKey: ['diagnostico', 'cadastros-removidos'],
+    queryFn: diagnosticoService.cadastrosRemovidos,
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/**
  * Devolve os horários fixos MARCADOS na conferência. A tela redispara a
  * varredura depois, para o dono ver o resultado em vez de acreditar nele.
  */

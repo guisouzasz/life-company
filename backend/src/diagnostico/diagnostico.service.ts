@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
 import { DevolverHorariosFixosDto } from './dto/devolver-horarios-fixos.dto';
 import { varrerHorariosFixos, type Varredura } from './varredura-horarios-fixos';
+import { levantarCadastrosRemovidos, type RelatorioRemovidos } from './cadastros-removidos';
 
 /**
  * Até onde as aulas são remarcadas ao devolver um horário fixo.
@@ -31,6 +32,18 @@ export class DiagnosticoService {
   /** A varredura dos horários fixos. Só leitura — pode rodar com o estúdio aberto. */
   horariosFixos(): Promise<Varredura> {
     return varrerHorariosFixos(this.prisma);
+  }
+
+  /**
+   * O que dá para saber de quem foi excluído definitivamente.
+   *
+   * Só leitura, e não desfaz nada — a exclusão não tem volta. Serve para
+   * recadastrar sem depender da memória de ninguém: nome, e-mail, plano e,
+   * principalmente, em que turmas a pessoa vinha, que os agendamentos ainda
+   * provam.
+   */
+  cadastrosRemovidos(): Promise<RelatorioRemovidos> {
+    return levantarCadastrosRemovidos(this.prisma);
   }
 
   /**

@@ -50,3 +50,44 @@ export type Varredura = {
   };
   achados: Achado[];
 };
+
+/** Uma turma em que a pessoa realmente treinou — vem dos agendamentos. */
+export type TurmaFrequentada = {
+  diaSemana: string;
+  horaInicio: string;
+  modalidade: string;
+  aulas: number;
+  ultima: string;
+};
+
+/**
+ * O que sobrou de um cadastro excluído definitivamente.
+ *
+ * `nome` e `email` vêm do registro de ações e podem faltar (exclusão anterior
+ * ao log). `turmas` vem dos agendamentos, que não são apagados — é a parte
+ * mais confiável, porque prova onde a pessoa esteve.
+ */
+export type CadastroRemovido = {
+  usuarioId: string;
+  nome: string | null;
+  email: string | null;
+  removidoEm: string | null;
+  plano: string | null;
+  turmas: TurmaFrequentada[];
+  /** Horários fixos que o registro mostra ter sido criados para a pessoa. */
+  fixosNoRegistro: string[];
+  temAnamnese: boolean;
+};
+
+export type RelatorioRemovidos = {
+  rodadaEm: string;
+  total: number;
+  comNome: number;
+  removidos: CadastroRemovido[];
+  /**
+   * Nomes que o registro mostra terem sido cadastrados mas não dá para ligar a
+   * um id — cadastros de antes de o registro guardar o id do criado. Servem
+   * para cruzar na mão com os excluídos sem nome.
+   */
+  nomesSemVinculo: { nome: string; email: string | null; quando: string }[];
+};
