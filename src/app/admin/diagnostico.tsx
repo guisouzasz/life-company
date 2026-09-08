@@ -8,18 +8,78 @@ import { Icon } from '../../components/ui/icon';
 import { Button } from '../../components/ui/button';
 import { EmptyState, ErrorState } from '../../components/ui/states';
 import { EsqueletoLista } from '../../components/ui/esqueleto';
-import { useVarreduraDeHorariosFixos } from '../../services/diagnostico/diagnostico.queries';
+import { ConfirmModal, InfoModal } from '../../components/ui/modal';
+import { ApiError } from '../../services/http';
+import { useVarreduraDeHorariosFixos, useRestaurarHorariosFixos } from '../../services/diagnostico/diagnostico.queries';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { formatDate } from '../../services/date';
 import type { Achado, ItemDoAchado } from '../../services/diagnostico/diagnostico.types';
 
-/** Conferência somente leitura; ajustes são feitos no cadastro de cada aluno. */
+/**
+ * Conferência dos horários fixos — só para o dono.
+ *
+ * A mesma varredura do `npm run auditoria:fixos`, para quem não vai abrir um
+ * terminal. Ela existe porque o problema que ela acha não aparece sozinho: um
+ * aluno ocupando vaga numa turma de onde saiu só se descobre abrindo cadastro
+ * por cadastro, e ninguém faz isso com trinta alunos.
+ *
+ * Não roda ao abrir a tela, de propósito: a conferência varre todos os fixos e
+ * todas as aulas de duas semanas. É para apertar quando se está investigando,
+ * não a cada vez que alguém passa pela aba.
+ *
+ * Quase tudo aqui é leitura: cada achado diz o que fazer, e o conserto
+ * acontece na tela do aluno, onde a dona vê o contexto todo.
+ *
+ * A exceção é devolver horário fixo apagado, e ela é uma ESCOLHA, não um
+ * botão de "arrumar tudo". Os dois casos que a lista mistura — o horário
+ * removido de propósito e o apagado por engano — são a mesma linha no banco.
+ * Quem sabe separar é quem administra o estúdio, e é por isso que ele marca
+ * nome por nome antes de confirmar.
+ */
 
-function ItemDoAchadoLinha({ item }: { item: ItemDoAchado }) {
+function ItemDoAchadoLinha({
+  item,
+  marcado,
+  onMarcar,
+}: {
+  item: ItemDoAchado;
+  /** Ausente quando o achado não é dos que se devolve — aí não há caixinha. */
+  marcado?: boolean;
+  onMarcar?: () => void;
+}) {
+  const nome = item.texto.split(' — ')[0];
+
   /*
-    Quando o achado é sobre uma pessoa, o toque leva ao cadastro dela.
-    Sem isso a lista vira uma lição de casa: ler trinta nomes numa tela,
-    decorar, e ir procurar um por um na busca da aba Alunos.
+    Com caixinha, o toque na linha inteira marca — alvo grande, para o dedo
+    numa lista de trinta nomes. Quem quiser abrir o cadastro usa a seta.
+  */
+  if (onMarcar) {
+    return (
+      <Pressable
+        style={({ pressed }) => [s.item, s.itemTocavel, pressed && s.itemPressed]}
+        onPress={onMarcar}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: !!marcado }}
+        accessibilityLabel={`Devolver os horários de ${nome}`}
+      >
+        <View style={[s.caixa, marcado && s.caixaMarcada]}>
+          {marcado ? <Icon name="checkmark" size={13} color="#fff" /> : null}
+        </View>
+        <Text style={[s.itemTexto, marcado && s.itemTextoMarcado]}>{item.texto}</Text>
+        <Pressable
+          hitSlop={10}
+          onPress={() => router.push(`/admin/alunos?busca=${encodeURIComponent(nome)}`)}
+          accessibilityLabel={`Abrir o cadastro de ${nome}`}
+        >
+          <Icon name="chevron-forward" size={15} color={LC.textMuted} />
+        </Pressable>
+      </Pressable>
+    );
+  }
+
+  /*
+    Sem caixinha, o toque leva ao cadastro. Sem isso a lista vira lição de
+    casa: ler trinta nomes, decorar, e procurar um por um na aba Alunos.
   */
   if (!item.usuarioId) {
     return (
@@ -31,8 +91,8 @@ function ItemDoAchadoLinha({ item }: { item: ItemDoAchado }) {
   return (
     <Pressable
       style={({ pressed }) => [s.item, s.itemTocavel, pressed && s.itemPressed]}
-      onPress={() => router.push(`/admin/alunos?busca=${encodeURIComponent(item.texto.split(' — ')[0])}`)}
-      accessibilityLabel={`Abrir o cadastro de ${item.texto.split(' — ')[0]}`}
+      onPress={() => router.push(`/admin/alunos?busca=${encodeURIComponent(nome)}`)}
+      accessibilityLabel={`Abrir o cadastro de ${nome}`}
     >
       <Text style={[s.itemTexto, s.itemTextoLink]}>{item.texto}</Text>
       <Icon name="chevron-forward" size={15} color={LC.textMuted} />
@@ -40,8 +100,23 @@ function ItemDoAchadoLinha({ item }: { item: ItemDoAchado }) {
   );
 }
 
-function CartaoDoAchado({ achado }: { achado: Achado }) {
+function CartaoDoAchado({
+  achado,
+  marcados,
+  onMarcar,
+  onDevolver,
+}: {
+  achado: Achado;
+  marcados: Set<string>;
+  onMarcar: (ids: string[]) => void;
+  onDevolver: () => void;
+}) {
   const grave = achado.gravidade === 'grave';
+  const escolhivel = achado.acao === 'restaurar-horarios-fixos';
+  const quantos = escolhivel
+    ? achado.itens.filter((i) => (i.horarioFixoIds ?? []).some((id) => marcados.has(id))).length
+    : 0;
+
   return (
     <Card style={[s.cartao, grave ? s.cartaoGrave : s.cartaoAtencao]} padding={0}>
       <View style={s.cartaoTopo}>
@@ -52,15 +127,35 @@ function CartaoDoAchado({ achado }: { achado: Achado }) {
         />
         <Text style={[s.cartaoTitulo, grave && { color: LC.dangerFg }]}>{achado.titulo}</Text>
       </View>
-      <View style={s.itens}>
-        {achado.itens.map((i, n) => (
-          <ItemDoAchadoLinha key={`${achado.tipo}-${n}`} item={i} />
-        ))}
-      </View>
+
       <View style={s.oQueFazer}>
         <Icon name="arrow-forward" size={13} color={LC.textSecondary} />
         <Text style={s.oQueFazerTexto}>{achado.oQueFazer}</Text>
       </View>
+
+      <View style={s.itens}>
+        {achado.itens.map((i, n) => {
+          const ids = i.horarioFixoIds ?? [];
+          return (
+            <ItemDoAchadoLinha
+              key={`${achado.tipo}-${n}`}
+              item={i}
+              marcado={escolhivel ? ids.length > 0 && ids.every((id) => marcados.has(id)) : undefined}
+              onMarcar={escolhivel && ids.length > 0 ? () => onMarcar(ids) : undefined}
+            />
+          );
+        })}
+      </View>
+
+      {escolhivel ? (
+        <View style={s.acaoBox}>
+          <Button
+            title={quantos === 0 ? 'Marque quem volta' : `Devolver ${quantos} aluno(s)`}
+            onPress={onDevolver}
+            disabled={quantos === 0}
+          />
+        </View>
+      ) : null}
     </Card>
   );
 }
@@ -70,14 +165,50 @@ export default function AdminDiagnostico() {
   /** A varredura só dispara quando o dono pede. */
   const [pediu, setPediu] = useState(false);
   const varredura = useVarreduraDeHorariosFixos(pediu);
+  const restaurar = useRestaurarHorariosFixos();
+  /**
+   * Ninguém vem marcado. Uma lista pré-marcada é um "confirmar tudo" com
+   * passos extras — e a única pergunta que esta tela faz é justamente quem
+   * deve voltar.
+   */
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [confirmando, setConfirmando] = useState(false);
+  const [resultado, setResultado] = useState<string | null>(null);
   const r = varredura.data;
+
+  const alternar = (ids: string[]) =>
+    setMarcados((atual) => {
+      const novo = new Set(atual);
+      const todosMarcados = ids.every((id) => novo.has(id));
+      for (const id of ids) (todosMarcados ? novo.delete(id) : novo.add(id));
+      return novo;
+    });
+
+  const devolver = () =>
+    restaurar.mutate([...marcados], {
+      onSuccess: (d) => {
+        setConfirmando(false);
+        setMarcados(new Set());
+        const detalhe = d.recusados.length
+          ? '\n\n' + d.recusados.map((x) => `• ${x.nome}: ${x.motivo}`).join('\n')
+          : '';
+        setResultado(d.mensagem + detalhe);
+        // Roda a conferência de novo: o dono vê o resultado, não acredita nele.
+        varredura.refetch();
+      },
+      onError: (e) => {
+        setConfirmando(false);
+        setResultado(e instanceof ApiError ? e.message : 'Não consegui devolver. Tente de novo.');
+      },
+    });
 
   const conteudo = (
     <>
       <View style={s.cabecalho}>
         <Text style={s.titulo}>Conferência dos horários fixos</Text>
         <Text style={s.subtitulo}>
-          Horários fixos, vagas e pendências de agendamento.
+          Horários fixos, vagas e pendências de agendamento. A conferência não muda nada — quando
+          há o que devolver, você marca quem volta.
         </Text>
       </View>
 
@@ -126,6 +257,9 @@ export default function AdminDiagnostico() {
                 <CartaoDoAchado
                   key={a.tipo}
                   achado={a}
+                  marcados={marcados}
+                  onMarcar={alternar}
+                  onDevolver={() => setConfirmando(true)}
                 />
               ))}
             </>
@@ -143,6 +277,29 @@ export default function AdminDiagnostico() {
         {conteudo}
       </ScrollView>
       <TabBar isAdmin />
+
+      {/*
+        Confirmação porque isto escreve no banco e mexe na grade de várias
+        pessoas. O texto diz o número exato antes de acontecer.
+      */}
+      <ConfirmModal
+        visible={confirmando}
+        title={`Devolver ${marcados.size} horário(s)?`}
+        message={
+          'Os horários marcados voltam a valer e as aulas dos próximos dois meses são remarcadas na hora.\n\n' +
+          'Quem você não marcou não é tocado. Turma cheia ou plano completo fica de fora, e eu digo quais.'
+        }
+        confirmLabel="Devolver"
+        loading={restaurar.isPending}
+        onConfirm={devolver}
+        onCancel={() => setConfirmando(false)}
+      />
+      <InfoModal
+        visible={!!resultado}
+        title="Pronto"
+        message={resultado ?? ''}
+        onClose={() => setResultado(null)}
+      />
     </View>
   );
 }
@@ -166,16 +323,28 @@ const s = StyleSheet.create({
   cartaoAtencao: { borderLeftColor: LC.warningFg },
   cartaoTopo: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, padding: 14, paddingBottom: 10 },
   cartaoTitulo: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary, lineHeight: 19 },
-  itens: { paddingHorizontal: 14, gap: 2 },
-  item: { paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  itens: { paddingHorizontal: 14, paddingTop: 10, gap: 2 },
+  item: { paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 9 },
   itemTocavel: { borderRadius: 8, paddingHorizontal: 8, marginHorizontal: -8 },
   itemPressed: { backgroundColor: LC.primaryLight },
   itemTexto: { flex: 1, fontSize: 13, color: LC.textSecondary, lineHeight: 18 },
   itemTextoLink: { color: LC.textPrimary },
+  itemTextoMarcado: { color: LC.textPrimary, fontWeight: '600' },
+  caixa: {
+    width: 20, height: 20, borderRadius: 5,
+    borderWidth: 1.5, borderColor: LC.borderStrong,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  caixaMarcada: { backgroundColor: LC.primary, borderColor: LC.primary },
+  /*
+    "O que fazer" vem ANTES da lista quando há o que marcar: é a instrução de
+    como usar as caixinhas logo abaixo. No rodapé, seria lida depois de o dono
+    já ter marcado no escuro.
+  */
   oQueFazer: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    padding: 14, paddingTop: 12, marginTop: 8,
-    borderTopWidth: 1, borderTopColor: LC.border,
+    paddingHorizontal: 14, paddingBottom: 12,
   },
   oQueFazerTexto: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 18 },
+  acaoBox: { padding: 14, paddingTop: 12 },
 });

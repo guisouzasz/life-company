@@ -1,15 +1,17 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { DonoGuard } from '../auth/guards/dono.guard';
 import { DiagnosticoService } from './diagnostico.service';
+import { DevolverHorariosFixosDto } from './dto/devolver-horarios-fixos.dto';
 
 /**
- * Conferência do estado do estúdio. Só leitura, e só para o dono.
+ * Conferência do estado do estúdio, e o único conserto que ela oferece.
  *
  * Fica atrás do DonoGuard não por sigilo — não devolve dado pessoal além do
  * nome — mas porque é uma lista de problemas: na mão de quem não vai agir,
- * vira só susto.
+ * vira só susto. E porque devolver horário em lote mexe na grade de muita
+ * gente de uma vez.
  */
 @ApiTags('diagnostico')
 @ApiBearerAuth()
@@ -24,9 +26,15 @@ export class DiagnosticoController {
     return this.service.horariosFixos();
   }
 
+  /**
+   * Devolve os horários fixos escolhidos. O corpo é obrigatório: sem lista de
+   * ids o ValidationPipe recusa, e é assim que uma versão antiga do app — que
+   * chamava esta rota sem corpo esperando "devolve tudo" — para de valer sem
+   * precisar de outra rota.
+   */
   @Post('restaurar-horarios-fixos')
-  @ApiOperation({ summary: 'Restauração em lote desativada; revisar os horários por aluno', deprecated: true })
-  restaurarHorariosFixos() {
-    return this.service.restaurarHorariosFixos();
+  @ApiOperation({ summary: 'Devolver os horários fixos marcados na conferência (dono)' })
+  restaurarHorariosFixos(@Body() dto: DevolverHorariosFixosDto) {
+    return this.service.restaurarHorariosFixos(dto);
   }
 }

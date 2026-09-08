@@ -22,9 +22,11 @@ export function useVarreduraDeHorariosFixos(enabled: boolean) {
 }
 
 /**
- * Devolve os horários fixos desligados de quem treina. A tela redispara a
+ * Devolve os horários fixos MARCADOS na conferência. A tela redispara a
  * varredura depois, para o dono ver o resultado em vez de acreditar nele.
  */
 export function useRestaurarHorariosFixos() {
-  return useMutation({ mutationFn: diagnosticoService.restaurarHorariosFixos });
+  return useMutation({
+    mutationFn: (ids: string[]) => diagnosticoService.restaurarHorariosFixos(ids),
+  });
 }

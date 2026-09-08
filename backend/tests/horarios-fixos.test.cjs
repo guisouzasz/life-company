@@ -43,9 +43,78 @@ function ambiente() {
   return { db, writes, locks, aluno, plano, vinculo, turma, fixo };
 }
 
-test('rota antiga de restauracao nao escreve nem gera aulas', () => {
-  const db = new Proxy({}, { get: () => { throw new Error('Nao deve acessar o banco'); } });
-  assert.throws(() => new DiagnosticoService(db).restaurarHorariosFixos(), /restauração em lote foi desativada/);
+/*
+  A devolução voltou a existir, mas ESCOLHIDA. A propriedade que o teste
+  anterior guardava continua guardada aqui: nada é restaurado sem alguém
+  apontar exatamente o quê.
+*/
+test('devolucao restaura somente os ids pedidos, e nada alem deles', async () => {
+  const a = ambiente();
+  let filtro;
+  a.db.horarioFixo.findMany = async (args) => {
+    filtro = args.where;
+    return [{
+      ...a.fixo, id: 'pedido', ativo: false,
+      usuario: { ...a.aluno, usuarioPlanos: [a.vinculo], horariosFixos: [] },
+      horario: a.turma,
+    }];
+  };
+  const gerou = [];
+  const auto = { gerarAgendamentosFixosNoPeriodo: async () => { gerou.push(1); return { criados: 4 }; } };
+
+  const r = await new DiagnosticoService(a.db, auto).restaurarHorariosFixos({ ids: ['pedido'] });
+
+  assert.deepEqual(filtro.id, { in: ['pedido'] }, 'só busca o que foi pedido');
+  assert.equal(filtro.ativo, false, 'e só entre os desligados');
+  assert.equal(r.devolvidos, 1);
+  assert.equal(r.aulasRemarcadas, 4);
+  assert.deepEqual(a.writes.map((w) => w.kind), ['fixo']);
+  assert.equal(a.writes[0].args.where.id, 'pedido');
+  assert.equal(gerou.length, 1, 'remarca, para a conferência seguinte vir limpa');
+});
+
+test('devolucao recusa aluno desligado, turma morta e plano completo', async () => {
+  for (const [nome, mudaAluno, mudaTurma, esperado] of [
+    ['desligado', { ativo: false }, {}, /não treina mais/],
+    ['turma morta', {}, { ativo: false }, /turma está desligada/],
+  ]) {
+    const a = ambiente();
+    a.db.horarioFixo.findMany = async () => [{
+      ...a.fixo, ativo: false,
+      usuario: { ...a.aluno, ...mudaAluno, usuarioPlanos: [a.vinculo], horariosFixos: [] },
+      horario: { ...a.turma, ...mudaTurma },
+    }];
+    const r = await new DiagnosticoService(a.db, {}).restaurarHorariosFixos({ ids: ['fixo'] });
+    assert.equal(r.devolvidos, 0, nome);
+    assert.equal(a.writes.length, 0, `${nome}: nada foi escrito`);
+    assert.match(r.recusados[0].motivo, esperado, nome);
+  }
+
+  const a = ambiente();
+  a.db.horarioFixo.findMany = async () => [{
+    ...a.fixo, ativo: false,
+    usuario: { ...a.aluno, usuarioPlanos: [a.vinculo], horariosFixos: [{ id: '1' }, { id: '2' }, { id: '3' }] },
+    horario: a.turma,
+  }];
+  const r = await new DiagnosticoService(a.db, {}).restaurarHorariosFixos({ ids: ['fixo'] });
+  assert.equal(r.devolvidos, 0);
+  assert.equal(a.writes.length, 0);
+  assert.match(r.recusados[0].motivo, /plano 3x já está completo/);
+});
+
+test('devolver varios do mesmo aluno respeita a cota somando os que acabaram de entrar', async () => {
+  const a = ambiente();
+  a.plano.aulasSemanais = 2;
+  const desligado = (id) => ({
+    ...a.fixo, id, ativo: false,
+    usuario: { ...a.aluno, usuarioPlanos: [a.vinculo], horariosFixos: [] },
+    horario: a.turma,
+  });
+  a.db.horarioFixo.findMany = async () => [desligado('a'), desligado('b'), desligado('c')];
+  const r = await new DiagnosticoService(a.db, {}).restaurarHorariosFixos({ ids: ['a', 'b', 'c'] });
+  assert.equal(r.devolvidos, 2, 'plano 2x recebe dois, não três');
+  assert.equal(a.writes.length, 2);
+  assert.match(r.recusados[0].motivo, /já está completo/);
 });
 
 test('script legado recusa --aplicar antes de conectar ao banco', () => {
@@ -185,7 +254,12 @@ test('geracao individual ignora turma desligada', async () => {
   assert.equal(r.criados, 0);
 });
 
-test('conferencia trata historico como revisao, sem oferecer restauracao em lote', async () => {
+/*
+  O achado oferece devolução, mas continua sendo REVISÃO: gravidade "atenção",
+  e o filtro que separa o acidente do remanejamento segue intacto — quem ainda
+  tem um fixo ativo (porque foi remanejado, não apagado) não entra na lista.
+*/
+test('conferencia trata historico como revisao e so oferece devolucao escolhida', async () => {
   const a = ambiente();
   a.fixo.usuario = { ...a.aluno, usuarioPlanos: [a.vinculo] };
   let filtroHistorico;
@@ -199,7 +273,10 @@ test('conferencia trata historico como revisao, sem oferecer restauracao em lote
   const r = await varrerHorariosFixos(a.db);
   assert.equal(r.resumo.graves, 0);
   assert.equal(r.achados[0].gravidade, 'atencao');
-  assert.equal(r.achados[0].acao, undefined);
+  assert.equal(r.achados[0].acao, 'restaurar-horarios-fixos');
+  // Sem os ids na linha, a tela não teria o que mandar e a única devolução
+  // possível voltaria a ser "todos" — que é justamente o que não se quer.
+  assert.deepEqual(r.achados[0].itens[0].horarioFixoIds, ['fixo']);
   assert.deepEqual(filtroHistorico.usuario.horariosFixos, { none: { ativo: true } });
   assert.equal(filtroHistorico.horario.ativo, true);
 });

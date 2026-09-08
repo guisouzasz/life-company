@@ -17,6 +17,15 @@ export type ItemDoAchado = {
   texto: string;
   /** Quando o achado é sobre uma pessoa: deixa a tela levar direto ao cadastro. */
   usuarioId?: string;
+  /**
+   * Os horários fixos desligados a que a linha se refere.
+   *
+   * Só o achado que tem `acao` preenche isto, e existe para a devolução ser
+   * ESCOLHIDA: a tela marca aluno por aluno e manda de volta exatamente estes
+   * ids. Sem eles a única devolução possível seria "todos", que é o que não
+   * se quer — histórico desligado nem sempre é engano.
+   */
+  horarioFixoIds?: string[];
 };
 
 export type Achado = {
@@ -319,8 +328,18 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
       'E enquanto estão lá ocupam a cota da semana. Vale cadastrar o horário fixo de verdade.',
   });
 
-  // Histórico desligado não prova erro: pode ser uma remoção intencional.
-  // Só sugere revisão se o aluno não tiver nenhum fixo ativo.
+  /**
+   * Histórico desligado não prova erro: pode ser uma remoção intencional.
+   * Só sugere revisão se o aluno não tiver NENHUM fixo ativo.
+   *
+   * Esse último filtro é o que separa os dois casos que a tabela não separa
+   * sozinha, porque ela não guarda QUANDO cada fixo foi desligado. Aluno
+   * remanejado — tiraram da quinta, puseram na sexta — continua com um fixo
+   * ativo e não aparece aqui. Quem ficou sem nenhum é a assinatura do
+   * acidente: desligaram e não devolveram nada.
+   *
+   * Não é prova, e por isso a devolução é escolhida na tela, não automática.
+   */
   const desligadosDeQuemTreina = await prisma.horarioFixo.findMany({
     where: {
       ativo: false,
@@ -345,13 +364,15 @@ export async function varrerHorariosFixos(prisma: ClientePrisma): Promise<Varred
     titulo: `${porAlunoDesligado.size} aluno(s) sem fixo ativo e com histórico para revisar`,
     itens: [...porAlunoDesligado.values()].map((lista) => ({
       usuarioId: lista[0].usuarioId,
+      horarioFixoIds: lista.map((f) => f.id),
       texto:
         `${lista[0].usuario.nome} — ` +
         lista.map((f) => `${DIA_LEGIVEL[f.horario.diaSemana]} ${f.horario.horaInicio}`).join(', '),
     })),
     oQueFazer:
-      'Esses horários podem ter sido removidos de propósito. Abra cada aluno e confirme ' +
-      'os dias atuais em Plano e horários. Não restaure o histórico inteiro.',
+      'Podem ter sido removidos de propósito, então confira nome por nome antes de marcar. ' +
+      'O que você marcar volta a valer e as aulas são remarcadas na hora; o resto fica como está.',
+    acao: 'restaurar-horarios-fixos',
   });
 
   const graves = achados.filter((a) => a.gravidade === 'grave');

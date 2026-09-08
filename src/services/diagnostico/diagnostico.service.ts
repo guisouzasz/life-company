@@ -7,8 +7,9 @@ export const diagnosticoService = {
     return data;
   },
 
-  async restaurarHorariosFixos(): Promise<Restauracao> {
-    const { data } = await http.post<Restauracao>('/diagnostico/restaurar-horarios-fixos');
+  /** Devolve só os horários marcados na tela — nunca "todos". */
+  async restaurarHorariosFixos(ids: string[]): Promise<Restauracao> {
+    const { data } = await http.post<Restauracao>('/diagnostico/restaurar-horarios-fixos', { ids });
     return data;
   },
 };
