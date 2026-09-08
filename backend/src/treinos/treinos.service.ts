@@ -66,6 +66,47 @@ export class TreinosService {
     };
   }
 
+  /**
+   * Quem assina a ficha, e com qual modalidade ela fica carimbada.
+   *
+   * Sem `professorId` no corpo, é quem está montando — o comportamento de
+   * sempre. Com ele, a ficha passa a ser do professor escolhido.
+   *
+   * A modalidade acompanha o professor escolhido, e isso não é detalhe: ela é
+   * o que `buscarComPermissao` usa para decidir quem pode editar. Uma ficha
+   * criada pela dona nasce sem modalidade, então nenhum professor conseguia
+   * abrir depois — a dona vinculava o professor e ele não podia mexer no
+   * próprio treino.
+   */
+  private async donoDaFicha(solicitante: Solicitante, dto: SalvarTreinoDto) {
+    const modalidadeDoSolicitante = await this.modalidadeDe(solicitante);
+    if (!dto.professorId || dto.professorId === solicitante.id) {
+      return { professorId: solicitante.id, modalidadeId: modalidadeDoSolicitante };
+    }
+
+    const escolhido = await this.prisma.usuario.findUnique({
+      where: { id: dto.professorId },
+      select: { id: true, tipoUsuario: true, ativo: true, modalidadeProfessorId: true },
+    });
+    if (!escolhido || escolhido.tipoUsuario !== 'PROFESSOR' || !escolhido.ativo) {
+      throw new NotFoundException('Professor não encontrado');
+    }
+
+    /**
+     * Professor não passa ficha para colega de outra modalidade: quem monta um
+     * treino de musculação carimba musculação, e o carimbo é o que dá acesso.
+     * Admin não tem essa amarra — é ela quem distribui o trabalho.
+     */
+    if (solicitante.tipo === 'PROFESSOR' && escolhido.modalidadeProfessorId !== modalidadeDoSolicitante) {
+      throw new ForbiddenException('Esse professor é de outra modalidade');
+    }
+
+    return {
+      professorId: escolhido.id,
+      modalidadeId: escolhido.modalidadeProfessorId ?? modalidadeDoSolicitante,
+    };
+  }
+
   /** Treino de Musculação usa exercicios[]; Funcional/Pilates usa texto livre. */
   private validarFormato(dto: SalvarTreinoDto) {
     const temExercicios = (dto.exercicios?.length ?? 0) > 0;
@@ -77,14 +118,14 @@ export class TreinosService {
 
   async criar(solicitante: Solicitante, dto: SalvarTreinoDto) {
     this.validarFormato(dto);
-    const modalidadeId = await this.modalidadeDe(solicitante);
+    const { professorId, modalidadeId } = await this.donoDaFicha(solicitante, dto);
     const aluno = await this.prisma.usuario.findUnique({ where: { id: dto.alunoId } });
     if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
     return this.prisma.treino.create({
       data: {
         alunoId: dto.alunoId,
-        professorId: solicitante.id,
-        modalidadeId, // null quando criado pelo admin
+        professorId,
+        modalidadeId, // null quando a dona monta sem escolher professor
         titulo: dto.titulo,
         conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
@@ -122,10 +163,18 @@ export class TreinosService {
   async atualizar(id: string, dto: SalvarTreinoDto, solicitante: Solicitante) {
     this.validarFormato(dto);
     await this.buscarComPermissao(id, solicitante);
+    /**
+     * Trocar o professor na edição também vale. Sem isto, corrigir uma ficha
+     * que nasceu com o professor errado exigia apagar e remontar exercício por
+     * exercício — e o histórico de carga do aluno ia junto.
+     */
+    const { professorId, modalidadeId } = await this.donoDaFicha(solicitante, dto);
     return this.prisma.treino.update({
       where: { id },
       data: {
         titulo: dto.titulo,
+        professorId,
+        modalidadeId,
         conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
         ...this.metaDados(dto),

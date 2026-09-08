@@ -7,6 +7,7 @@ import type {
   CriarAlunoPayload,
   CriarAlunoResposta,
   GerarLinkResposta,
+  NomeDeProfessor,
   ProfessorAdmin,
 } from './usuarios.admin.types';
 
@@ -24,6 +25,11 @@ export const usuariosService = {
 
   async listarProfessores(): Promise<ProfessorAdmin[]> {
     const { data } = await http.get<ProfessorAdmin[]>('/usuarios/professores');
+    return data;
+  },
+
+  async listarNomesDeProfessores(): Promise<NomeDeProfessor[]> {
+    const { data } = await http.get<NomeDeProfessor[]>('/usuarios/professores/nomes');
     return data;
   },
 

@@ -248,6 +248,28 @@ export class UsuariosService {
     return professores.map(({ senhaHash, ...p }) => ({ ...p, ativado: !!senhaHash }));
   }
 
+  /**
+   * Nomes dos professores em atividade, para escolher quem assina uma ficha.
+   *
+   * Só quem está ativo: professor desligado não recebe treino novo, e deixá-lo
+   * na lista é convidar ao engano.
+   */
+  async listarNomesDeProfessores() {
+    return this.prisma.usuario.findMany({
+      where: {
+        tipoUsuario: 'PROFESSOR',
+        ativo: true,
+        NOT: { cpf: { startsWith: 'REMOVIDO-' } },
+      },
+      select: {
+        id: true,
+        nome: true,
+        modalidadeProfessor: { select: { id: true, nome: true } },
+      },
+      orderBy: { nome: 'asc' },
+    });
+  }
+
   /** Define a senha de um aluno/professor (o estúdio não envia e-mail). */
   async definirSenha(id: string, senha: string) {
     return this.authService.definirSenhaPorAdmin(id, senha);

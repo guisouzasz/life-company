@@ -8,6 +8,7 @@ import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { formatDate } from '../../services/date';
+import { nomeCurto } from '../../services/nome';
 
 /**
  * O treino de um aluno em leitura: alerta de saúde no topo e as fichas
@@ -94,10 +95,23 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
                   </Text>
                 ) : null}
                 {t.frequencia ? <Text style={s.treinoMeta}>{t.frequencia}</Text> : null}
+                {t.professor ? <Text style={s.treinoMeta}>prof. {nomeCurto(t.professor.nome)}</Text> : null}
               </View>
-              {t.conteudo ? <Text style={s.conteudo}>{t.conteudo}</Text> : null}
+
+              {/*
+                A observação do aluno vem antes de tudo: em aula o professor lê
+                de cima para baixo e começa a série. Se "dor no ombro" está no
+                rodapé, ele lê depois de já ter mandado fazer.
+              */}
+              {t.observacoes ? (
+                <View style={s.obsAluno}>
+                  <Icon name="alert-circle-outline" size={15} color={LC.warningFg} />
+                  <Text style={s.obsAlunoTexto}>{t.observacoes}</Text>
+                </View>
+              ) : null}
+
               <FichaExercicios exercicios={t.exercicios} evolucaoDe={evolucaoDe} onAbrirCarga={onAbrirCarga} />
-              {t.observacoes ? <Text style={s.obs}>{t.observacoes}</Text> : null}
+              {t.conteudo ? <Text style={s.conteudo}>{t.conteudo}</Text> : null}
               {t.vencimento ? (
                 <Text style={s.venc}>Ficha vence em {formatDate(t.vencimento, 'DD/MM/YYYY')}</Text>
               ) : null}
@@ -124,6 +138,11 @@ const s = StyleSheet.create({
   treinoTitulo: { fontSize: 14.5, fontWeight: '800', color: LC.primary, letterSpacing: 0.4 },
   treinoMeta: { fontSize: 12, color: LC.textSecondary },
   conteudo: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, marginTop: 8 },
-  obs: { fontSize: 12, color: LC.textMuted, marginTop: 8, fontStyle: 'italic' },
+  obsAluno: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
+    backgroundColor: LC.warningBg, borderRadius: 9,
+    padding: 9, marginTop: 8,
+  },
+  obsAlunoTexto: { flex: 1, fontSize: 12.5, color: LC.warningFg, lineHeight: 18, fontWeight: '600' },
   venc: { fontSize: 11.5, color: LC.textMuted, marginTop: 6 },
 });

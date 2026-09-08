@@ -92,8 +92,17 @@ export default function MeusTreinos() {
         </View>
       ) : null}
 
-      {/* Funcional/Pilates: o professor escreve o treino em texto livre */}
-      {t.conteudo ? <Text style={s.conteudo}>{t.conteudo}</Text> : null}
+      {/*
+        A observação do professor sobre o aluno, antes dos exercícios. Se diz
+        "sem impacto no joelho", o aluno precisa ler antes de começar — no
+        rodapé, ele lê depois de ter feito.
+      */}
+      {t.observacoes ? (
+        <View style={s.obsAluno}>
+          <Icon name="alert-circle-outline" size={15} color={LC.warningFg} />
+          <Text style={s.obsAlunoTexto}>{t.observacoes}</Text>
+        </View>
+      ) : null}
 
       {/* Musculação: exercícios agrupados por músculo, como na ficha */}
       {porGrupo(t.exercicios).map((bloco) => (
@@ -130,7 +139,12 @@ export default function MeusTreinos() {
         </View>
       ))}
 
-      {t.observacoes ? <Text style={s.obs}>{t.observacoes}</Text> : null}
+      {/*
+        O texto livre agora vem DEPOIS da tabela. Na musculação ele é
+        complemento (aquecimento, alongamento); no Funcional/Pilates é o treino
+        inteiro e a tabela está vazia, então acaba no topo de qualquer jeito.
+      */}
+      {t.conteudo ? <Text style={s.conteudo}>{t.conteudo}</Text> : null}
     </Card>
   );
 
@@ -231,7 +245,12 @@ const s = StyleSheet.create({
   exEvoText: { fontSize: 11, fontWeight: '700', color: LC.textSecondary },
   exDetalhe: { fontSize: 13, fontWeight: '700', color: LC.primary },
 
-  obs: { fontSize: 12, color: LC.textMuted, marginTop: 10, fontStyle: 'italic' },
+  obsAluno: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
+    backgroundColor: LC.warningBg, borderRadius: 9,
+    padding: 10, marginTop: 10,
+  },
+  obsAlunoTexto: { flex: 1, fontSize: 13, color: LC.warningFg, lineHeight: 19, fontWeight: '600' },
   sectionTitle: {
     fontSize: 13, fontWeight: '800', color: LC.textMuted, textTransform: 'uppercase',
     letterSpacing: 0.5, marginTop: 10, marginBottom: 10,

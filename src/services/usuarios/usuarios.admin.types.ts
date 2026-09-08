@@ -84,6 +84,20 @@ export interface GerarLinkResposta {
 }
 
 /**
+ * Professor só com o que serve para escolhê-lo numa lista
+ * (GET /usuarios/professores/nomes).
+ *
+ * Separado de `ProfessorAdmin` porque aquele carrega CPF, e-mail e telefone —
+ * dado de cadastro, que a equipe não precisa ver para vincular um professor a
+ * uma ficha de treino.
+ */
+export interface NomeDeProfessor {
+  id: string;
+  nome: string;
+  modalidadeProfessor?: { id: string; nome: string } | null;
+}
+
+/**
  * Professor do estúdio (GET /usuarios/professores).
  *
  * `ativado` = já tem senha, ou seja, passou pelo primeiro acesso (ou a dona

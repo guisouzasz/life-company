@@ -24,3 +24,18 @@ export function useProfessores() {
     queryFn: usuariosService.listarProfessores,
   });
 }
+
+/**
+ * Só os nomes, para o professor escolher quem assina a ficha.
+ *
+ * Rota separada da de cima porque aquela é de admin e traz CPF, e-mail e
+ * telefone — dado de cadastro que o colega não precisa ver para preencher uma
+ * lista de nomes.
+ */
+export function useNomesDeProfessores() {
+  return useQuery({
+    queryKey: ['usuarios', 'professores', 'nomes'],
+    queryFn: usuariosService.listarNomesDeProfessores,
+    staleTime: 5 * 60 * 1000,
+  });
+}

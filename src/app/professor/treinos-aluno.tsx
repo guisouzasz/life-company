@@ -22,10 +22,12 @@ import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { FichaSaude, alertasDaFicha } from '../../components/professor/ficha-saude';
 import { useMe } from '../../services/auth/auth.queries';
+import { useNomesDeProfessores } from '../../services/usuarios/usuarios.queries';
 import type { ExercicioPayload, Treino } from '../../services/treinos/treinos.types';
 import { ApiError } from '../../services/http';
 import { formatDate } from '../../services/date';
 import { nomeCurto } from '../../services/nome';
+import { dataFuturaParaIso, isoParaData, mascaraData } from '../../services/mascaras';
 
 interface ExercicioForm extends ExercicioPayload {
   seriesTexto: string;
@@ -114,6 +116,8 @@ export default function TreinosAluno() {
   // Funcional e Pilates escrevem o treino em texto livre (blocos de tempo).
   const me = useMe();
   const formatoCarga = usaFichaEstruturada(me.data?.modalidadeProfessor?.nome);
+  /** Para escolher quem assina a ficha — quem monta nem sempre é quem acompanha. */
+  const professores = useNomesDeProfessores();
 
   /** Evolução registrada para um exercício (por nome). */
   const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;
@@ -134,7 +138,17 @@ export default function TreinosAluno() {
   const [escolhendo, setEscolhendo] = useState<{ si: number; ii: number; grupo: string } | null>(null);
   // Metadados da ficha (opcionais)
   const [frequencia, setFrequencia] = useState('');
-  const [vencimento, setVencimento] = useState(''); // YYYY-MM-DD
+  /**
+   * A validade mora em UM lugar só: o texto DD/MM/AAAA que está na tela.
+   *
+   * Os botões de 3/6/12 meses e o campo digitado são duas portas para o mesmo
+   * valor. Guardar cada um no seu estado deixaria os dois discordando assim
+   * que a dona usasse os dois — clica "6 meses", corrige o dia, e qual vale?
+   * Aqui o campo é a verdade e o botão só o preenche.
+   */
+  const [vencimentoTexto, setVencimentoTexto] = useState(''); // DD/MM/AAAA
+  const vencimento = dataFuturaParaIso(vencimentoTexto) ?? ''; // YYYY-MM-DD para a API
+  const [professorId, setProfessorId] = useState('');
 
   const abrirNovo = () => {
     setEditando(null);
@@ -143,7 +157,8 @@ export default function TreinosAluno() {
     setObservacoes('');
     setSecoes([secaoVazia()]);
     setFrequencia('');
-    setVencimento('');
+    setVencimentoTexto('');
+    setProfessorId('');
     setFormAberto(true);
   };
 
@@ -153,7 +168,8 @@ export default function TreinosAluno() {
     setConteudo(t.conteudo ?? '');
     setObservacoes(t.observacoes ?? '');
     setFrequencia(t.frequencia ?? '');
-    setVencimento(t.vencimento ? t.vencimento.slice(0, 10) : '');
+    setVencimentoTexto(isoParaData(t.vencimento));
+    setProfessorId(t.professor?.id ?? '');
     setSecoes(agrupar(t.exercicios));
     setFormAberto(true);
   };
@@ -178,6 +194,33 @@ export default function TreinosAluno() {
   const addSecao = () => setSecoes((atual) => [...atual, secaoVazia()]);
   const removeSecao = (si: number) => setSecoes((atual) => atual.filter((_, i) => i !== si));
 
+  /**
+   * Trocar de lugar sem remontar.
+   *
+   * A ficha sai na ordem em que foi digitada, e a ordem importa: o professor
+   * monta pensando em pernas → ombro → pernas e depois quer juntar as pernas,
+   * para o aluno não atravessar a academia duas vezes. Antes disso, arrumar
+   * significava apagar e redigitar exercício por exercício.
+   *
+   * São setas e não arrastar de propósito: isto é usado com o celular na mão,
+   * em pé na academia, e arrastar dentro de uma tela que já rola sozinha erra
+   * mais do que acerta.
+   */
+  const trocar = <T,>(lista: T[], de: number, para: number): T[] => {
+    if (para < 0 || para >= lista.length) return lista;
+    const copia = [...lista];
+    [copia[de], copia[para]] = [copia[para], copia[de]];
+    return copia;
+  };
+
+  const moverSecao = (si: number, passo: -1 | 1) =>
+    setSecoes((atual) => trocar(atual, si, si + passo));
+
+  const moverItem = (si: number, ii: number, passo: -1 | 1) =>
+    setSecoes((atual) =>
+      atual.map((s, i) => (i === si ? { ...s, itens: trocar(s.itens, ii, ii + passo) } : s)),
+    );
+
   const salvar = () => {
     if (!alunoId) return;
     if (titulo.trim().length < 2) {
@@ -187,6 +230,7 @@ export default function TreinosAluno() {
     const meta = {
       frequencia: frequencia || undefined,
       vencimento: vencimento || undefined,
+      professorId: professorId || undefined,
     };
     let payload;
     if (formatoCarga) {
@@ -211,6 +255,13 @@ export default function TreinosAluno() {
         alunoId,
         titulo: titulo.trim(),
         observacoes: observacoes.trim() || undefined,
+        /**
+         * Na musculação o texto livre é um COMPLEMENTO da tabela, não o
+         * treino inteiro: aquecimento, alongamento, um circuito no final —
+         * coisas que não cabem em série/repetição/carga e que antes o
+         * professor não tinha onde escrever.
+         */
+        conteudo: conteudo.trim() || undefined,
         ...meta,
         exercicios: validos,
       };
@@ -299,16 +350,43 @@ export default function TreinosAluno() {
             </>
           ) : null}
 
+          {/*
+            Sobe para logo abaixo do título porque é o que muda a conduta da
+            aula. "Dor no ombro, sem supino" no rodapé da ficha é um aviso que
+            chega depois da série feita.
+          */}
           <Input
-            label="Observações (opcional)"
-            placeholder="Aquecer 10min antes, alongar no final..."
+            label="Observação do aluno (opcional)"
+            placeholder="Dor no ombro direito, cirurgia de joelho em 2024, evitar impacto..."
             value={observacoes}
             onChangeText={setObservacoes}
             multiline
           />
+          <Text style={s.conteudoHint}>
+            Aparece em destaque no alto da ficha, antes dos exercícios.
+          </Text>
 
-          {/* Detalhes da ficha (opcionais) — frequência, validade, pausa, execução */}
+          {/* Detalhes da ficha (opcionais) — frequência, validade, professor */}
           <Text style={s.sectionTitle}>Detalhes da ficha (opcional)</Text>
+
+          <Text style={s.metaLabel}>Professor responsável</Text>
+          <View style={s.grupoChips}>
+            {(professores.data ?? []).map((p) => {
+              const sel = professorId === p.id;
+              return (
+                <Pressable
+                  key={p.id}
+                  style={[s.grupoChip, sel && s.grupoChipSel]}
+                  onPress={() => setProfessorId(sel ? '' : p.id)}
+                >
+                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{nomeCurto(p.nome)}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {!professorId ? (
+            <Text style={s.metaHint}>Sem escolher, a ficha fica no seu nome.</Text>
+          ) : null}
 
           <Text style={s.metaLabel}>Frequência</Text>
           <View style={s.grupoChips}>
@@ -329,13 +407,43 @@ export default function TreinosAluno() {
               const alvo = d.meses === 0 ? '' : emMeses(d.meses);
               const sel = vencimento === alvo;
               return (
-                <Pressable key={d.label} style={[s.grupoChip, sel && s.grupoChipSel]} onPress={() => setVencimento(alvo)}>
+                <Pressable
+                  key={d.label}
+                  style={[s.grupoChip, sel && s.grupoChipSel]}
+                  onPress={() => setVencimentoTexto(alvo ? isoParaData(alvo) : '')}
+                >
                   <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{d.label}</Text>
                 </Pressable>
               );
             })}
           </View>
-          {vencimento ? <Text style={s.metaHint}>Vence em {formatDate(vencimento, 'DD/MM/YYYY')}</Text> : null}
+          {/*
+            Os botões cobrem o comum (3 meses, 6 meses); o campo cobre o resto.
+            A dona pediu data porque ficha nem sempre vence em múltiplo de mês:
+            vence quando o aluno volta da viagem, quando fecha o ciclo dele.
+          */}
+          {/*
+            Campo mascarado, e não um seletor nativo de data: o app roda como
+            site no celular da dona, e o `type=date` do navegador não atravessa
+            o React Native Web — vira uma caixa de texto comum. Melhor um
+            campo que se comporta igual em todo lugar do que um que funciona
+            num aparelho e falha no outro.
+          */}
+          <Input
+            label="Ou digite a data"
+            value={vencimentoTexto}
+            onChangeText={(v) => setVencimentoTexto(mascaraData(v))}
+            placeholder="DD/MM/AAAA"
+            keyboardType="number-pad"
+            maxLength={10}
+          />
+          {vencimentoTexto.length === 10 && !dataFuturaParaIso(vencimentoTexto) ? (
+            <Text style={s.metaErro}>Essa data não existe. Confira o dia e o mês.</Text>
+          ) : vencimento ? (
+            <Text style={s.metaHint}>Vence em {formatDate(vencimento, 'DD/MM/YYYY')}</Text>
+          ) : (
+            <Text style={s.metaHint}>Sem data, a ficha não vence.</Text>
+          )}
 
           {formatoCarga ? (
             <>
@@ -357,9 +465,31 @@ export default function TreinosAluno() {
                 )}
                 <View style={{ flex: 1 }} />
                 {secoes.length > 1 ? (
-                  <Pressable hitSlop={6} onPress={() => removeSecao(si)}>
-                    <Icon name="trash-outline" size={16} color={LC.danger} />
-                  </Pressable>
+                  <View style={s.mover}>
+                    <Pressable
+                      hitSlop={6}
+                      disabled={si === 0}
+                      onPress={() => moverSecao(si, -1)}
+                      accessibilityLabel={`Subir o grupo ${secao.grupo || si + 1}`}
+                    >
+                      <Icon name="chevron-up" size={18} color={si === 0 ? LC.textMuted : LC.textSecondary} />
+                    </Pressable>
+                    <Pressable
+                      hitSlop={6}
+                      disabled={si === secoes.length - 1}
+                      onPress={() => moverSecao(si, 1)}
+                      accessibilityLabel={`Descer o grupo ${secao.grupo || si + 1}`}
+                    >
+                      <Icon
+                        name="chevron-down"
+                        size={18}
+                        color={si === secoes.length - 1 ? LC.textMuted : LC.textSecondary}
+                      />
+                    </Pressable>
+                    <Pressable hitSlop={6} onPress={() => removeSecao(si)}>
+                      <Icon name="trash-outline" size={16} color={LC.danger} />
+                    </Pressable>
+                  </View>
                 ) : null}
               </View>
 
@@ -377,10 +507,33 @@ export default function TreinosAluno() {
                 <Card key={ii} style={s.exCard} padding={14} bordered>
                   <View style={s.exHead}>
                     <Text style={s.exNum}>{ii + 1}º exercício</Text>
+                    <View style={{ flex: 1 }} />
                     {secao.itens.length > 1 ? (
-                      <Pressable hitSlop={6} onPress={() => removeItem(si, ii)}>
-                        <Icon name="trash-outline" size={16} color={LC.danger} />
-                      </Pressable>
+                      <View style={s.mover}>
+                        <Pressable
+                          hitSlop={6}
+                          disabled={ii === 0}
+                          onPress={() => moverItem(si, ii, -1)}
+                          accessibilityLabel={`Subir ${e.nome || `o ${ii + 1}º exercício`}`}
+                        >
+                          <Icon name="chevron-up" size={18} color={ii === 0 ? LC.textMuted : LC.textSecondary} />
+                        </Pressable>
+                        <Pressable
+                          hitSlop={6}
+                          disabled={ii === secao.itens.length - 1}
+                          onPress={() => moverItem(si, ii, 1)}
+                          accessibilityLabel={`Descer ${e.nome || `o ${ii + 1}º exercício`}`}
+                        >
+                          <Icon
+                            name="chevron-down"
+                            size={18}
+                            color={ii === secao.itens.length - 1 ? LC.textMuted : LC.textSecondary}
+                          />
+                        </Pressable>
+                        <Pressable hitSlop={6} onPress={() => removeItem(si, ii)}>
+                          <Icon name="trash-outline" size={16} color={LC.danger} />
+                        </Pressable>
+                      </View>
                     ) : null}
                   </View>
                   {/* Com o grupo escolhido, o nome vem do catálogo daquele
@@ -429,6 +582,25 @@ export default function TreinosAluno() {
             <Icon name="add" size={18} color="#fff" />
             <Text style={s.addGrupoText}>Adicionar grupo muscular</Text>
           </Pressable>
+
+          {/*
+            Texto livre TAMBÉM na musculação — complementando a tabela, não
+            substituindo. Aquecimento, alongamento, um circuito no fim: coisas
+            que não têm série nem carga e que antes não tinham onde ser
+            escritas, então iam parar na observação do aluno, misturadas com
+            "dor no ombro".
+          */}
+          <Text style={s.sectionTitle}>Mais alguma coisa? (opcional)</Text>
+          <Input
+            placeholder={'Aquecimento: 10min de esteira\nAlongar posterior no fim\nAbdominal: 3x20 livre'}
+            value={conteudo}
+            onChangeText={setConteudo}
+            multiline
+            style={s.conteudoInput}
+          />
+          <Text style={s.conteudoHint}>
+            Escreva livre. Sai na ficha logo abaixo da tabela de exercícios.
+          </Text>
             </>
           ) : null}
 
@@ -558,7 +730,7 @@ export default function TreinosAluno() {
                   </Pressable>
                 </View>
 
-                {(metaResumo(t) || t.vencimento) ? (
+                {(metaResumo(t) || t.vencimento || t.professor) ? (
                   <View style={s.metaChips}>
                     {metaResumo(t) ? <Text style={s.metaChipText}>{metaResumo(t)}</Text> : null}
                     {t.vencimento ? (
@@ -566,17 +738,29 @@ export default function TreinosAluno() {
                         {metaResumo(t) ? '• ' : ''}vence {formatDate(t.vencimento, 'DD/MM/YYYY')}
                       </Text>
                     ) : null}
+                    {t.professor ? (
+                      <Text style={s.metaChipText}>
+                        {metaResumo(t) || t.vencimento ? '• ' : ''}prof. {nomeCurto(t.professor.nome)}
+                      </Text>
+                    ) : null}
                   </View>
                 ) : null}
 
-                {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
+                {/* Antes dos exercícios: é o que muda a conduta da série. */}
+                {t.observacoes ? (
+                  <View style={s.obsAluno}>
+                    <Icon name="alert-circle-outline" size={16} color={LC.warningFg} />
+                    <Text style={s.obsAlunoTexto}>{t.observacoes}</Text>
+                  </View>
+                ) : null}
 
                 <FichaExercicios
                   exercicios={t.exercicios}
                   evolucaoDe={evolucaoDe}
                   onAbrirCarga={setCargaDe}
                 />
-                {t.observacoes ? <Text style={s.treinoObs}>{t.observacoes}</Text> : null}
+
+                {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
               </Card>
             ))
           ) : (
@@ -653,7 +837,17 @@ const s = StyleSheet.create({
   metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   metaChipText: { fontSize: 12, fontWeight: '600', color: LC.textSecondary },
   acao: { width: 34, height: 34, borderRadius: 17, backgroundColor: LC.primaryLight, alignItems: 'center', justifyContent: 'center' },
-  treinoObs: { fontSize: 12, color: LC.textMuted, marginTop: 10, fontStyle: 'italic' },
+  /*
+    A observação do aluno é aviso de conduta, não rodapé: fundo âmbar, ícone e
+    posição fixa logo abaixo do título. Ela concorre com a tabela de
+    exercícios pela atenção de quem está em pé na academia, e tem que ganhar.
+  */
+  obsAluno: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: LC.warningBg, borderRadius: 10,
+    padding: 10, marginBottom: 10,
+  },
+  obsAlunoTexto: { flex: 1, fontSize: 13, color: LC.warningFg, lineHeight: 19, fontWeight: '600' },
   conteudoTexto: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, paddingTop: 6, borderTopWidth: 1, borderTopColor: LC.border },
 
   // Form
@@ -695,6 +889,8 @@ const s = StyleSheet.create({
   seletorPlaceholder: { flex: 1, fontSize: 15, color: LC.textMuted },
   exCard: { marginBottom: 12, gap: 10 },
   exHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mover: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  metaErro: { fontSize: 12, color: LC.danger, marginTop: -2, marginBottom: 6 },
   exNum: { fontSize: 12, fontWeight: '800', color: LC.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
   exRow: { flexDirection: 'row', gap: 8 },
   addExBtn: {

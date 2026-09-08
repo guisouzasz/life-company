@@ -26,6 +26,18 @@ export class UsuariosController {
   @Get('professores') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Professores do estúdio (admin)' })
   listarProfessores() { return this.service.listarProfessores(); }
 
+  /**
+   * Só id, nome e modalidade — para escolher quem assina a ficha de treino.
+   *
+   * Separada de `/professores` porque aquela devolve CPF, e-mail e telefone
+   * dos colegas: dado de cadastro, que é da administração. Preencher uma lista
+   * de nomes não precisa de nada disso, e entrega-se o menor conjunto que
+   * resolve.
+   */
+  @Get('professores/nomes') @UseGuards(StaffGuard)
+  @ApiOperation({ summary: 'Nomes dos professores ativos (equipe)' })
+  listarNomesDeProfessores() { return this.service.listarNomesDeProfessores(); }
+
   @Get('me/saldo') @ApiOperation({ summary: 'Saldo semanal do aluno logado' })
   saldo(@Request() req) { return this.service.saldoSemanal(req.user.id); }
 

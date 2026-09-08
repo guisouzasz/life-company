@@ -65,6 +65,26 @@ export function dataParaIso(v: string): string | null {
   return `${String(ano).padStart(4, '0')}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 
+/**
+ * "DD/MM/AAAA" → "AAAA-MM-DD", aceitando data FUTURA.
+ *
+ * `dataParaIso` recusa o futuro porque foi feita para nascimento. Validade de
+ * ficha de treino é o oposto: ela vence adiante, e é a data futura que
+ * interessa. O resto da checagem continua igual — dia que não existe no
+ * calendário (31/02, mês 13) segue recusado.
+ */
+export function dataFuturaParaIso(v: string): string | null {
+  const d = v.replace(/\D/g, '');
+  if (d.length !== 8) return null;
+  const dia = Number(d.slice(0, 2));
+  const mes = Number(d.slice(2, 4));
+  const ano = Number(d.slice(4));
+  if (ano < 2000 || ano > 2100) return null;
+  const data = new Date(ano, mes - 1, dia);
+  if (data.getFullYear() !== ano || data.getMonth() + 1 !== mes || data.getDate() !== dia) return null;
+  return `${String(ano).padStart(4, '0')}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+
 /** Data vinda da API (ISO) → "DD/MM/AAAA" para preencher o formulário. */
 export function isoParaData(v?: string | null): string {
   if (!v) return '';

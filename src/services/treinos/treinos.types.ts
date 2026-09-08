@@ -62,11 +62,21 @@ export interface SalvarTreinoDiaPayload {
 export interface SalvarTreinoPayload {
   alunoId: string;
   titulo: string;
-  /** Texto livre (Funcional/Pilates). Exige conteudo OU exercicios. */
+  /**
+   * Texto livre. No Funcional/Pilates é o treino inteiro; na musculação é o
+   * complemento da tabela (aquecimento, alongamento). Exige conteudo OU
+   * exercicios.
+   */
   conteudo?: string;
+  /** Sobre o ALUNO: dor, cirurgia, limitação. Sai no alto da ficha. */
   observacoes?: string;
   /** Metadados da ficha (opcionais). */
   vencimento?: string; // YYYY-MM-DD
   frequencia?: string;
+  /**
+   * Professor responsável. Ausente, fica quem está montando — quem monta nem
+   * sempre é quem acompanha: a dona cadastra e a ficha é do professor.
+   */
+  professorId?: string;
   exercicios?: ExercicioPayload[];
 }

@@ -44,10 +44,26 @@ export class SalvarTreinoDto {
   @IsOptional() @IsString() @MinLength(3)
   conteudo?: string;
 
+  /**
+   * Observação sobre o ALUNO: dor, incômodo, cirurgia, limitação.
+   *
+   * Vale para esta ficha e aparece no alto dela, logo abaixo do título — quem
+   * vai conduzir a série precisa ler isto antes de começar, não depois.
+   */
   @IsOptional() @IsString()
   observacoes?: string;
 
   // ── Metadados da ficha (opcionais) ─────────────────────────────────
+  /**
+   * Professor responsável pela ficha.
+   *
+   * Ausente, fica quem está montando — que era o comportamento antigo e segue
+   * valendo. Existe porque quem monta nem sempre é quem acompanha: a dona
+   * cadastra pelo painel e o treino é do professor da musculação.
+   */
+  @IsOptional() @IsString()
+  professorId?: string;
+
   /** Vencimento em YYYY-MM-DD (ou vazio para sem prazo). */
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'vencimento deve ser YYYY-MM-DD' })
   vencimento?: string;
