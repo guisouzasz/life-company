@@ -11,7 +11,7 @@
  * aceite do texto novo de quem já usa o sistema é preciso uma tela à parte,
  * porque este termo só barra o primeiro acesso.
  */
-export const VERSAO_TERMO = '2026-08-27';
+export const VERSAO_TERMO = '2026-09-09';
 
 export interface SecaoDoTermo {
   titulo: string;
@@ -51,7 +51,7 @@ export const TERMO = {
       titulo: '3. Política de reposição de aulas',
       itens: [
         'Agendamento autônomo: A marcação de reposições é feita exclusivamente pelo aluno através do site oficial da academia. Não serão aceitos agendamentos via WhatsApp.',
-        'Limite e validade: Cada aluno pode agendar até 5 (cinco) reposições a cada 30 dias. O crédito gerado por uma falta expira em 30 dias corridos a contar da data da aula cancelada.',
+        'Limite e validade: Cada aluno pode agendar até 3 (três) reposições a cada 30 dias. O crédito gerado por uma falta expira em 30 dias corridos a contar da data da aula cancelada.',
         'Disponibilidade de vagas: As reposições estão sujeitas à existência de vagas nos horários desejados.',
         'Compromisso de presença: Uma vez agendada no sistema, a reposição é confirmada e não permite novo cancelamento ou reagendamento.',
         'Regras gerais: O crédito de reposição é pessoal e intransferível. Faltas em dias de feriados (quando a academia não abre) não geram direito a reposição.',

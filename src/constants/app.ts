@@ -27,7 +27,7 @@ export const DIAS_VALIDADE_CREDITO = 30;
  * número. Espelha MAX_REPOSICOES_POR_PERIODO e DIAS_PERIODO_REPOSICOES em
  * backend/src/creditos/creditos.constantes.ts — manter em sincronia.
  */
-export const MAX_REPOSICOES_POR_PERIODO = 5;
+export const MAX_REPOSICOES_POR_PERIODO = 3;
 export const DIAS_PERIODO_REPOSICOES = 30;
 
 export const DIAS_PT: Record<string, string> = {
