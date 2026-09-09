@@ -109,6 +109,31 @@ const AJUSTES: { descricao: string; sql: string }[] = [
               ON DELETE SET NULL ON UPDATE CASCADE;
           EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
   },
+  {
+    // A ficha de anamnese foi reescrita a pedido do estúdio: contato de
+    // emergência, fatores da profissão, patologias em lista, PAR-Q e as
+    // regiões de dor marcadas no boneco. Tudo anulável e aditivo — as
+    // colunas antigas ficam, porque guardam o que os alunos já responderam.
+    descricao: 'anamneses: ficha reescrita (emergência, profissão, patologias, PAR-Q, dor)',
+    sql: `ALTER TABLE "anamneses"
+            ADD COLUMN IF NOT EXISTS "contato_emergencia_nome" TEXT,
+            ADD COLUMN IF NOT EXISTS "contato_emergencia_telefone" TEXT,
+            ADD COLUMN IF NOT EXISTS "objetivos" TEXT,
+            ADD COLUMN IF NOT EXISTS "experiencia" TEXT,
+            ADD COLUMN IF NOT EXISTS "profissao" TEXT,
+            ADD COLUMN IF NOT EXISTS "postura_predominante" TEXT,
+            ADD COLUMN IF NOT EXISTS "movimentos_repetitivos" BOOLEAN,
+            ADD COLUMN IF NOT EXISTS "movimentos_repetitivos_quais" TEXT,
+            ADD COLUMN IF NOT EXISTS "patologias" TEXT,
+            ADD COLUMN IF NOT EXISTS "patologia_outra" TEXT,
+            ADD COLUMN IF NOT EXISTS "usa_medicamento" BOOLEAN,
+            ADD COLUMN IF NOT EXISTS "fez_cirurgia" BOOLEAN,
+            ADD COLUMN IF NOT EXISTS "cirurgia_qual" TEXT,
+            ADD COLUMN IF NOT EXISTS "tem_lesao" BOOLEAN,
+            ADD COLUMN IF NOT EXISTS "tem_dor" BOOLEAN,
+            ADD COLUMN IF NOT EXISTS "regioes_dor" TEXT,
+            ADD COLUMN IF NOT EXISTS "parq" TEXT`,
+  },
 ];
 
 /**

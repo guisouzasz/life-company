@@ -94,24 +94,24 @@ model Usuario {
 /// e treino. O log não pode virar uma segunda cópia dos dados de saúde do
 /// aluno — guarda o suficiente para reconstruir a ação, não os dados dela.
 model LogAcao {
-  id         String   @id @default(uuid())
+  id          String   @id @default(uuid())
   /// Quem fez. Null quando a ação não tinha sessão (ex: login que falhou).
-  usuarioId  String?  @map("usuario_id")
+  usuarioId   String?  @map("usuario_id")
   /// Nome e tipo copiados no momento da ação: se o usuário for editado ou
   /// desativado depois, o log continua contando a história certa.
-  usuarioNome String  @map("usuario_nome")
-  usuarioTipo String  @map("usuario_tipo")
-  metodo     String
-  rota       String
+  usuarioNome String   @map("usuario_nome")
+  usuarioTipo String   @map("usuario_tipo")
+  metodo      String
+  rota        String
   /// Frase legível, montada a partir da rota ("Colocou aluno na aula").
-  resumo     String
+  resumo      String
   /// Registro afetado, quando dá para saber pela rota.
-  entidadeId String?  @map("entidade_id")
+  entidadeId  String?  @map("entidade_id")
   /// Campos úteis e seguros do corpo, em JSON. Nunca dados sensíveis.
-  detalhe    String?
-  status     Int
-  ip         String?
-  criadoEm   DateTime @default(now()) @map("criado_em")
+  detalhe     String?
+  status      Int
+  ip          String?
+  criadoEm    DateTime @default(now()) @map("criado_em")
 
   usuario Usuario? @relation(fields: [usuarioId], references: [id])
 
@@ -144,17 +144,63 @@ model Anamnese {
   id        String @id @default(uuid())
   usuarioId String @unique @map("usuario_id")
 
-  objetivo        String? // Emagrecimento, Hipertrofia, Condicionamento...
-  nivelAtividade  String? // Sedentário, Já treinei, Treino regularmente
-  problemasSaude  String? // hipertensão, diabetes, cardíaco... (texto livre)
-  lesoes          String? // lesões e cirurgias
-  dores           String? // dores articulares / coluna
-  medicamentos    String?
+  // ── Identificação ────────────────────────────────────────────────────
+  // O contato de emergência é a única resposta que a ficha exige: é o que
+  // alguém precisa ter em mãos quando o aluno passa mal na sala.
+  contatoEmergenciaNome     String? @map("contato_emergencia_nome")
+  contatoEmergenciaTelefone String? @map("contato_emergencia_telefone")
+
+  // ── Objetivos e rotina ───────────────────────────────────────────────
+  /// Até 2 objetivos, em JSON: ["Emagrecimento", "Hipertrofia"].
+  objetivos   String?
+  experiencia String? // nunca treinei / parado há meses / treino regularmente
+
+  // ── Fatores da profissão ─────────────────────────────────────────────
+  // Postura e repetição do trabalho mudam o treino tanto quanto uma lesão:
+  // quem passa oito horas sentado chega com outra queixa de quem carrega peso.
+  profissao                  String?
+  posturaPredominante        String?  @map("postura_predominante")
+  movimentosRepetitivos      Boolean? @map("movimentos_repetitivos")
+  movimentosRepetitivosQuais String?  @map("movimentos_repetitivos_quais")
+
+  // ── Patologias ───────────────────────────────────────────────────────
+  /// Lista marcada, em JSON: ["Hipertensão (pressão alta)", "Diabetes"].
+  patologias     String?
+  patologiaOutra String? @map("patologia_outra")
+
+  // Cada "sim/não" tem seu campo de texto ao lado: o booleano diz se a
+  // pergunta foi respondida, o texto diz o quê. Sem o booleano, "não tem
+  // lesão" e "não respondeu" seriam a mesma coisa — os dois campos vazios.
+  usaMedicamento Boolean? @map("usa_medicamento")
+  medicamentos   String?
+  fezCirurgia    Boolean? @map("fez_cirurgia")
+  cirurgiaQual   String?  @map("cirurgia_qual")
+  temLesao       Boolean? @map("tem_lesao")
+  lesoes         String?
+  temDor         Boolean? @map("tem_dor")
+  dores          String?
+  /// Regiões marcadas no boneco, em JSON: ["ombro-d", "lombar"].
+  regioesDor     String?  @map("regioes_dor")
+
+  // ── PAR-Q resumido ───────────────────────────────────────────────────
+  /// Itens marcados, em JSON. Vazio = nenhuma das opções se aplica.
+  parq String?
+
+  observacoes String?
+
+  // Legado: saíram da ficha quando ela foi reescrita e não são mais
+  // gravados. As colunas ficam porque guardam o que os alunos já
+  // responderam — a ficha do professor ainda mostra `objetivo`,
+  // `nivelAtividade` e `problemasSaude` quando os campos novos estão vazios,
+  // para não zerar 30 fichas de uma vez. `alergias`, `gestante`, `fumante` e
+  // `liberacaoMedica` saíram do documento novo e não são mais exibidos.
+  objetivo        String?
+  nivelAtividade  String?
+  problemasSaude  String?
   alergias        String?
   gestante        Boolean @default(false)
   fumante         Boolean @default(false)
-  liberacaoMedica Boolean @default(false) // tem atestado/liberação médica
-  observacoes     String?
+  liberacaoMedica Boolean @default(false)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
