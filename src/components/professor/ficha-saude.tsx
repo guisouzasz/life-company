@@ -85,19 +85,46 @@ function SimNao({
   );
 }
 
-/** Lista marcada, como selos. Some quando o aluno não marcou nada. */
-function Marcadas({ rotulo, itens }: { rotulo: string; itens: string[] }) {
+/**
+ * Lista marcada. Some quando o aluno não marcou nada.
+ *
+ * Dois formatos, e a escolha não é estética: pastilha só serve para rótulo
+ * curto. As perguntas do PAR-Q são frases inteiras, e como pastilha elas
+ * vazavam pela borda direita da tela do celular — o professor lia metade de
+ * "Você tem algum problema ósseo ou articular que pode ser…" e o resto ficava
+ * fora. Frase vira lista, com o texto quebrando em linha.
+ */
+function Marcadas({
+  rotulo,
+  itens,
+  formato = 'selo',
+}: {
+  rotulo: string;
+  itens: string[];
+  formato?: 'selo' | 'lista';
+}) {
   if (itens.length === 0) return null;
   return (
     <View style={s.campo}>
       <Text style={s.rotulo}>{rotulo}</Text>
-      <View style={s.selos}>
-        {itens.map((i) => (
-          <View key={i} style={s.selo}>
-            <Text style={s.seloTexto}>{i}</Text>
-          </View>
-        ))}
-      </View>
+      {formato === 'lista' ? (
+        <View style={s.linhas}>
+          {itens.map((i) => (
+            <View key={i} style={s.linha}>
+              <Text style={s.marcador}>•</Text>
+              <Text style={s.linhaTexto}>{i}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={s.selos}>
+          {itens.map((i) => (
+            <View key={i} style={s.selo}>
+              <Text style={s.seloTexto}>{i}</Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -191,7 +218,7 @@ export function FichaSaude({ ficha, alunoNome, completa = false }: Props) {
 
       {completa ? (
         <>
-          <Marcadas rotulo="PAR-Q — respostas de risco" itens={parq} />
+          <Marcadas rotulo="PAR-Q — respostas de risco" itens={parq} formato="lista" />
           {parq.length === 0 && ficha.parq !== undefined ? (
             <View style={s.campo}>
               <Text style={s.rotulo}>PAR-Q</Text>
@@ -237,8 +264,21 @@ const s = StyleSheet.create({
   valorVazio: { color: LC.textMuted, fontStyle: 'italic' },
 
   selos: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  selo: { backgroundColor: LC.neutralBg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  seloTexto: { fontSize: 12.5, color: LC.textPrimary, fontWeight: '600' },
+  /*
+    `maxWidth` e `flexShrink` são a rede de segurança: uma pastilha com rótulo
+    comprido quebra em duas linhas em vez de vazar pela borda da tela. Foi o
+    que aconteceu com as perguntas do PAR-Q antes de virarem lista.
+  */
+  selo: {
+    backgroundColor: LC.neutralBg, borderRadius: 14,
+    paddingHorizontal: 10, paddingVertical: 5, maxWidth: '100%',
+  },
+  seloTexto: { flexShrink: 1, fontSize: 12.5, color: LC.textPrimary, fontWeight: '600', lineHeight: 18 },
+
+  linhas: { marginTop: 6, gap: 6 },
+  linha: { flexDirection: 'row', gap: 7 },
+  marcador: { fontSize: 13, color: LC.textMuted, lineHeight: 19 },
+  linhaTexto: { flex: 1, fontSize: 13.5, color: LC.textPrimary, lineHeight: 19 },
 
   boneco: { marginTop: 8 },
 
