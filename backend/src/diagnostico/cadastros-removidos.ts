@@ -24,6 +24,11 @@ import { PrismaClient } from '@prisma/client';
  * o plano que tinha e em que turmas vinha. É menos do que um backup do banco
  * devolveria, e por isso o relatório diz isso em voz alta: se houver backup,
  * é o backup que se usa.
+ *
+ * A ficha de anamnese NÃO está entre o que sobrevive — ela é apagada junto com
+ * o cadastro, e o boot varre as que ficaram de versões antigas. `temAnamnese`
+ * continua no relatório só como alarme: se vier verdadeiro, uma dessas duas
+ * coisas falhou.
  */
 
 type ClientePrisma = Pick<PrismaClient, 'usuario' | 'agendamento' | 'logAcao' | 'anamnese' | 'horario'>;
@@ -56,7 +61,11 @@ export type CadastroRemovido = {
    * inferência a partir das aulas, é a combinação que alguém cadastrou.
    */
   fixosNoRegistro: string[];
-  /** A ficha de saúde não é apagada na exclusão — continua ligada ao id. */
+  /**
+   * Sinal de alarme, não informação: a exclusão apaga a anamnese e o boot
+   * varre as que sobraram de versões antigas. Se isto vier `true`, alguma
+   * dessas duas coisas não funcionou.
+   */
   temAnamnese: boolean;
 };
 

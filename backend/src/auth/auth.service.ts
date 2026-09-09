@@ -73,6 +73,21 @@ export class AuthService {
       await tx.registroCarga.deleteMany({ where: { OR: [{ alunoId: usuarioId }, { professorId: usuarioId }] } });
       await tx.treino.deleteMany({ where: { OR: [{ alunoId: usuarioId }, { professorId: usuarioId }] } });
       await tx.treinoDia.deleteMany({ where: { professorId: usuarioId } });
+      /**
+       * A ficha de anamnese também sai — e ela é o dado mais sensível que o
+       * sistema guarda: lesão, cirurgia, medicamento controlado, patologia.
+       *
+       * Ficou de fora desta lista por descuido e sobrevivia à exclusão,
+       * pendurada num cadastro que já não tem nome. Esta rota promete que "os
+       * dados pessoais foram removidos"; deixar justamente o de saúde para
+       * trás é o pior jeito possível de não cumprir isso.
+       *
+       * O que FICA, e é decisão e não esquecimento: agendamentos e pagamentos
+       * (histórico do estúdio, já anônimo), o aceite do termo (a prova de que
+       * a pessoa concordou, e que não guarda nada além de data e versão) e o
+       * registro de ações.
+       */
+      await tx.anamnese.deleteMany({ where: { usuarioId } });
 
       // Anonimiza o cadastro (mantém agendamentos/pagamentos como histórico anônimo)
       await tx.usuario.update({

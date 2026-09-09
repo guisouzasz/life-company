@@ -199,8 +199,16 @@ function CartaoRemovido({ r }: { r: CadastroRemovido }) {
         <Text style={s.removidoDado}>Sem aulas registradas — não dá para saber o horário.</Text>
       )}
 
+      {/*
+        Depois do conserto, a exclusão apaga a anamnese e o boot varre as que
+        sobraram — então esta linha só deve aparecer se alguma coisa falhou.
+        Deixa de ser informação e passa a ser aviso.
+      */}
       {r.temAnamnese ? (
-        <Text style={s.removidoNota}>A ficha de saúde não foi apagada e continua no sistema.</Text>
+        <Text style={s.removidoNota}>
+          ⚠ A ficha de saúde deste cadastro ainda está no banco. Deveria ter sido apagada na
+          exclusão — avise o suporte.
+        </Text>
       ) : null}
     </View>
   );

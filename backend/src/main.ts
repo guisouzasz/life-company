@@ -9,6 +9,7 @@ import { garantirEsquema } from './prisma/garantir-esquema';
 import { garantirDono } from './prisma/garantir-dono';
 import { corrigirMatricula } from './prisma/corrigir-matricula';
 import { limparInativos } from './prisma/limpar-inativos';
+import { limparAnamneseOrfa } from './prisma/limpar-anamnese-orfa';
 
 /** Origens do app web autorizadas a chamar a API (CORS_ORIGINS separa por vírgula). */
 const ORIGENS_PADRAO = [
@@ -88,6 +89,16 @@ async function bootstrap() {
    */
   await limparInativos(app.get(PrismaService)).catch((e) =>
     console.error('não consegui limpar as turmas dos alunos inativos:', e?.message),
+  );
+
+  /**
+   * Apaga ficha de saúde que sobrou de cadastro já excluído. Também não
+   * derruba o boot: é arrumação, e o estúdio funciona sem ela — mas é a que
+   * mexe com o dado mais sensível, então roda em todo boot até não achar mais
+   * nada.
+   */
+  await limparAnamneseOrfa(app.get(PrismaService)).catch((e) =>
+    console.error('não consegui limpar as anamneses órfãs:', e?.message),
   );
 
   const port = process.env.PORT || 3000;
