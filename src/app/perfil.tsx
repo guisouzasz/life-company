@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/auth';
@@ -13,6 +13,8 @@ import { useSaldo } from '../services/usuarios/usuarios.queries';
 import { useMinhaAnamnese } from '../services/anamnese/anamnese.queries';
 import { useLogout, useExcluirConta } from '../services/auth/auth.mutations';
 import { ApiError } from '../services/http';
+import { InstalarAppModal } from '../components/instalar-app';
+import { jaInstalado } from '../services/instalar';
 
 export default function Perfil() {
   const nome = useAuthStore((s) => s.nome);
@@ -25,6 +27,15 @@ export default function Perfil() {
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [erroExcluir, setErroExcluir] = useState<string | null>(null);
   const [emBreve, setEmBreve] = useState(false);
+  const [instalar, setInstalar] = useState(false);
+  /*
+    Decidido depois de montar, e não na primeira renderização: no `output:
+    static` o HTML sai do servidor, onde não existe `window` para perguntar se
+    o site já está na tela inicial. Decidir lá deixaria o servidor e o celular
+    montando menus diferentes.
+  */
+  const [podeInstalar, setPodeInstalar] = useState(false);
+  useEffect(() => setPodeInstalar(!jaInstalado()), []);
 
   const excluirConta = () => {
     excluir.mutate(undefined, {
@@ -47,6 +58,19 @@ export default function Perfil() {
     { label: 'Alterar senha', icon: 'lock-closed-outline', onPress: () => setEmBreve(true) },
     { label: 'Notificações', icon: 'notifications-outline', onPress: () => router.push('/notificacoes') },
   ];
+
+  /*
+    Só entra quando faz sentido: no app nativo (se existir) e em quem já
+    salvou na tela inicial, este item seria um convite para instalar o que já
+    está instalado.
+  */
+  if (podeInstalar) {
+    menu.push({
+      label: 'Adicionar à tela de início',
+      icon: 'phone-portrait-outline',
+      onPress: () => setInstalar(true),
+    });
+  }
 
   const info: { label: string; value: string }[] = [
     { label: 'Nome', value: nome || '—' },
@@ -165,6 +189,7 @@ export default function Perfil() {
         message="Para alterar seus dados, fale com a recepção do studio."
         onClose={() => setEmBreve(false)}
       />
+      <InstalarAppModal visible={instalar} onClose={() => setInstalar(false)} />
     </View>
   );
 }

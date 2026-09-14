@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AnelProgresso } from '../components/ui/anel-progresso';
 import { Toque, EntraSubindo } from '../components/ui/motion';
+import { ConviteInstalar } from '../components/convite-instalar';
 import { primeiroNome as soPrimeiroNome } from '../services/nome';
 import { useAuthStore } from '../store/auth';
 import { LC } from '../constants/theme';
@@ -154,6 +155,16 @@ export default function Dashboard() {
           </Card>
         )}
 
+        {/*
+          O convite de instalar entra depois da próxima aula e antes do
+          resumo: o aluno abre a tela para ver quando treina, e essa
+          informação continua sendo a primeira. O cartão se dispensa e some
+          para quem já instalou.
+        */}
+        <View style={s.convite}>
+          <ConviteInstalar />
+        </View>
+
         {/* Resumo */}
         <View style={s.sectionTitleRow}>
           <Text style={s.sectionTitle}>Resumo do mês</Text>
@@ -285,6 +296,8 @@ const s = StyleSheet.create({
   linkText: { color: '#fff', fontSize: 12.5, fontWeight: '700' },
 
   block: { marginHorizontal: 16, marginBottom: 12 },
+  // As mesmas margens dos outros cartões: encostado na borda ele saltava fora da coluna.
+  convite: { marginHorizontal: 16, marginBottom: 12 },
   metaLabel: { fontSize: 12, color: LC.textMuted, marginBottom: 3 },
   planRow: { flexDirection: 'row', alignItems: 'flex-start' },
   planNome: { fontSize: 18, fontWeight: '800', color: LC.textPrimary },
