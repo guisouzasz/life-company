@@ -343,6 +343,71 @@ test('geracao com leitura antiga nao recria aula de fixo removido', async () => 
   assert.equal(a.writes.length, 0);
 });
 
+/*
+  A agenda materializa a semana toda vez que é aberta. Se a geração tratar aula
+  CANCELADA como aula que nunca existiu, ela remarca — e a dona tira alguém de
+  uma quinta, a tela recarrega, e o aluno está de volta. Foi assim que a agenda
+  ficou com fama de não aceitar alteração.
+
+  A propriedade tem dois lados, e os dois são testados: o dia desmarcado fica
+  desmarcado, e as OUTRAS semanas continuam sendo geradas.
+*/
+function bancadaDeGeracao({ cancelada = null } = {}) {
+  const a = ambiente();
+  const consultas = [];
+  const criadas = [];
+  a.db.horarioFixo.findMany = async () => [a.fixo];
+  a.db.agendamento.findMany = async (args) => {
+    consultas.push(args.where);
+    if (!cancelada) return [];
+    // O banco de mentira honra o filtro de status: sem isto, consultar só os
+    // CONFIRMADOS ainda devolveria a linha cancelada e o teste não veria a
+    // regressão que existe justamente nesse filtro.
+    if (args.where.status && args.where.status !== 'CANCELADO') return [];
+    return [{ usuarioId: 'aluno', horarioId: 'turma', dataAula: cancelada }];
+  };
+  const agendamentos = {
+    criarComoAdmin: async (dto) => { criadas.push(dto.dataAula); return {}; },
+  };
+  return { a, consultas, criadas, auto: new AutoAgendamentoService(a.db, agendamentos) };
+}
+
+test('a geracao olha aula desmarcada tambem, nao so a confirmada', async () => {
+  const { consultas, auto } = bancadaDeGeracao();
+  const seg = dayjs(proximaSegunda());
+  await auto.gerarAgendamentosFixosNoPeriodo(seg.toDate(), seg.add(6, 'day').toDate());
+
+  const filtro = consultas.find((w) => w.dataAula);
+  assert.ok(filtro, 'consultou os agendamentos do período');
+  assert.equal(filtro.status, undefined,
+    'filtrar por CONFIRMADO faz aula cancelada parecer aula que nunca existiu');
+});
+
+test('dia desmarcado de proposito nao volta na proxima abertura da agenda', async () => {
+  const seg = dayjs(proximaSegunda());
+  const { criadas, auto } = bancadaDeGeracao({ cancelada: seg.toDate() });
+  await auto.gerarAgendamentosFixosNoPeriodo(seg.toDate(), seg.add(21, 'day').toDate());
+
+  assert.ok(!criadas.includes(seg.format('YYYY-MM-DD')),
+    'a segunda que a dona desmarcou não pode ser remarcada');
+  assert.ok(criadas.length > 0, 'e as outras semanas continuam entrando');
+  assert.ok(criadas.includes(seg.add(7, 'day').format('YYYY-MM-DD')),
+    'o horário fixo continua valendo na semana seguinte');
+});
+
+test('criar o horario fixo na mao remarca, mesmo com dia cancelado', async () => {
+  /*
+    A distinção que faz a regra ser útil: automático nunca ressuscita, mas
+    quando a dona monta a combinação ela está pedindo as aulas de volta.
+  */
+  const a = ambiente();
+  const criadas = [];
+  const agendamentos = { criarComoAdmin: async (dto) => { criadas.push(dto.dataAula); return {}; } };
+  const auto = new AutoAgendamentoService(a.db, agendamentos);
+  await auto.gerarParaHorarioFixoId('fixo');
+  assert.ok(criadas.length > 0, 'a criação manual gera as aulas sem consultar o que foi cancelado');
+});
+
 test('turma desligada enquanto aguarda trava nao recebe aula', async () => {
   const a = ambiente();
   a.db.$queryRaw = async () => { a.turma.ativo = false; return []; };

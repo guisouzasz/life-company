@@ -132,9 +132,26 @@ export class AutoAgendamentoService {
 
     if (fixos.length === 0) return total;
 
+    /**
+     * Data que já tem linha — marcada OU desmarcada — não se mexe.
+     *
+     * O filtro era só `CONFIRMADO`, e aí aula cancelada ficava idêntica a aula
+     * que nunca existiu: a geração remarcava. Como a agenda materializa a
+     * semana toda vez que é aberta, a dona tirava alguém de uma quinta,
+     * a tela recarregava e o aluno estava de volta. Ela tentava de novo, via
+     * o mesmo, e concluía que a agenda não aceitava alteração.
+     *
+     * Uma linha CANCELADA é decisão de alguém — a dona arrumando a agenda, ou
+     * o aluno desmarcando no prazo — e vale para AQUELE dia. O horário fixo
+     * continua valendo: as outras semanas seguem sendo geradas normalmente,
+     * porque cada data tem a sua linha.
+     *
+     * Isto vale para a geração automática. Quando a dona cria ou reativa um
+     * horário fixo, `gerarParaHorarioFixoId` entra sem este conjunto — ali ela
+     * está montando a combinação na mão, e aí remarcar é o que se espera.
+     */
     const existentes = await this.prisma.agendamento.findMany({
       where: {
-        status: 'CONFIRMADO',
         dataAula: { gte: inicioPeriodo.toDate(), lte: fimPeriodo.toDate() },
         OR: fixos.map((fixo) => ({
           usuarioId: fixo.usuarioId,
@@ -143,7 +160,7 @@ export class AutoAgendamentoService {
       },
       select: { usuarioId: true, horarioId: true, dataAula: true },
     });
-    const jaConfirmados = new Set(
+    const jaResolvidos = new Set(
       existentes.map((agendamento) =>
         chaveAgendamento(
           agendamento.usuarioId,
@@ -158,7 +175,7 @@ export class AutoAgendamentoService {
         fixo,
         inicioPeriodo,
         fimPeriodo,
-        jaConfirmados,
+        jaResolvidos,
       );
       somarResultado(total, r);
     }
@@ -189,7 +206,8 @@ export class AutoAgendamentoService {
     },
     inicioPeriodo = dayjs().startOf('day'),
     fimPeriodo = inicioPeriodo.add(JANELA_DIAS, 'day'),
-    jaConfirmados = new Set<string>(),
+    /** Datas já resolvidas: têm aula marcada, ou desmarcada de propósito. */
+    jaResolvidos = new Set<string>(),
   ) {
     let criados = 0;
     let ignorados = 0;
@@ -223,7 +241,7 @@ export class AutoAgendamentoService {
 
       const dataAula = dia.format('YYYY-MM-DD');
       const chave = chaveAgendamento(fixo.usuarioId, fixo.horarioId, dataAula);
-      if (jaConfirmados.has(chave)) {
+      if (jaResolvidos.has(chave)) {
         ignorados++;
         continue;
       }
@@ -254,7 +272,7 @@ export class AutoAgendamentoService {
         }, fixo.id);
         criados++;
         datas.push(dataAula);
-        jaConfirmados.add(chave);
+        jaResolvidos.add(chave);
       } catch (e) {
         if (e instanceof ConflictException) {
           ignorados++;

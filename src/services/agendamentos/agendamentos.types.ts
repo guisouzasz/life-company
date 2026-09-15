@@ -87,4 +87,12 @@ export interface AgendamentoDoHorario {
   status: StatusAgendamento;
   reposicao?: boolean;
   usuario: { id: string; nome: string; cpf: string };
+  /**
+   * O horário fixo que põe este aluno aqui toda semana, quando existe.
+   *
+   * É o que deixa a tela perguntar, na hora de tirar, se é só esta aula ou se
+   * é para tirar da combinação. `null` = encaixe avulso ou reposição, e aí não
+   * há nada de permanente para desfazer.
+   */
+  horarioFixoId?: string | null;
 }

@@ -482,10 +482,39 @@ export class AgendamentosService {
       }
     }
     const dataAula = dayjs(data).startOf('day').toDate();
-    return this.prisma.agendamento.findMany({
-      where: { horarioId, dataAula, status: 'CONFIRMADO' },
-      include: { usuario: { select: { id: true, nome: true, cpf: true } } },
-    });
+    const [agendamentos, fixos] = await Promise.all([
+      this.prisma.agendamento.findMany({
+        where: { horarioId, dataAula, status: 'CONFIRMADO' },
+        include: { usuario: { select: { id: true, nome: true, cpf: true } } },
+      }),
+      /**
+       * Quem está nesta aula por horário fixo, e qual é o fixo.
+       *
+       * Sem isto a tela não sabe distinguir "a Ana está aqui porque combinou
+       * toda terça" de "a Ana foi encaixada nesta terça". São coisas
+       * diferentes na hora de tirar: numa, a dona quer liberar só este dia; na
+       * outra, ela está remanejando de vez. A tela pergunta qual — e para
+       * oferecer a segunda opção precisa do id do fixo.
+       *
+       * O período conta: fixo que termina antes desta data já não é o motivo
+       * de o aluno estar aqui.
+       */
+      this.prisma.horarioFixo.findMany({
+        where: {
+          horarioId,
+          ativo: true,
+          dataInicio: { lte: dataAula },
+          OR: [{ dataFim: null }, { dataFim: { gte: dataAula } }],
+        },
+        select: { id: true, usuarioId: true },
+      }),
+    ]);
+
+    const fixoPorAluno = new Map(fixos.map((f) => [f.usuarioId, f.id]));
+    return agendamentos.map((a) => ({
+      ...a,
+      horarioFixoId: fixoPorAluno.get(a.usuarioId) ?? null,
+    }));
   }
 
   /**

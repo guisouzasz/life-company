@@ -16,6 +16,7 @@ import {
   useCancelarAgendamentoAdmin,
   useDesmarcarAgendamento,
 } from '../../services/agendamentos/agendamentos.mutations';
+import { useRemoverHorarioFixo } from '../../services/horarios-fixos/horarios-fixos.mutations';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import type { HorarioAdmin } from '../../services/horarios/horarios.types';
@@ -104,11 +105,20 @@ export function AlunosHorarioModal({
   const cancelar = useCancelarAgendamentoAdmin();
   const desmarcar = useDesmarcarAgendamento();
   const adicionar = useAdicionarAlunoNaAula();
+  const removerFixo = useRemoverHorarioFixo();
 
   const [modo, setModo] = useState<'lista' | 'adicionar'>('lista');
   const [busca, setBusca] = useState('');
-  /** Aluno que a dona está tirando da aula — falta escolher se leva crédito. */
+  /** Aluno que a dona está tirando da aula — falta escolher o quê, e como. */
   const [tirando, setTirando] = useState<AgendamentoDoHorario | null>(null);
+  /**
+   * O que ela já decidiu sobre o alcance: só este dia, ou o horário fixo todo.
+   *
+   * `null` = ainda não perguntei. Quem entrou na aula por encaixe ou reposição
+   * não tem nada de permanente para desfazer, então essa pergunta nem aparece
+   * e o alcance já nasce 'aula'.
+   */
+  const [alcance, setAlcance] = useState<'aula' | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   /** Aluno esbarrou no plano: quais aulas da semana dele podem sair no lugar. */
   const [conflito, setConflito] = useState<{ aluno: AlunoAdmin; texto: string; aulas: AulaDaSemana[] } | null>(null);
@@ -155,6 +165,7 @@ export function AlunosHorarioModal({
     setModo('lista');
     setBusca('');
     setTirando(null);
+    setAlcance(null);
     setConflito(null);
     setFeedback(null);
     onClose();
@@ -179,12 +190,43 @@ export function AlunosHorarioModal({
     const acao = comCredito ? cancelar : desmarcar;
     acao.mutate(tirando.id, {
       onSuccess: (r) => {
-        setTirando(null);
+        fecharPergunta();
         setFeedback(r.mensagem);
       },
       onError: (e) => {
-        setTirando(null);
+        fecharPergunta();
         setFeedback(e instanceof ApiError ? e.message : 'Não foi possível tirar o aluno da aula.');
+      },
+    });
+  };
+
+  const fecharPergunta = () => {
+    setTirando(null);
+    setAlcance(null);
+  };
+
+  /**
+   * Tirar do horário fixo: sai desta aula e das próximas.
+   *
+   * Não passa pela pergunta do crédito de propósito — quem remaneja é o
+   * estúdio, e a rota do horário fixo já cancela as aulas futuras sem gerar
+   * crédito. Dar crédito aqui inflaria o saldo do aluno a cada remanejamento.
+   */
+  const tirarDoHorarioFixo = () => {
+    const id = tirando?.horarioFixoId;
+    if (!id) return;
+    const nome = primeiroNome(tirando!.usuario.nome);
+    removerFixo.mutate(id, {
+      onSuccess: (r) => {
+        fecharPergunta();
+        setFeedback(
+          `${nome} saiu do horário fixo desta turma. ` +
+            (r?.mensagem ?? 'As aulas futuras nesta turma foram desmarcadas.'),
+        );
+      },
+      onError: (e) => {
+        fecharPergunta();
+        setFeedback(e instanceof ApiError ? e.message : 'Não foi possível tirar do horário fixo.');
       },
     });
   };
@@ -433,19 +475,78 @@ export function AlunosHorarioModal({
       <View style={s.hintRow}>
         <Icon name="ticket-outline" size={14} color={LC.textMuted} />
         <Text style={s.hint}>
-          Ao tirar um aluno da aula, você escolhe se ele ganha crédito de reposição.
+          Ao tirar um aluno, você escolhe se é só esta aula ou o horário fixo — e se ele ganha
+          crédito de reposição.
         </Text>
       </View>
 
       {/*
-        A pergunta do crédito.
+        Primeiro o ALCANCE, e só para quem está aqui por horário fixo.
+        "Tirei a Ana da terça" pode querer dizer duas coisas muito diferentes —
+        ela faltou nesta semana, ou saiu da turma —, e o sistema não tem como
+        adivinhar. Perguntar é mais barato do que desfazer depois.
+      */}
+      <AppModal
+        visible={!!tirando && !!tirando.horarioFixoId && alcance === null}
+        onClose={fecharPergunta}
+        title={tirando ? `Tirar ${primeiroNome(tirando.usuario.nome)}` : ''}
+        dismissable={!removerFixo.isPending}
+      >
+        <Text style={s.escolhaTexto}>
+          {tirando ? `${primeiroNome(tirando.usuario.nome)} tem horário fixo nesta turma e ` : ''}
+          entra aqui toda semana. Tirar de qual?
+        </Text>
+
+        <Pressable
+          style={s.escolha}
+          accessibilityRole="button"
+          disabled={removerFixo.isPending}
+          onPress={() => setAlcance('aula')}
+        >
+          <View style={[s.escolhaIcone, { backgroundColor: LC.primaryLight }]}>
+            <Icon name="calendar-outline" size={18} color={LC.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.escolhaTitulo}>
+              Só a aula de {data ? formatDate(data, 'dddd, DD/MM') : 'hoje'}
+            </Text>
+            <Text style={s.escolhaSub}>
+              O horário fixo continua: na semana que vem está aqui de novo.
+            </Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          style={s.escolha}
+          accessibilityRole="button"
+          disabled={removerFixo.isPending}
+          onPress={tirarDoHorarioFixo}
+        >
+          <View style={[s.escolhaIcone, { backgroundColor: LC.dangerBg }]}>
+            <Icon name="repeat-outline" size={18} color={LC.danger} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.escolhaTitulo}>Tirar do horário fixo</Text>
+            <Text style={s.escolhaSub}>
+              Sai desta e das próximas semanas, e a vaga abre na turma. Use quando mudou de
+              horário ou parou de treinar.
+            </Text>
+          </View>
+          {removerFixo.isPending ? <Text style={s.escolhaSub}>…</Text> : null}
+        </Pressable>
+
+        <Button title="Voltar" variant="outline" size="sm" onPress={fecharPergunta} style={{ marginTop: 10 }} />
+      </AppModal>
+
+      {/*
+        Depois, a pergunta do crédito.
         Fica num modal próprio, e não em dois botões na linha do aluno, porque
         as duas opções precisam de uma frase explicando quando usar cada uma —
         na linha não caberia, e a dona escolheria no chute.
       */}
       <AppModal
-        visible={!!tirando}
-        onClose={() => setTirando(null)}
+        visible={!!tirando && (!tirando.horarioFixoId || alcance === 'aula')}
+        onClose={fecharPergunta}
         title={tirando ? `Tirar ${primeiroNome(tirando.usuario.nome)} desta aula` : ''}
         dismissable={!cancelar.isPending && !desmarcar.isPending}
       >
@@ -495,7 +596,7 @@ export function AlunosHorarioModal({
           title="Voltar"
           variant="outline"
           size="sm"
-          onPress={() => setTirando(null)}
+          onPress={fecharPergunta}
           style={{ marginTop: 10 }}
         />
       </AppModal>
