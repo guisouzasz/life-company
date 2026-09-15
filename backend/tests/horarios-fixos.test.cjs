@@ -208,6 +208,116 @@ test('novo fixo sem nenhuma vaga nao fica ativo', async () => {
   assert.equal(a.writes.at(-1).args.data.ativo, false);
 });
 
+/*
+  O furo que a dona encontrou: dava para fixar um quarto aluno numa turma de
+  três. A checagem antiga era indireta — tentava gerar as aulas e só desfazia
+  se NENHUMA entrasse. Bastava uma vaga pontual (alguém desmarcou a quarta que
+  vem) para a conta fechar e o aluno virar morador permanente de uma turma
+  lotada: pegava aquela aula e mais nenhuma.
+
+  `contarPor` responde cada `count` pelo formato do filtro, que é como o
+  serviço faz as duas perguntas diferentes: quantos fixos tem ESTE ALUNO (a
+  cota do plano) e quantos fixos tem ESTA TURMA (o tamanho da sala).
+*/
+function contarPor(a, { doAluno = 1, naTurma = 0 }) {
+  a.db.horarioFixo.count = async (args) => (args.where.horarioId ? naTurma : doAluno);
+}
+
+test('turma cheia de fixos recusa mais um, mesmo com vaga pontual na agenda', async () => {
+  const a = ambiente();
+  a.db.horarioFixo.findUnique = async () => null;
+  contarPor(a, { doAluno: 1, naTurma: 3 }); // Pilates: cabem 3, e já são 3
+  // A geração acharia vaga numa data (alguém desmarcou) e o fixo passaria.
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 1, ignorados: 0, erros: 7, motivos: ['Horário cheio'], datas: [] }) };
+
+  await assert.rejects(
+    new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma', dataInicio: '2026-09-07' }),
+    /já tem 3 aluno\(s\) em horário fixo/,
+  );
+  assert.equal(a.writes.length, 0, 'recusa ANTES de gravar: nada de criar e desfazer');
+  assert.match(a.locks[0], /horarios/, 'e com a turma travada, senão dois cadastros leem a mesma contagem');
+});
+
+test('a recusa usa o teto da modalidade, nao so o numero gravado na turma', async () => {
+  const a = ambiente();
+  a.turma.capacidadeMaxima = 6; // turma de Pilates salva antes da regra do teto
+  a.db.horarioFixo.findUnique = async () => null;
+  contarPor(a, { doAluno: 1, naTurma: 3 });
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 8, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
+
+  await assert.rejects(
+    new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma' }),
+    /limite de 3 da sala/,
+  );
+});
+
+test('turma com vaga continua aceitando fixo novo', async () => {
+  const a = ambiente();
+  a.db.horarioFixo.findUnique = async () => null;
+  contarPor(a, { doAluno: 1, naTurma: 2 });
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 8, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
+
+  const r = await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma' });
+  assert.equal(r.geracao.criados, 8, 'a trava não pode virar muro');
+});
+
+test('quem ja e fixo na turma pode mexer nas proprias datas', async () => {
+  const a = ambiente();
+  contarPor(a, { doAluno: 1, naTurma: 3 }); // turma cheia, mas ele é um dos três
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 8, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
+
+  await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma', dataFim: '2026-12-31' });
+  assert.ok(a.writes.some((w) => w.kind === 'fixo'), 'editar período não é entrar de novo');
+});
+
+/*
+  A troca combinada: uma sai dia 30, outra entra dia 1º. Só conta como
+  ocupante quem divide o período — senão a dona teria que apagar o horário de
+  quem ainda está treinando para poder cadastrar a substituta.
+*/
+test('quem ja terminou nao ocupa vaga na contagem', async () => {
+  const a = ambiente();
+  a.db.horarioFixo.findUnique = async () => null;
+  let filtro;
+  a.db.horarioFixo.count = async (args) => {
+    if (!args.where.horarioId) return 1;
+    filtro = args.where;
+    return 0;
+  };
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 8, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
+
+  await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma', dataInicio: '2026-10-01' });
+
+  assert.deepEqual(filtro.usuarioId, { not: 'aluno' }, 'ele não conta contra si mesmo');
+  assert.ok(filtro.OR.some((c) => c.dataFim === null), 'fixo sem fim sempre ocupa');
+  const comFim = filtro.OR.find((c) => c.dataFim && c.dataFim.gte);
+  assert.equal(dayjs(comFim.dataFim.gte).format('YYYY-MM-DD'), '2026-10-01', 'quem acabou antes não ocupa');
+});
+
+/*
+  Data final marcada tem que valer para as aulas JÁ geradas. A geração corre
+  oito semanas à frente, então sem isto o aluno seguia ocupando vaga em turma
+  da qual já tinha saído — e a vaga não abria para ninguém.
+*/
+test('marcar data final cancela as aulas futuras alem dela', async () => {
+  const a = ambiente();
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 2, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
+  await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma', dataFim: '2026-09-30' });
+
+  const corte = a.writes.find((w) => w.kind === 'cancelar-aulas');
+  assert.ok(corte, 'as aulas depois da saída precisam sair da agenda');
+  assert.equal(corte.args.data.status, 'CANCELADO');
+  assert.equal(corte.args.where.reposicao, false, 'reposição é crédito do aluno, não se mexe');
+  assert.equal(dayjs(corte.args.where.dataAula.gt).format('YYYY-MM-DD'), '2026-09-30');
+});
+
+test('fixo sem data final nao mexe em aula nenhuma', async () => {
+  const a = ambiente();
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 8, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
+  await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma' });
+  assert.equal(a.writes.filter((w) => w.kind === 'cancelar-aulas').length, 0);
+});
+
 test('remover fixo desliga e cancela aulas na mesma transacao, preservando reposicoes', async () => {
   const a = ambiente();
   let dentro = false;

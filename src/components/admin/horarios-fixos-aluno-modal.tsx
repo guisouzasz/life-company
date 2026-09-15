@@ -20,6 +20,7 @@ import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import type { DiaSemana } from '../../services/agendamentos/agendamentos.types';
 import { addDays, formatDate } from '../../services/date';
 import { nomeCurto } from '../../services/nome';
+import { ApiError } from '../../services/http';
 
 const DIAS_ORDEM: DiaSemana[] = ['SEGUNDA', 'TERCA', 'QUARTA', 'QUINTA', 'SEXTA'];
 const DIAS_CURTO: Record<string, string> = {
@@ -178,6 +179,24 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
                 : `${nome} foi fixado neste horário.`,
             });
           }
+        },
+        /**
+         * A recusa da API tinha que virar recado na tela.
+         *
+         * Sem isto o toque não fazia nada: a API respondia "a turma já tem 3
+         * alunos em horário fixo", a tela engolia o 400, e a dona tocava de
+         * novo achando que era a conexão. A mensagem vem pronta do servidor,
+         * com o nome do aluno e o que fazer — reescrever a regra aqui daria
+         * duas versões dela para manter em dia.
+         */
+        onError: (e) => {
+          setAviso({
+            titulo: 'Não deu para fixar',
+            texto:
+              e instanceof ApiError && e.message
+                ? e.message
+                : 'Não foi possível salvar o horário fixo. Confira a conexão e tente de novo.',
+          });
         },
       },
     );

@@ -4,10 +4,19 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
 import { CriarHorarioFixoDto } from './dto/criar-horario-fixo.dto';
 import { nomeCurto } from '../comum/nome';
+import { capacidadeEfetiva } from '../horarios/capacidade';
 
 function temErroDeLotacao(motivos: string[]) {
   return motivos.some((motivo) => /lotad|cheio/i.test(motivo));
 }
+
+const DIA_LEGIVEL: Record<string, string> = {
+  SEGUNDA: 'segunda', TERCA: 'terça', QUARTA: 'quarta', QUINTA: 'quinta', SEXTA: 'sexta',
+};
+
+/** "quarta às 08:00", para a recusa dizer de qual turma está falando. */
+const apelidoDaTurma = (diaSemana: string, horaInicio: string) =>
+  `${DIA_LEGIVEL[diaSemana] ?? diaSemana.toLowerCase()} às ${horaInicio}`;
 
 @Injectable()
 export class HorariosFixosService {
@@ -83,7 +92,10 @@ export class HorariosFixosService {
     const { registro: fixo, jaEstavaAtivo } = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${dto.horarioId} FOR UPDATE`;
       await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
-      const turmaAtual = await tx.horario.findUnique({ where: { id: dto.horarioId } });
+      const turmaAtual = await tx.horario.findUnique({
+        where: { id: dto.horarioId },
+        include: { modalidade: true },
+      });
       if (!turmaAtual?.ativo) throw new BadRequestException('Turma desligada. Escolha uma turma ativa.');
       const planoAtual = await tx.usuarioPlano.findUnique({ where: { id: usuarioPlano.id } });
       if (!planoAtual || planoAtual.vigenciaFim) {
@@ -102,6 +114,48 @@ export class HorariosFixosService {
             `Limite de horários fixos atingido (${usuarioPlano.plano.aulasSemanais}x/semana no plano ${usuarioPlano.plano.nome})`,
           );
         }
+
+        /**
+         * Cabe mais um FIXO nesta turma?
+         *
+         * Esta pergunta não estava sendo feita. O que existia era indireto:
+         * tentava-se gerar as aulas e, se NENHUMA entrasse por lotação, o fixo
+         * era desfeito. Só que basta uma vaga pontual para a conta dar certo —
+         * uma aluna desmarcou a quarta que vem, e essa única brecha deixava
+         * entrar um quarto aluno PERMANENTE numa turma de três. Ele pegava
+         * aquela aula e mais nenhuma: a partir da semana seguinte ficava como
+         * fixo sem aula, e quem perdia a vaga em cada semana virava sorteio do
+         * cron.
+         *
+         * Aqui a pergunta é a estrutural: quantas pessoas moram neste horário.
+         * A linha do horário já está travada acima (`FOR UPDATE`), então dois
+         * cadastros simultâneos não leem a mesma contagem.
+         *
+         * Só conta quem divide o período com o novo fixo. Fixo que já terminou
+         * não ocupa vaga nenhuma, e é isso que permite a troca combinada — a
+         * que sai até o dia 30, a que entra a partir do dia 1º — sem obrigar a
+         * dona a apagar o horário de quem ainda está treinando.
+         */
+        const cabem = capacidadeEfetiva(turmaAtual.capacidadeMaxima, turmaAtual.modalidade?.nome);
+        const fixosNaTurma = await tx.horarioFixo.count({
+          where: {
+            horarioId: dto.horarioId,
+            ativo: true,
+            usuarioId: { not: usuarioId },
+            // O outro ainda não tinha acabado quando este começa…
+            OR: [{ dataFim: null }, { dataFim: { gte: dataInicio } }],
+            // …e já tinha começado antes de este acabar.
+            ...(dataFim ? { dataInicio: { lte: dataFim } } : {}),
+          },
+        });
+        if (fixosNaTurma >= cabem) {
+          const turma = apelidoDaTurma(turmaAtual.diaSemana, turmaAtual.horaInicio);
+          throw new BadRequestException(
+            `A turma de ${turma} já tem ${fixosNaTurma} aluno(s) em horário fixo, que é o limite ` +
+              `de ${cabem} da sala. Para colocar ${nomeCurto(aluno.nome)} aqui, tire antes alguém ` +
+              'do horário fixo desta turma ou escolha outro horário.',
+          );
+        }
       }
 
       const registro = existente
@@ -114,6 +168,31 @@ export class HorariosFixosService {
             data: { usuarioId, horarioId: dto.horarioId, dataInicio, dataFim },
             include: { horario: { include: { modalidade: true } } },
           });
+
+      /**
+       * Data final marcada tem que valer também para as aulas JÁ geradas.
+       *
+       * A geração corre até oito semanas à frente, então quando a dona põe uma
+       * data de saída as aulas depois dela já estão na agenda — e continuavam
+       * lá, com o aluno ocupando vaga numa turma da qual ele já tinha saído. É
+       * o mesmo estrago que `remover()` conserta, e pelo mesmo motivo: a vaga
+       * ficava presa, e a próxima pessoa não entrava.
+       *
+       * Só as futuras, e só as do plano: aula que já aconteceu é histórico, e
+       * reposição foi o aluno que marcou com crédito dele.
+       */
+      if (dataFim) {
+        await tx.agendamento.updateMany({
+          where: {
+            usuarioId,
+            horarioId: dto.horarioId,
+            status: 'CONFIRMADO',
+            reposicao: false,
+            dataAula: { gt: dataFim, gte: dayjs().startOf('day').toDate() },
+          },
+          data: { status: 'CANCELADO' },
+        });
+      }
 
       return { registro, jaEstavaAtivo };
     });
