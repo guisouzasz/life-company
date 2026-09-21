@@ -104,6 +104,19 @@ export default function TreinosAluno() {
    * limitação — não uma lista de exercícios vazia.
    */
   const [aba, setAba] = useState<'treinos' | 'ficha' | null>(null);
+  /**
+   * Treino em uso e treino guardado são listas separadas.
+   *
+   * Um aluno de um ano tem dezenas de fichas velhas, e elas iam todas na mesma
+   * rolagem — cada uma com a tabela inteira de exercícios aberta. O treino de
+   * hoje, que é o que o professor abre a tela para ver, ficava soterrado.
+   *
+   * O arquivo não apaga nada: é a mesma ficha, fora do caminho. A lista
+   * guardada abre em linha fechada, e o professor abre a que quiser.
+   */
+  const [prateleira, setPrateleira] = useState<'ativos' | 'arquivados'>('ativos');
+  /** Fichas arquivadas que o professor abriu para olhar. */
+  const [abertos, setAbertos] = useState<Record<string, boolean>>({});
   const temTreino = (treinos.data ?? []).some((t) => !t.concluido);
   const abaAtual = aba ?? (treinos.isSuccess && !temTreino ? 'ficha' : 'treinos');
   const alertas = alertasDaFicha(anamnese.data);
@@ -285,12 +298,25 @@ export default function TreinosAluno() {
     else criar.mutate(payload, { onSuccess, onError });
   };
 
+  /**
+   * Arquivar guarda, desarquivar traz de volta — e a tela segue o professor
+   * para a lista onde a ficha acabou de cair. Sem isso ele toca em "arquivar",
+   * o card some da frente dele e parece que apagou.
+   */
   const alternarStatus = (t: Treino) => {
+    const arquivando = !t.concluido;
     definirStatus.mutate(
-      { id: t.id, concluido: !t.concluido },
-      { onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível atualizar o status.') },
+      { id: t.id, concluido: arquivando },
+      {
+        onSuccess: () => setPrateleira(arquivando ? 'arquivados' : 'ativos'),
+        onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível atualizar o status.'),
+      },
     );
   };
+
+  const ativos = (treinos.data ?? []).filter((t) => !t.concluido);
+  const arquivados = (treinos.data ?? []).filter((t) => t.concluido);
+  const naPrateleira = prateleira === 'ativos' ? ativos : arquivados;
 
   /** Linha compacta com os metadados preenchidos da ficha. */
   const metaResumo = (t: Treino): string => (t.frequencia ?? '');
@@ -685,30 +711,98 @@ export default function TreinosAluno() {
         <ErrorState onRetry={() => treinos.refetch()} />
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-          {treinos.data && treinos.data.length > 0 ? (
-            treinos.data.map((t) => (
-              <Card key={t.id} style={[s.treinoCard, t.concluido && s.treinoCardConcluido]} padding={16}>
-                <View style={s.treinoHead}>
-                  <View style={{ flex: 1 }}>
-                    <View style={s.tituloRow}>
-                      <Text style={s.treinoTitulo}>{t.titulo.toUpperCase()}</Text>
-                      <Badge label={t.concluido ? 'Concluída' : 'Ativa'} variant={t.concluido ? 'neutral' : 'success'} />
-                    </View>
-                    <Text style={s.treinoMeta}>
-                      {t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}
-                      {t.conteudo
-                        ? `atualizado ${formatDate(t.updatedAt, 'DD/MM')}`
-                        : `${t.exercicios.length} ${t.exercicios.length === 1 ? 'exercício' : 'exercícios'} • atualizado ${formatDate(t.updatedAt, 'DD/MM')}`}
-                    </Text>
-                  </View>
+          {/*
+            As duas prateleiras. Só aparecem quando há algo arquivado — num
+            aluno novo seriam duas abas para uma lista só, e a vazia ainda
+            convidaria a procurar o que não existe.
+          */}
+          {arquivados.length > 0 ? (
+            <View style={s.prateleiras}>
+              {([
+                ['ativos', 'Em uso', ativos.length],
+                ['arquivados', 'Arquivados', arquivados.length],
+              ] as const).map(([chave, rotulo, quantos]) => {
+                const ativa = prateleira === chave;
+                return (
                   <Pressable
-                    style={[s.acao, { backgroundColor: t.concluido ? LC.primaryLight : LC.successBg }]}
+                    key={chave}
+                    style={[s.prateleira, ativa && s.prateleiraAtiva]}
+                    onPress={() => setPrateleira(chave)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: ativa }}
+                  >
+                    <Text style={[s.prateleiraTexto, ativa && s.prateleiraTextoAtivo]}>
+                      {rotulo} ({quantos})
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {naPrateleira.length > 0 ? (
+            naPrateleira.map((t) => {
+              /*
+                Ficha arquivada entra fechada: é consulta, não é o treino do
+                dia. Abre no toque, quando o professor quer ver o que o aluno
+                fazia antes para montar o próximo.
+              */
+              const guardado = t.concluido;
+              const aberto = !guardado || abertos[t.id];
+              return (
+              <Card key={t.id} style={[s.treinoCard, guardado && s.treinoCardConcluido]} padding={16}>
+                <View style={[s.treinoHead, aberto && s.treinoHeadAberto]}>
+                  {/* O cabeçalho da ficha guardada é o próprio botão de abrir. */}
+                  {/*
+                    A seta fica À ESQUERDA do título e fora dele: dentro da
+                    mesma linha, título comprido empurrava a seta para uma
+                    linha só dela, e ela virava um risco solto no card.
+                  */}
+                  <Pressable
+                    style={s.cabecaToque}
+                    disabled={!guardado}
+                    onPress={() => setAbertos((a) => ({ ...a, [t.id]: !a[t.id] }))}
+                    accessibilityRole={guardado ? 'button' : undefined}
+                    accessibilityLabel={guardado ? `${aberto ? 'Fechar' : 'Abrir'} ${t.titulo}` : undefined}
+                  >
+                    {guardado ? (
+                      <Icon name={aberto ? 'chevron-down' : 'chevron-forward'} size={15} color={LC.textMuted} />
+                    ) : null}
+                    <View style={{ flex: 1 }}>
+                      <View style={s.tituloRow}>
+                        <Text style={[s.treinoTitulo, guardado && s.treinoTituloGuardado]} numberOfLines={2}>
+                          {t.titulo.toUpperCase()}
+                        </Text>
+                        {guardado ? null : <Badge label="Em uso" variant="success" />}
+                      </View>
+                      {/*
+                        Na ficha guardada a DATA vem primeiro: é por ela que o
+                        professor acha "o que ele fazia em julho". Atrás da
+                        modalidade, ela era a parte que o corte comia.
+                      */}
+                      <Text style={s.treinoMeta} numberOfLines={guardado ? 1 : 2}>
+                        {guardado
+                          ? `${formatDate(t.updatedAt, 'DD/MM/YYYY')}${t.conteudo ? '' : ` • ${t.exercicios.length} ex.`}`
+                          : `${t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}${
+                              t.conteudo
+                                ? `atualizado ${formatDate(t.updatedAt, 'DD/MM')}`
+                                : `${t.exercicios.length} ${t.exercicios.length === 1 ? 'exercício' : 'exercícios'} • atualizado ${formatDate(t.updatedAt, 'DD/MM')}`
+                            }`}
+                      </Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    style={[s.acao, { backgroundColor: guardado ? LC.primaryLight : LC.neutralBg }]}
                     hitSlop={4}
                     onPress={() => alternarStatus(t)}
                     accessibilityRole="button"
-                    accessibilityLabel={t.concluido ? `Reativar ${t.titulo}` : `Concluir ${t.titulo}`}
+                    accessibilityLabel={guardado ? `Desarquivar ${t.titulo}` : `Arquivar ${t.titulo}`}
                   >
-                    <Icon name={t.concluido ? 'refresh-outline' : 'checkmark-done-outline'} size={17} color={t.concluido ? LC.primary : LC.success} />
+                    <Icon
+                      name={guardado ? 'arrow-up-circle-outline' : 'archive-outline'}
+                      size={17}
+                      color={guardado ? LC.primary : LC.textSecondary}
+                    />
                   </Pressable>
                   <Pressable
                     style={s.acao}
@@ -730,6 +824,7 @@ export default function TreinosAluno() {
                   </Pressable>
                 </View>
 
+                {!aberto ? null : <>
                 {(metaResumo(t) || t.vencimento || t.professor) ? (
                   <View style={s.metaChips}>
                     {metaResumo(t) ? <Text style={s.metaChipText}>{metaResumo(t)}</Text> : null}
@@ -761,8 +856,26 @@ export default function TreinosAluno() {
                 />
 
                 {t.conteudo ? <Text style={s.conteudoTexto}>{t.conteudo}</Text> : null}
+                </>}
               </Card>
-            ))
+              );
+            })
+          ) : prateleira === 'arquivados' ? (
+            <EmptyState
+              icon="archive-outline"
+              title="Nada arquivado"
+              description={`As fichas antigas de ${nomeCurto(alunoNome)} vão ficar guardadas aqui.`}
+            />
+          ) : arquivados.length > 0 ? (
+            /*
+              Sem ficha em uso, mas com arquivo: o professor precisa saber que
+              o treino do aluno está guardado, e não perdido.
+            */
+            <EmptyState
+              icon="barbell-outline"
+              title="Nenhum treino em uso"
+              description={`${nomeCurto(alunoNome)} tem ${arquivados.length} ${arquivados.length === 1 ? 'ficha arquivada' : 'fichas arquivadas'}. Monte a nova ou desarquive uma.`}
+            />
           ) : (
             <EmptyState icon="barbell-outline" title="Nenhum treino ainda" description={`Monte o primeiro treino de ${nomeCurto(alunoNome)}.`} />
           )}
@@ -825,14 +938,30 @@ const s = StyleSheet.create({
   abaPonto: { width: 7, height: 7, borderRadius: 4, backgroundColor: LC.warning },
   scroll: { ...LC.coluna, padding: 16, paddingTop: 8 },
 
+  /* Em uso × arquivados. Pílulas, e não as abas do topo: aquelas trocam de
+     assunto (treino/ficha de saúde), estas filtram a mesma lista. */
+  prateleiras: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  prateleira: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: LC.radius.full,
+    backgroundColor: LC.neutralBg,
+  },
+  prateleiraAtiva: { backgroundColor: LC.primary },
+  prateleiraTexto: { fontSize: 13, fontWeight: '700', color: LC.textSecondary },
+  prateleiraTextoAtivo: { color: '#fff' },
+
   // Lista
   treinoCard: { marginBottom: 12 },
-  treinoCardConcluido: { opacity: 0.7 },
-  treinoHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 10 },
-  tituloRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  /* Guardada é consulta: fica discreta e sem a folga de baixo do card aberto. */
+  treinoCardConcluido: { marginBottom: 8, backgroundColor: LC.neutralBg },
+  treinoHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  treinoHeadAberto: { alignItems: 'flex-start', marginBottom: 10 },
+  cabecaToque: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tituloRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // Título da ficha em maiúsculas e na cor da marca, como no cabeçalho de uma
   // ficha impressa (o modelo de referência usa vermelho; aqui vale o teal).
-  treinoTitulo: { fontSize: 16, fontWeight: '800', color: LC.primary, letterSpacing: 0.4 },
+  treinoTitulo: { fontSize: 16, fontWeight: '800', color: LC.primary, letterSpacing: 0.4, flexShrink: 1 },
+  /* Menor e em cinza: no arquivo, o que importa é achar, não destacar. */
+  treinoTituloGuardado: { fontSize: 14, color: LC.textSecondary, letterSpacing: 0.2 },
   treinoMeta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
   metaChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   metaChipText: { fontSize: 12, fontWeight: '600', color: LC.textSecondary },
