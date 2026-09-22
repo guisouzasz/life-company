@@ -191,11 +191,14 @@ export default function PrimeiroAcesso() {
             <View style={s.shield}>
               <Icon name="shield-checkmark" size={36} color="#fff" />
             </View>
-            <Text style={s.title}>Primeiro acesso</Text>
+            {/* Quem perdeu a senha não está no "primeiro" acesso: é a volta. */}
+            <Text style={s.title}>{redefinindo ? 'Criar nova senha' : 'Primeiro acesso'}</Text>
             <Text style={s.subtitle}>
-              {comToken
-                ? 'Para sua segurança, crie uma nova senha.'
-                : 'Informe seu CPF, cadastre seu e-mail e crie sua senha.'}
+              {redefinindo
+                ? 'Confirme seu CPF e escolha a senha nova. O resto do seu cadastro continua como está.'
+                : comToken
+                  ? 'Para sua segurança, crie uma nova senha.'
+                  : 'Informe seu CPF, cadastre seu e-mail e crie sua senha.'}
             </Text>
           </View>
 

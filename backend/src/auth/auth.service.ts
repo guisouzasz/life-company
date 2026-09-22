@@ -497,11 +497,11 @@ export class AuthService {
     const desligado = usuario && !usuario.ativo && usuario.senhaHash;
     if (!usuario || desligado) return generico;
 
+    // O link já sai marcado como troca de senha quando é o caso (ver abaixo).
     const { link } = await this.gerarLinkPrimeiroAcesso(usuario.id);
-    const linkRedefinir = `${link}&redefinir=1`;
     const { assunto, texto, html } = modeloRedefinirSenha(
       nomeCurto(usuario.nome),
-      linkRedefinir,
+      link,
       HORAS_DO_LINK,
     );
     await this.email.enviar(usuario.email!, assunto, texto, html);
@@ -511,12 +511,37 @@ export class AuthService {
   async gerarLinkPrimeiroAcesso(usuarioId: string) {
     const token = uuidv4();
     const expiraEm = dayjs().add(HORAS_DO_LINK, "hour").toDate();
-    await this.prisma.primeiroAcesso.upsert({
-      where: { usuarioId },
-      update: { token, expiraEm, usado: false },
-      create: { usuarioId, token, expiraEm },
-    });
-    return { link: `${this.baseDoApp()}/primeiro-acesso?token=${token}`, token };
+    const [usuario] = await Promise.all([
+      this.prisma.usuario.findUnique({ where: { id: usuarioId }, select: { senhaHash: true } }),
+      this.prisma.primeiroAcesso.upsert({
+        where: { usuarioId },
+        update: { token, expiraEm, usado: false },
+        create: { usuarioId, token, expiraEm },
+      }),
+    ]);
+    /**
+     * Quem já tem senha está VOLTANDO, não chegando — e o link diz isso.
+     *
+     * A tela tem os dois modos: cadastro (ficha inteira e termo) e troca de
+     * senha (só CPF e a senha nova). Quem escolhia era a marca `redefinir=1`,
+     * e ela só era posta no e-mail de "esqueci a senha" — e sempre, até para
+     * quem nunca tinha entrado. Os dois lados erravam:
+     *
+     *  - o botão "Gerar link" da dona nunca marcava: a aluna que só perdeu a
+     *    senha recebia o formulário de cadastro inteiro, com RG, endereço e
+     *    CEP, para quem já tinha preenchido tudo isso um dia;
+     *  - o e-mail marcava sempre: quem ainda não tinha feito o primeiro
+     *    acesso pulava a ficha e o termo, e o servidor recusava no fim por
+     *    falta do aceite.
+     *
+     * A pergunta certa é uma só, e é a mesma que o servidor faz ao receber o
+     * link: a pessoa já tem senha? Então a resposta mora aqui.
+     */
+    const redefinindo = !!usuario?.senhaHash;
+    return {
+      link: `${this.baseDoApp()}/primeiro-acesso?token=${token}${redefinindo ? '&redefinir=1' : ''}`,
+      token,
+    };
   }
 
   /**
