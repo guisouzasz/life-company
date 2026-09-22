@@ -28,7 +28,7 @@ export const PROF_TABS: Tab[] = [
 
 export const ADMIN_TABS: Tab[] = [
   { label: 'Início', route: '/admin/dashboard', icon: 'home-outline', iconActive: 'home', activeRoutes: ['/admin/dashboard'] },
-  { label: 'Alunos', route: '/admin/alunos', icon: 'people-outline', iconActive: 'people', activeRoutes: ['/admin/alunos', '/admin/novo-aluno', '/admin/professores'] },
+  { label: 'Alunos', route: '/admin/alunos', icon: 'people-outline', iconActive: 'people', activeRoutes: ['/admin/alunos', '/admin/novo-aluno', '/admin/professores', '/admin/treinos-aluno'] },
   // A aba é a AGENDA da semana, que é o uso diário; a grade de horários
   // (criar/editar turma) vive dentro dela, no botão "Gerenciar horários".
   // Uma sexta aba deixaria os rótulos ilegíveis na barra do celular.

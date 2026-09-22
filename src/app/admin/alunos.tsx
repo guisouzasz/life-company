@@ -489,6 +489,20 @@ export default function AdminAlunos() {
                     <Icon name="calendar-outline" size={16} color={LC.primary} />
                     <Text style={s.credLinkText}>Editar plano e horário fixo</Text>
                   </Pressable>
+                  {/*
+                    A porta da dona para os treinos. Até aqui ela não tinha
+                    nenhuma: a tela existia só na área do professor, e a regra
+                    de rotas a devolvia ao painel.
+                  */}
+                  <Pressable
+                    style={s.credLink}
+                    onPress={() =>
+                      router.push({ pathname: '/admin/treinos-aluno' as any, params: { id: aluno.id, nome: aluno.nome } })
+                    }
+                  >
+                    <Icon name="barbell-outline" size={16} color={LC.primary} />
+                    <Text style={s.credLinkText}>Treinos e ficha de saúde</Text>
+                  </Pressable>
                   <Pressable
                     style={[s.credLink, s.credLinkPerigo]}
                     onPress={() => setExcluindo(aluno)}

@@ -78,8 +78,42 @@ export class TreinosService {
    * abrir depois — a dona vinculava o professor e ele não podia mexer no
    * próprio treino.
    */
-  private async donoDaFicha(solicitante: Solicitante, dto: SalvarTreinoDto) {
+  private async donoDaFicha(
+    solicitante: Solicitante,
+    dto: SalvarTreinoDto,
+    /** Na edição: quem assina hoje. Sem professor no corpo, é quem continua. */
+    atual?: { professorId: string; modalidadeId: string | null },
+  ) {
     const modalidadeDoSolicitante = await this.modalidadeDe(solicitante);
+
+    /**
+     * Editar não troca o dono da ficha por omissão.
+     *
+     * Sem isto, salvar sem professor no corpo assinava a ficha com quem estava
+     * editando. Para o professor dava no mesmo; para a DONA era um roubo: a
+     * ficha do Rubens virava "Administrador", perdia a modalidade, e o Rubens
+     * deixava de enxergar o treino do próprio aluno. Bastava um toque no nome
+     * dele — que já vem marcado na edição — para desmarcar e salvar.
+     *
+     * Trocar de professor continua possível: é só mandar o novo.
+     */
+    if (atual && !dto.professorId) return atual;
+
+    /**
+     * A dona não assina ficha em nome próprio.
+     *
+     * Ela não tem modalidade, então a ficha nascia sem carimbo — e o carimbo é
+     * o que dá acesso ao professor. O treino aparecia para o aluno e sumia
+     * para todos os professores, sem aviso nenhum. Ela precisa dizer de quem
+     * é o treino; recusar aqui é mais barato do que descobrir depois.
+     */
+    if (solicitante.tipo !== 'PROFESSOR' && !dto.professorId) {
+      throw new BadRequestException(
+        'Escolha o professor responsável pela ficha. Sem isso ela fica sem modalidade ' +
+          'e nenhum professor consegue abrir.',
+      );
+    }
+
     if (!dto.professorId || dto.professorId === solicitante.id) {
       return { professorId: solicitante.id, modalidadeId: modalidadeDoSolicitante };
     }
@@ -162,13 +196,16 @@ export class TreinosService {
   /** Atualiza título/observações/conteúdo e SUBSTITUI a lista de exercícios. */
   async atualizar(id: string, dto: SalvarTreinoDto, solicitante: Solicitante) {
     this.validarFormato(dto);
-    await this.buscarComPermissao(id, solicitante);
+    const atual = await this.buscarComPermissao(id, solicitante);
     /**
      * Trocar o professor na edição também vale. Sem isto, corrigir uma ficha
      * que nasceu com o professor errado exigia apagar e remontar exercício por
      * exercício — e o histórico de carga do aluno ia junto.
      */
-    const { professorId, modalidadeId } = await this.donoDaFicha(solicitante, dto);
+    const { professorId, modalidadeId } = await this.donoDaFicha(solicitante, dto, {
+      professorId: atual.professorId,
+      modalidadeId: atual.modalidadeId,
+    });
     return this.prisma.treino.update({
       where: { id },
       data: {

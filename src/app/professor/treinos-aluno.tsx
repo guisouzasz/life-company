@@ -128,7 +128,8 @@ export default function TreinosAluno() {
   // Musculação monta treino estruturado (séries/reps/carga + evolução);
   // Funcional e Pilates escrevem o treino em texto livre (blocos de tempo).
   const me = useMe();
-  const formatoCarga = usaFichaEstruturada(me.data?.modalidadeProfessor?.nome);
+  /** A dona também monta ficha por aqui, mas não tem modalidade própria. */
+  const ehDona = !!me.data && me.data.tipo !== 'PROFESSOR';
   /** Para escolher quem assina a ficha — quem monta nem sempre é quem acompanha. */
   const professores = useNomesDeProfessores();
 
@@ -162,6 +163,23 @@ export default function TreinosAluno() {
   const [vencimentoTexto, setVencimentoTexto] = useState(''); // DD/MM/AAAA
   const vencimento = dataFuturaParaIso(vencimentoTexto) ?? ''; // YYYY-MM-DD para a API
   const [professorId, setProfessorId] = useState('');
+  /**
+   * O formato da ficha é o da MODALIDADE DA FICHA, não o de quem está logado.
+   *
+   * Para o professor dá no mesmo — a modalidade dele é a da ficha. Para a
+   * dona não: ela não tem modalidade, então caía sempre no formulário de
+   * musculação. Abria uma ficha de Pilates (que é texto), via uma tabela de
+   * exercícios vazia no lugar do texto, e o salvar recusava por falta de
+   * exercício — ela não conseguia editar ficha nenhuma de Pilates ou Funcional.
+   *
+   * Ordem: o professor escolhido (é quem vai usar a ficha), depois a própria
+   * ficha, depois quem está logado.
+   */
+  const modalidadeDaFicha =
+    (professores.data ?? []).find((p) => p.id === professorId)?.modalidadeProfessor?.nome ??
+    editando?.modalidade?.nome ??
+    me.data?.modalidadeProfessor?.nome;
+  const formatoCarga = usaFichaEstruturada(modalidadeDaFicha);
 
   const abrirNovo = () => {
     setEditando(null);
@@ -333,6 +351,45 @@ export default function TreinosAluno() {
   };
 
   // ── Form de treino ──────────────────────────────────────────────────
+  const seletorDeProfessor = (
+    <>
+          <Text style={s.metaLabel}>
+            Professor responsável{ehDona ? ' (obrigatório)' : ''}
+          </Text>
+          <View style={s.grupoChips}>
+            {(professores.data ?? []).map((p) => {
+              const sel = professorId === p.id;
+              return (
+                <Pressable
+                  key={p.id}
+                  style={[s.grupoChip, sel && s.grupoChipSel]}
+                  // Para a dona o professor é obrigatório: tocar de novo não desmarca.
+                  onPress={() => setProfessorId(sel && !ehDona ? '' : p.id)}
+                >
+                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>
+                    {nomeCurto(p.nome)}
+                    {/* A dona escolhe entre professores de todas as modalidades. */}
+                    {ehDona && p.modalidadeProfessor ? ` · ${nomeModalidade(p.modalidadeProfessor.nome)}` : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {!professorId ? (
+            /*
+              A dona não tem modalidade: ficha no nome dela fica sem carimbo e
+              some para todos os professores. O servidor recusa, e a tela avisa
+              antes para ela não descobrir só no "salvar".
+            */
+            <Text style={[s.metaHint, ehDona && { color: LC.warningFg, fontWeight: '700' }]}>
+              {ehDona
+                ? 'Escolha quem acompanha o aluno — sem professor, a ficha não aparece para nenhum deles.'
+                : 'Sem escolher, a ficha fica no seu nome.'}
+            </Text>
+          ) : null}
+    </>
+  );
+
   if (formAberto) {
     return (
       <View style={s.root}>
@@ -350,6 +407,12 @@ export default function TreinosAluno() {
         </View>
 
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/*
+            Para a dona o professor vem PRIMEIRO: é obrigatório para ela, e é
+            ele que decide se a ficha é de exercícios ou de texto. No rodapé,
+            ela preenchia a tabela inteira e só no fim o formulário virava.
+          */}
+          {ehDona ? seletorDeProfessor : null}
           <Input
             label="Nome do treino"
             placeholder={formatoCarga ? 'Treino A — Superiores' : 'Treino de terça'}
@@ -395,24 +458,7 @@ export default function TreinosAluno() {
           {/* Detalhes da ficha (opcionais) — frequência, validade, professor */}
           <Text style={s.sectionTitle}>Detalhes da ficha (opcional)</Text>
 
-          <Text style={s.metaLabel}>Professor responsável</Text>
-          <View style={s.grupoChips}>
-            {(professores.data ?? []).map((p) => {
-              const sel = professorId === p.id;
-              return (
-                <Pressable
-                  key={p.id}
-                  style={[s.grupoChip, sel && s.grupoChipSel]}
-                  onPress={() => setProfessorId(sel ? '' : p.id)}
-                >
-                  <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{nomeCurto(p.nome)}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {!professorId ? (
-            <Text style={s.metaHint}>Sem escolher, a ficha fica no seu nome.</Text>
-          ) : null}
+          {ehDona ? null : seletorDeProfessor}
 
           <Text style={s.metaLabel}>Frequência</Text>
           <View style={s.grupoChips}>
@@ -890,7 +936,8 @@ export default function TreinosAluno() {
       </Pressable>
       )}
 
-      <TabBar isProfessor />
+      {/* A mesma tela serve os dois; a barra de baixo é a de quem está usando. */}
+      {ehDona ? <TabBar isAdmin /> : <TabBar isProfessor />}
       <CargaExercicioModal
         exercicio={cargaDe?.nome ?? null}
         alunoId={alunoId}
