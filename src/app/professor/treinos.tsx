@@ -13,7 +13,8 @@ import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import { useMe } from '../../services/auth/auth.queries';
-import { useTreinoDia } from '../../services/treinos/treinos.queries';
+import { useResumoTreinos, useTreinoDia } from '../../services/treinos/treinos.queries';
+import { diasAte, situacaoDoAluno } from '../../components/professor/situacao';
 import { useSalvarTreinoDia, useRemoverTreinoDia } from '../../services/treinos/treinos.mutations';
 import { getProximosDiasUteis, formatDate } from '../../services/date';
 import { ApiError } from '../../services/http';
@@ -162,16 +163,78 @@ function TreinoDoDia({ compacto = false }: { compacto?: boolean }) {
   );
 }
 
-/** Musculação/Pilates: treino por aluno — escolhe o aluno na lista. */
+type Filtro = 'semana' | 'atencao' | 'todos';
+
+/** "hoje 18:00", "amanhã 07:00", "qua 07:00". */
+function quando(p: { data: string; hora: string }): string {
+  const d = diasAte(p.data);
+  const dia = d === 0 ? 'hoje' : d === 1 ? 'amanhã' : formatDate(p.data, 'ddd').toLowerCase();
+  return `${dia} ${p.hora}`;
+}
+
+/**
+ * Os alunos do professor, com a situação de cada um à vista.
+ *
+ * Era uma lista de nomes com "3x por semana" embaixo — para saber quem estava
+ * sem ficha, o professor abria um por um. Agora a lista começa por quem treina
+ * com ele esta semana, na ordem das aulas, e cada linha diz se a ficha está em
+ * dia, vencendo, vencida ou se não existe. "Precisam de ficha" junta num toque
+ * o trabalho que ele tem para fazer.
+ */
 function TreinosPorAluno({ compacto = false }: { compacto?: boolean }) {
   const [busca, setBusca] = useState('');
-  const alunos = useAlunos(busca.trim() || undefined);
+  const [filtro, setFiltro] = useState<Filtro | null>(null);
+  const alunos = useAlunos();
+  const resumo = useResumoTreinos();
+
+  const porId = useMemo(() => new Map((resumo.data ?? []).map((r) => [r.alunoId, r])), [resumo.data]);
+  const linhas = useMemo(
+    () =>
+      (alunos.data ?? [])
+        .filter((a) => a.ativo)
+        .map((a) => {
+          const r = porId.get(a.id) ?? null;
+          return { a, r, sit: r ? situacaoDoAluno(r) : null };
+        }),
+    [alunos.data, porId],
+  );
+
+  const daSemana = linhas.filter((l) => l.r?.proximaAula);
+  // Precisa do professor: sem ficha ou vencida, entre quem treina com ele.
+  const atencao = linhas.filter((l) => l.r && l.sit && (l.sit.urgente || l.sit.chave === 'vencendo') && (l.r.proximaAula || l.r.fichas > 0));
+  const ativo: Filtro = filtro ?? (daSemana.length > 0 ? 'semana' : 'todos');
+
+  const termo = busca.trim().toLowerCase();
+  const base = ativo === 'semana' ? daSemana : ativo === 'atencao' ? atencao : linhas;
+  const visiveis = base
+    .filter((l) => !termo || l.a.nome.toLowerCase().includes(termo))
+    .sort((x, y) => {
+      if (ativo === 'semana') {
+        const a = `${x.r!.proximaAula!.data} ${x.r!.proximaAula!.hora}`;
+        const b = `${y.r!.proximaAula!.data} ${y.r!.proximaAula!.hora}`;
+        if (a !== b) return a < b ? -1 : 1;
+      }
+      if (ativo === 'atencao') {
+        const u = Number(!!y.sit?.urgente) - Number(!!x.sit?.urgente);
+        if (u) return u;
+      }
+      return nomeCurto(x.a.nome).localeCompare(nomeCurto(y.a.nome), 'pt-BR');
+    });
+
+  const FILTROS: { chave: Filtro; rotulo: string; n: number }[] = [
+    { chave: 'semana', rotulo: 'Esta semana', n: daSemana.length },
+    { chave: 'atencao', rotulo: 'Precisam de você', n: atencao.length },
+    { chave: 'todos', rotulo: 'Todos', n: linhas.length },
+  ];
 
   return (
     <>
       <View style={[s.header, compacto && s.headerCompacto]}>
-        <Text style={s.title}>Treinos</Text>
-        <Text style={s.subtitle}>Escolha um aluno para montar ou revisar o treino</Text>
+        <Text style={s.title}>Seus alunos</Text>
+        <Text style={s.subtitle}>
+          {daSemana.length > 0 ? `${daSemana.length} treinam com você esta semana` : 'Escolha um aluno para montar ou revisar o treino'}
+          {atencao.length > 0 ? ` · ${atencao.length} precisam de você` : ''}
+        </Text>
       </View>
 
       <View style={s.buscaWrap}>
@@ -184,32 +247,72 @@ function TreinosPorAluno({ compacto = false }: { compacto?: boolean }) {
         />
       </View>
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filtrosScroll} contentContainerStyle={s.filtros}>
+        {FILTROS.map((f) => {
+          const sel = f.chave === ativo;
+          return (
+            <Pressable
+              key={f.chave}
+              style={[s.filtro, sel && s.filtroSel, f.chave === 'atencao' && f.n > 0 && !sel && s.filtroAtencao]}
+              onPress={() => setFiltro(f.chave)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: sel }}
+            >
+              <Text style={[s.filtroTexto, sel && s.filtroTextoSel, f.chave === 'atencao' && f.n > 0 && !sel && { color: LC.dangerFg }]}>
+                {f.rotulo}
+              </Text>
+              <Text style={[s.filtroN, sel && s.filtroTextoSel]}>{f.n}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       {alunos.isLoading ? (
         <Loading />
       ) : alunos.isError ? (
         <ErrorState onRetry={() => alunos.refetch()} />
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {alunos.data && alunos.data.length > 0 ? (
-            alunos.data.map((aluno) => (
+          {visiveis.length > 0 ? (
+            visiveis.map(({ a, r, sit }) => (
               <Pressable
-                key={aluno.id}
+                key={a.id}
                 accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/professor/treinos-aluno' as any, params: { id: aluno.id, nome: aluno.nome } })}
-                style={({ pressed }) => [pressed && s.pressed]}
+                accessibilityLabel={`Treinos de ${a.nome}`}
+                onPress={() => router.push({ pathname: '/professor/treinos-aluno' as any, params: { id: a.id, nome: a.nome } })}
+                style={({ pressed }) => [s.card, pressed && s.pressed]}
               >
-                <Card style={s.card} padding={14}>
-                  <Avatar nome={aluno.nome} size={44} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.nome}>{aluno.nome}</Text>
-                    <Text style={s.plano}>{aluno.usuarioPlanos?.[0]?.plano?.nome ?? 'Sem plano'}</Text>
+                <Avatar nome={a.nome} size={44} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={s.nome} numberOfLines={1}>{nomeCurto(a.nome)}</Text>
+                  <Text style={s.plano} numberOfLines={2}>
+                    {r?.proximaAula ? (
+                      <Text style={s.proxima}>
+                        <Icon name="calendar" size={11} color={LC.primary} /> {quando(r.proximaAula)}
+                      </Text>
+                    ) : null}
+                    {r?.proximaAula && r?.ultimaCarga ? '  ·  ' : ''}
+                    {r?.ultimaCarga
+                      ? `carga ${diasAte(r.ultimaCarga) === 0 ? 'hoje' : `há ${-diasAte(r.ultimaCarga)} dias`}`
+                      : !r
+                        ? 'sem aulas com você'
+                        : ''}
+                  </Text>
+                </View>
+                {sit ? (
+                  <View style={[s.situacao, { backgroundColor: sit.fundo }]}>
+                    <Text style={[s.situacaoTexto, { color: sit.cor }]}>{sit.rotulo}</Text>
                   </View>
-                  <Icon name="chevron-forward" size={18} color={LC.textMuted} />
-                </Card>
+                ) : null}
+                <Icon name="chevron-forward" size={18} color={LC.textMuted} />
               </Pressable>
             ))
           ) : (
-            <EmptyState icon="people-outline" title="Nenhum aluno encontrado" description={busca ? 'Tente outra busca.' : 'Os alunos aparecerão aqui.'} />
+            <EmptyState
+              icon={ativo === 'atencao' ? 'checkmark-done-outline' : 'people-outline'}
+              title={ativo === 'atencao' ? 'Tudo em dia' : 'Nenhum aluno aqui'}
+              description={busca ? 'Tente outra busca.' : ativo === 'atencao' ? 'Nenhum aluno seu está sem ficha ou com ela vencendo.' : 'Os alunos aparecerão aqui.'}
+            />
           )}
           <View style={{ height: 8 }} />
         </ScrollView>
@@ -294,8 +397,26 @@ const s = StyleSheet.create({
   buscaWrap: { paddingHorizontal: 16, paddingBottom: 6 },
   scroll: { ...LC.coluna, padding: 16, paddingTop: 8 },
   pressed: { opacity: 0.85 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  nome: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
+  card: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8,
+    backgroundColor: LC.bgCard, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: LC.border, ...LC.shadow,
+  },
+  proxima: { color: LC.primary, fontWeight: '700' },
+  situacao: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  situacaoTexto: { fontSize: 11.5, fontWeight: '800' },
+  filtrosScroll: { flexGrow: 0, flexShrink: 0, ...LC.coluna },
+  filtros: { gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  filtro: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.borderStrong,
+  },
+  filtroSel: { backgroundColor: LC.primary, borderColor: LC.primary },
+  filtroAtencao: { borderColor: '#FCA5A5', backgroundColor: LC.dangerBg },
+  filtroTexto: { fontSize: 13, fontWeight: '700', color: LC.textSecondary },
+  filtroTextoSel: { color: '#fff' },
+  filtroN: { fontSize: 12, fontWeight: '800', color: LC.textMuted },
+  nome: { fontSize: 15.5, fontWeight: '700', color: LC.textPrimary },
   plano: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
 
   // ── Treino do dia ───────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { http } from '../http';
-import type { SalvarTreinoDiaPayload, SalvarTreinoPayload, Treino, TreinoDia } from './treinos.types';
+import type { SalvarTreinoDiaPayload, SalvarTreinoPayload, Treino, TreinoDia, ResumoAluno } from './treinos.types';
 
 export const treinosService = {
   /** Treinos do aluno logado. */
@@ -31,6 +31,12 @@ export const treinosService = {
   },
 
   // ── Professor/Admin ────────────────────────────────────────────────
+  /** Situação das fichas de cada aluno e a próxima aula dele. */
+  async resumo(): Promise<ResumoAluno[]> {
+    const { data } = await http.get<ResumoAluno[]>('/treinos/resumo');
+    return data;
+  },
+
   async doAluno(alunoId: string): Promise<Treino[]> {
     const { data } = await http.get<Treino[]>(`/treinos/aluno/${alunoId}`);
     return data;

@@ -48,6 +48,96 @@ export class TreinosService {
     });
   }
 
+  /**
+   * A situação de cada aluno, numa consulta só, para a lista do professor.
+   *
+   * Sem isto, saber quem está sem ficha ou com a ficha vencida exigia abrir
+   * aluno por aluno — ninguém faz isso, e o aluno novo passava semanas
+   * treinando "de cabeça". Aqui vêm: quantas fichas em uso, o vencimento mais
+   * próximo, a última carga registrada e a próxima aula dele nas turmas do
+   * professor (é o que separa "precisa de ficha para amanhã" de "sumiu").
+   *
+   * Tudo limitado às modalidades de quem pede, como o resto dos treinos.
+   * Funcional fica fora da próxima aula: lá o treino é o do dia, não ficha.
+   */
+  async resumo(solicitante: Solicitante) {
+    const modalidades = await this.modalidadesDe(solicitante);
+    const filtroMod = modalidades ? { modalidadeId: { in: modalidades } } : {};
+
+    const [fichas, cargas, mods] = await Promise.all([
+      this.prisma.treino.findMany({
+        where: { ativo: true, concluido: false, ...filtroMod },
+        select: { alunoId: true, vencimento: true, updatedAt: true },
+      }),
+      this.prisma.registroCarga.groupBy({
+        by: ['alunoId'],
+        where: filtroMod,
+        _max: { data: true },
+      }),
+      this.prisma.modalidade.findMany({ select: { id: true, nome: true } }),
+    ]);
+
+    const ehFuncional = (nome: string) =>
+      nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('funcional');
+    const comFicha = mods
+      .filter((m) => !ehFuncional(m.nome) && (!modalidades || modalidades.includes(m.id)))
+      .map((m) => m.id);
+
+    const hoje = dayjs().startOf('day');
+    const aulas = await this.prisma.agendamento.findMany({
+      where: {
+        status: 'CONFIRMADO',
+        dataAula: { gte: hoje.toDate(), lt: hoje.add(7, 'day').toDate() },
+        horario: { modalidadeId: { in: comFicha } },
+        usuario: { tipoUsuario: 'ALUNO', ativo: true },
+      },
+      select: { usuarioId: true, dataAula: true, horario: { select: { horaInicio: true } } },
+      orderBy: [{ dataAula: 'asc' }],
+    });
+
+    type Linha = {
+      alunoId: string;
+      fichas: number;
+      vencimento: Date | null;
+      atualizadaEm: Date | null;
+      ultimaCarga: Date | null;
+      proximaAula: { data: string; hora: string } | null;
+    };
+    const porAluno = new Map<string, Linha>();
+    const linha = (alunoId: string) => {
+      let l = porAluno.get(alunoId);
+      if (!l) {
+        l = { alunoId, fichas: 0, vencimento: null, atualizadaEm: null, ultimaCarga: null, proximaAula: null };
+        porAluno.set(alunoId, l);
+      }
+      return l;
+    };
+
+    for (const f of fichas) {
+      const l = linha(f.alunoId);
+      l.fichas++;
+      if (f.vencimento && (!l.vencimento || f.vencimento < l.vencimento)) l.vencimento = f.vencimento;
+      if (!l.atualizadaEm || f.updatedAt > l.atualizadaEm) l.atualizadaEm = f.updatedAt;
+    }
+    for (const c of cargas) linha(c.alunoId).ultimaCarga = c._max.data;
+
+    // A primeira aula de cada aluno (a lista já vem em ordem de data; dentro
+    // do mesmo dia, fica a mais cedo).
+    const agora = dayjs();
+    for (const a of aulas) {
+      const dia = dayjs(a.dataAula).format('YYYY-MM-DD');
+      const hora = a.horario.horaInicio;
+      // Aula de hoje que já passou não é "próxima".
+      if (dia === hoje.format('YYYY-MM-DD') && dayjs(`${dia}T${hora}`).add(1, 'hour').isBefore(agora)) continue;
+      const l = linha(a.usuarioId);
+      if (!l.proximaAula || dia < l.proximaAula.data || (dia === l.proximaAula.data && hora < l.proximaAula.hora)) {
+        l.proximaAula = { data: dia, hora };
+      }
+    }
+
+    return [...porAluno.values()];
+  }
+
   /** Metadados opcionais da ficha (vencimento, frequência). */
   private metaDados(dto: SalvarTreinoDto) {
     return {

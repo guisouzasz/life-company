@@ -32,6 +32,22 @@ export interface Treino {
   modalidade?: { id: string; nome: string } | null;
 }
 
+/**
+ * Situação de um aluno para o professor (GET /treinos/resumo): só aparecem
+ * alunos com ficha, carga ou aula marcada nas modalidades dele.
+ */
+export interface ResumoAluno {
+  alunoId: string;
+  /** Fichas em uso (não arquivadas). */
+  fichas: number;
+  /** O vencimento mais próximo entre as fichas em uso. */
+  vencimento: string | null;
+  atualizadaEm: string | null;
+  ultimaCarga: string | null;
+  /** A próxima aula dele com o professor, nos próximos 7 dias. */
+  proximaAula: { data: string; hora: string } | null;
+}
+
 export interface ExercicioPayload {
   grupo?: string;
   nome: string;

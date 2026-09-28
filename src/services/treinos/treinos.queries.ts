@@ -21,6 +21,19 @@ export function useTreinoDia(data?: string) {
   });
 }
 
+/**
+ * Situação de cada aluno (fichas, vencimento, última carga, próxima aula).
+ * Um minuto de validade: a lista é consultada o dia inteiro, mas muda pouco.
+ */
+export function useResumoTreinos(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.treinosResumo,
+    queryFn: treinosService.resumo,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 /** Treinos de um aluno (professor/admin). */
 export function useTreinosDoAluno(alunoId?: string, enabled = true) {
   return useQuery({

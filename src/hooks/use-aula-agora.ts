@@ -88,7 +88,7 @@ export function escolherAulaAgora(aulas: HorarioVaga[], agoraMin: number): FocoD
 }
 
 /** Minutos do relógio agora, atualizados de minuto em minuto. */
-function useMinutoAtual(): number {
+export function useMinutoAtual(): number {
   const calcular = () => {
     const d = new Date();
     return d.getHours() * 60 + d.getMinutes();

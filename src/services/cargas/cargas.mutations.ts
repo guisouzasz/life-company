@@ -4,7 +4,11 @@ import type { RegistrarCargaPayload } from './cargas.types';
 
 function useInvalidarCargas() {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: ['cargas'] });
+  return () => {
+    qc.invalidateQueries({ queryKey: ['cargas'] });
+    // A lista de alunos mostra a última carga de cada um.
+    qc.invalidateQueries({ queryKey: ['treinos', 'resumo'] });
+  };
 }
 
 export function useRegistrarCarga() {

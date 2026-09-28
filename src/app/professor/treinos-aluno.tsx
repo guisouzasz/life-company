@@ -12,7 +12,7 @@ import { Avatar } from '../../components/ui/avatar';
 import { ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { CargaExercicioModal } from '../../components/professor/carga-exercicio-modal';
-import { FichaExercicios } from '../../components/professor/ficha-exercicios';
+import { FichaExercicios, type ExercicioAberto } from '../../components/professor/ficha-exercicios';
 import { SeletorExercicio } from '../../components/professor/seletor-exercicio';
 import { EXERCICIOS_POR_GRUPO } from '../../constants/exercicios';
 import { Badge } from '../../components/ui/badge';
@@ -137,7 +137,7 @@ export default function TreinosAluno() {
   const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;
 
   // Exercício aberto no modal de carga/progressão
-  const [cargaDe, setCargaDe] = useState<{ nome: string; reps: string } | null>(null);
+  const [cargaDe, setCargaDe] = useState<(ExercicioAberto & { sequencia: ExercicioAberto[] }) | null>(null);
 
   // Form (null = lista; senão criação/edição)
   const [editando, setEditando] = useState<Treino | null>(null);
@@ -1003,6 +1003,9 @@ export default function TreinosAluno() {
         alunoId={alunoId}
         alunoNome={alunoNome}
         repeticoesPadrao={cargaDe?.reps}
+        cargaFicha={cargaDe?.carga}
+        sequencia={cargaDe?.sequencia}
+        onIr={(e) => setCargaDe((atual) => (atual ? { ...atual, ...e } : atual))}
         onClose={() => setCargaDe(null)}
       />
       <ConfirmModal

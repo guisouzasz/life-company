@@ -44,7 +44,7 @@ export function AppModal({
               <View style={styles.header}>
                 {headerLeft}
                 <Text style={styles.title}>{title}</Text>
-                <Pressable onPress={onClose} hitSlop={8} style={styles.close}>
+                <Pressable onPress={onClose} hitSlop={8} style={styles.close} accessibilityRole="button" accessibilityLabel="Fechar">
                   <Icon name="close" size={20} color={LC.textSecondary} />
                 </Pressable>
               </View>

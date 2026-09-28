@@ -42,6 +42,12 @@ export class TreinosController {
   }
 
   // ── Professor/Admin (professor limitado à própria modalidade) ─────
+  @Get('resumo') @UseGuards(StaffGuard)
+  @ApiOperation({ summary: 'Situação das fichas de cada aluno e a próxima aula dele (professor/admin)' })
+  resumo(@Request() req) {
+    return this.service.resumo(req.user);
+  }
+
   @Get('aluno/:alunoId') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Treinos de um aluno (professor/admin)' })
   doAluno(@Request() req, @Param('alunoId') alunoId: string) {
     return this.service.doAluno(alunoId, req.user);

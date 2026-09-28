@@ -2,54 +2,67 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
 import { Icon } from '../ui/icon';
+import { cargaDeHoje } from './situacao';
 import type { ExercicioTreino } from '../../services/treinos/treinos.types';
 import type { EvolucaoExercicio } from '../../services/cargas/cargas.types';
 
 /**
- * Ficha de musculação no formato de tabela impressa: colunas Exercício,
- * Repetições e Carga, com os exercícios agrupados por músculo.
+ * A ficha de musculação como o professor usa em pé, na sala: um cartão por
+ * exercício, agrupados por músculo, na ordem da ficha.
  *
- * O selo escuro do grupo recolhe e expande a seção. Numa ficha longa isso
- * evita rolagem, e faz o "+" ser um controle de verdade em vez de enfeite.
+ * Era uma tabela de três colunas. No celular o nome do exercício quebrava em
+ * três linhas ("SUPINO RETO / COM / HALTERES") para caber ao lado de colunas
+ * de largura fixa, e a carga que o aluno levantou da última vez vinha num
+ * texto de 11px embaixo da carga da ficha — justamente o número que ele
+ * pergunta ("quanto eu coloquei semana passada?").
+ *
+ * Agora cada exercício diz, em letra de ler de longe: o que fazer (séries ×
+ * repetições), com quanto (a carga da ficha) e quanto foi da última vez — e
+ * fica verde quando a carga de hoje já foi registrada, que é o "feito" da
+ * aula. O toque abre o registro de carga.
  */
 
 /** 22.5 → "22,5" | 20 → "20" */
-const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
+export const kgFmt = (v: number) => (Math.round(v * 100) / 100).toString().replace('.', ',');
 
 /**
- * A carga é texto livre: o professor escreve "12", "12kg" ou "elástico forte".
- * Quando é só número, ganha o "Kg" para a coluna ficar uniforme; qualquer
- * outra coisa aparece exatamente como foi digitada.
+ * A carga da ficha é texto livre: "12", "12kg" ou "elástico forte". Número
+ * ganha "kg"; o resto aparece como foi escrito.
  */
-function formatarCarga(carga?: string | null): string {
+export function formatarCarga(carga?: string | null): string | null {
   const v = (carga ?? '').trim();
-  if (!v) return '—';
-  return /^\d+([.,]\d+)?$/.test(v) ? `${v.replace('.', ',')} Kg` : v;
+  if (!v) return null;
+  return /^\d+([.,]\d+)?$/.test(v) ? `${v.replace('.', ',')} kg` : v;
 }
 
-type Secao = { grupo: string; itens: ExercicioTreino[] };
+type Secao = { grupo: string; itens: { e: ExercicioTreino; n: number }[] };
 
 /** Agrupa preservando a ordem em que os grupos aparecem na ficha. */
 function agrupar(exercicios: ExercicioTreino[]): Secao[] {
   const secoes: Secao[] = [];
-  for (const e of exercicios) {
+  exercicios.forEach((e, i) => {
     const grupo = e.grupo ?? '';
     let secao = secoes.find((s) => s.grupo === grupo);
     if (!secao) {
       secao = { grupo, itens: [] };
       secoes.push(secao);
     }
-    secao.itens.push(e);
-  }
+    secao.itens.push({ e, n: i + 1 });
+  });
   return secoes;
 }
+
+export type ExercicioAberto = { nome: string; reps: string; carga?: string | null };
 
 interface Props {
   exercicios: ExercicioTreino[];
   /** Evolução de carga já registrada para o exercício, se houver. */
   evolucaoDe: (nome: string) => EvolucaoExercicio | null;
-  /** Abre o histórico/registro de carga do exercício. */
-  onAbrirCarga: (exercicio: { nome: string; reps: string }) => void;
+  /**
+   * Abre o registro de carga. Vem com a ficha inteira em `sequencia`, para o
+   * registro poder seguir para o próximo exercício sem voltar à lista.
+   */
+  onAbrirCarga: (exercicio: ExercicioAberto & { sequencia: ExercicioAberto[] }) => void;
 }
 
 export function FichaExercicios({ exercicios, evolucaoDe, onAbrirCarga }: Props) {
@@ -58,81 +71,95 @@ export function FichaExercicios({ exercicios, evolucaoDe, onAbrirCarga }: Props)
 
   const secoes = agrupar(exercicios);
   const alternar = (grupo: string) => setRecolhidos((r) => ({ ...r, [grupo]: !r[grupo] }));
+  const sequencia: ExercicioAberto[] = exercicios.map((e) => ({ nome: e.nome, reps: e.repeticoes, carga: e.carga }));
 
   return (
-    <View style={s.tabela}>
-      {/* Cabeçalho das colunas */}
-      <View style={s.cabecalho}>
-        <Text style={[s.colTitulo, s.colNome]}>Exercício</Text>
-        <Text style={[s.colTitulo, s.colReps]}>Repetições</Text>
-        <Text style={[s.colTitulo, s.colCarga]}>Carga</Text>
-        <View style={s.colAcao} />
-      </View>
-
+    <View style={s.lista}>
       {secoes.map((secao) => {
         const recolhido = !!recolhidos[secao.grupo];
+        const feitos = secao.itens.filter(({ e }) => cargaDeHoje(evolucaoDe(e.nome))).length;
         return (
-          <View key={secao.grupo || 'sem-grupo'}>
+          <View key={secao.grupo || 'sem-grupo'} style={s.secao}>
             {secao.grupo ? (
               <Pressable
-                style={({ pressed }) => [s.linhaGrupo, pressed && s.linhaPressionada]}
+                style={s.grupo}
                 onPress={() => alternar(secao.grupo)}
                 accessibilityRole="button"
                 accessibilityState={{ expanded: !recolhido }}
-                accessibilityLabel={`${recolhido ? 'Expandir' : 'Recolher'} grupo ${secao.grupo}`}
+                accessibilityLabel={`${recolhido ? 'Mostrar' : 'Esconder'} ${secao.grupo}`}
               >
-                <View style={s.selo}>
-                  <Icon name={recolhido ? 'add' : 'remove'} size={15} color="#fff" />
-                </View>
-                <Text style={s.grupoNome}>GRUPO: {secao.grupo.toUpperCase()}</Text>
-                {recolhido ? (
-                  <Text style={s.grupoContagem}>
-                    {secao.itens.length} {secao.itens.length === 1 ? 'exercício' : 'exercícios'}
-                  </Text>
-                ) : null}
+                <Text style={s.grupoNome}>{secao.grupo}</Text>
+                <View style={s.grupoLinha} />
+                <Text style={s.grupoConta}>
+                  {feitos > 0 ? `${feitos}/${secao.itens.length} feitos` : secao.itens.length}
+                </Text>
+                <Icon name={recolhido ? 'chevron-down' : 'chevron-up'} size={14} color={LC.textMuted} />
               </Pressable>
             ) : null}
 
             {recolhido
               ? null
-              : secao.itens.map((e) => {
+              : secao.itens.map(({ e, n }) => {
                   const evo = evolucaoDe(e.nome);
+                  const hoje = cargaDeHoje(evo);
+                  const carga = formatarCarga(e.carga);
+                  // A última carga ANTES de hoje: é o "quanto foi da última vez".
+                  const anteriores = (evo?.registros ?? []).filter((r) => r !== hoje);
+                  const ultima = anteriores[anteriores.length - 1];
+                  const subiu = hoje && ultima ? hoje.peso - ultima.peso : 0;
                   return (
                     <Pressable
                       key={e.id}
-                      style={({ pressed }) => [s.linha, pressed && s.linhaPressionada]}
-                      onPress={() => onAbrirCarga({ nome: e.nome, reps: e.repeticoes })}
+                      style={({ pressed }) => [s.cartao, hoje && s.cartaoFeito, pressed && s.cartaoApertado]}
+                      onPress={() => onAbrirCarga({ nome: e.nome, reps: e.repeticoes, carga: e.carga, sequencia })}
                       accessibilityRole="button"
                       accessibilityLabel={`Carga de ${e.nome}`}
                     >
-                      <View style={s.colNome}>
-                        <Text style={s.exNome}>{e.nome}</Text>
-                        {e.observacao ? <Text style={s.exObs}>({e.observacao})</Text> : null}
+                      <View style={[s.numero, hoje && s.numeroFeito]}>
+                        {hoje ? (
+                          <Icon name="checkmark" size={15} color="#fff" />
+                        ) : (
+                          <Text style={s.numeroTexto}>{n}</Text>
+                        )}
                       </View>
 
-                      <Text style={[s.valor, s.colReps]}>
-                        {e.series} x {e.repeticoes}
-                      </Text>
-
-                      <View style={s.colCarga}>
-                        <Text style={s.valor}>{formatarCarga(e.carga)}</Text>
-                        {evo ? (
-                          <View style={s.evoRow}>
-                            <Icon
-                              name={evo.evolucaoKg > 0 ? 'trending-up' : evo.evolucaoKg < 0 ? 'trending-down' : 'remove'}
-                              size={11}
-                              color={evo.evolucaoKg > 0 ? LC.success : evo.evolucaoKg < 0 ? LC.danger : LC.textMuted}
-                            />
-                            <Text style={s.evoTexto}>
-                              {kgFmt(evo.atual)}
-                              {evo.evolucaoKg !== 0 ? ` (${evo.evolucaoKg > 0 ? '+' : ''}${kgFmt(evo.evolucaoKg)})` : ''}
+                      <View style={s.meio}>
+                        <Text style={s.nome}>{e.nome}</Text>
+                        <View style={s.metaLinha}>
+                          <View style={s.series}>
+                            <Text style={s.seriesTexto}>
+                              {e.series} × {e.repeticoes}
                             </Text>
                           </View>
-                        ) : null}
+                          {e.observacao ? (
+                            <Text style={s.obs} numberOfLines={2}>
+                              {e.observacao}
+                            </Text>
+                          ) : null}
+                        </View>
                       </View>
 
-                      <View style={s.colAcao}>
-                        <Icon name="stats-chart-outline" size={15} color={LC.primary} />
+                      <View style={s.direita}>
+                        {hoje ? (
+                          <>
+                            <Text style={[s.carga, { color: LC.successFg }]}>{kgFmt(hoje.peso)} kg</Text>
+                            <Text style={[s.ultima, { color: LC.successFg }]}>
+                              hoje{subiu > 0 ? ` · +${kgFmt(subiu)}` : ''}
+                            </Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={[s.carga, !carga && s.cargaVazia]}>{carga ?? '—'}</Text>
+                            {ultima ? (
+                              <View style={s.ultimaLinha}>
+                                <Icon name="time-outline" size={11} color={LC.textSecondary} />
+                                <Text style={s.ultimaTexto}>última {kgFmt(ultima.peso)}</Text>
+                              </View>
+                            ) : (
+                              <Text style={s.semRegistro}>registrar</Text>
+                            )}
+                          </>
+                        )}
                       </View>
                     </Pressable>
                   );
@@ -144,71 +171,45 @@ export function FichaExercicios({ exercicios, evolucaoDe, onAbrirCarga }: Props)
   );
 }
 
-/**
- * O respiro entre as colunas, e a razão de ele ser um `gap` da linha inteira e
- * não um `paddingRight` de cada coluna.
- *
- * Antes as colunas de número eram larguras fixas encostadas uma na outra: só o
- * nome tinha `paddingRight`. Enquanto a repetição era curta (`4 x 12/10/8/8`)
- * sobrava folga e ninguém via problema. Mas repetição é texto livre, e o
- * professor escreve coisas como `10"+8-10` (tempo mais repetições, notação de
- * musculação). Aí a repetição ocupava a coluna inteira e a carga começava
- * grudada nela: `3 x 10"+8-10` + `30 Kg` virava `3 x 10"+8-1030 Kg` na tela.
- *
- * Numa ficha de musculação isso não é só feio — o professor bate o olho e lê
- * mil e trinta quilos onde são trinta.
- *
- * `gap` resolve para sempre porque não depende de a largura ter sido bem
- * escolhida: por mais comprido que fique o texto, as colunas nunca se tocam.
- * A largura maior da repetição é só acabamento, para o caso comum caber numa
- * linha só.
- */
-const COL_GAP = 10;
-
 const s = StyleSheet.create({
-  tabela: { marginTop: 12, borderTopWidth: 1, borderTopColor: LC.borderStrong },
+  lista: { marginTop: 10 },
+  secao: { marginBottom: 6 },
 
-  cabecalho: {
-    flexDirection: 'row', alignItems: 'center', gap: COL_GAP,
-    paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: LC.borderStrong,
+  grupo: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  grupoNome: {
+    fontSize: 11.5, fontWeight: '800', color: LC.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase',
   },
-  colTitulo: { fontSize: 12.5, color: LC.textSecondary },
+  grupoLinha: { flex: 1, height: 1, backgroundColor: LC.borderStrong },
+  grupoConta: { fontSize: 11.5, fontWeight: '700', color: LC.textMuted },
 
-  /*
-    Colunas: o nome ocupa o resto, as de número têm largura fixa para alinhar
-    de uma linha para a outra.
-
-    O `minWidth` do nome e o `flexShrink` da repetição são para telas
-    estreitas. Larguras fixas somadas ao gap não cabiam num aparelho de 320px:
-    sobrava tão pouco para o nome que ele partia no meio da palavra —
-    "EXTEN/SOR", "ABDU/TOR". Num aparelho apertado é a repetição que cede
-    espaço e quebra em duas linhas; o nome do exercício continua legível, que é
-    por onde o professor acha a linha que procura.
-  */
-  colNome: { flex: 1, minWidth: 96 },
-  colReps: { width: 92, flexShrink: 1 },
-  colCarga: { width: 66 },
-  colAcao: { width: 22, alignItems: 'flex-end' },
-
-  linhaGrupo: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: LC.border,
+  cartao: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: LC.bgCard, borderRadius: 14, borderWidth: 1, borderColor: LC.border,
+    paddingVertical: 12, paddingHorizontal: 12, marginBottom: 8,
+    ...LC.shadow,
   },
-  selo: {
-    width: 28, height: 28, borderRadius: 14, backgroundColor: LC.textPrimary,
+  cartaoFeito: { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
+  cartaoApertado: { backgroundColor: LC.primaryLight, borderColor: LC.primarySoft },
+
+  numero: {
+    width: 30, height: 30, borderRadius: 15, backgroundColor: LC.neutralBg,
     alignItems: 'center', justifyContent: 'center',
   },
-  grupoNome: { flex: 1, fontSize: 13.5, fontWeight: '800', color: LC.textPrimary, letterSpacing: 0.3 },
-  grupoContagem: { fontSize: 11.5, color: LC.textMuted },
+  numeroFeito: { backgroundColor: LC.success },
+  numeroTexto: { fontSize: 13, fontWeight: '800', color: LC.textSecondary },
 
-  linha: {
-    flexDirection: 'row', alignItems: 'center', gap: COL_GAP,
-    paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: LC.border,
-  },
-  linhaPressionada: { backgroundColor: LC.neutralBg },
-  exNome: { fontSize: 13.5, color: LC.textPrimary, textTransform: 'uppercase', letterSpacing: 0.2 },
-  exObs: { fontSize: 12, color: LC.textMuted, marginTop: 2 },
-  valor: { fontSize: 13.5, color: LC.textPrimary },
-  evoRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
-  evoTexto: { fontSize: 11, fontWeight: '700', color: LC.textSecondary },
+  meio: { flex: 1, minWidth: 0 },
+  nome: { fontSize: 14.5, fontWeight: '700', color: LC.textPrimary, letterSpacing: 0.1 },
+  metaLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' },
+  series: { backgroundColor: LC.primaryLight, borderRadius: 7, paddingHorizontal: 7, paddingVertical: 2 },
+  seriesTexto: { fontSize: 12.5, fontWeight: '800', color: LC.primaryDark },
+  obs: { flexShrink: 1, fontSize: 12, color: LC.textSecondary, fontStyle: 'italic' },
+
+  direita: { alignItems: 'flex-end', minWidth: 70 },
+  carga: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
+  cargaVazia: { color: LC.textMuted },
+  ultimaLinha: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  ultima: { fontSize: 11.5, fontWeight: '600', color: LC.textSecondary, marginTop: 3 },
+  ultimaTexto: { fontSize: 11.5, fontWeight: '600', color: LC.textSecondary },
+  semRegistro: { fontSize: 11.5, fontWeight: '700', color: LC.primary, marginTop: 3 },
 });

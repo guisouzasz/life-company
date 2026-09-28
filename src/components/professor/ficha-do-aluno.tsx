@@ -1,32 +1,45 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
 import { Icon } from '../ui/icon';
 import { Loading, ErrorState } from '../ui/states';
-import { FichaExercicios } from './ficha-exercicios';
+import { FichaExercicios, type ExercicioAberto } from './ficha-exercicios';
 import { alertasDaFicha } from './ficha-saude';
+import { cargaDeHoje, diasAte, fichaSugerida, ordenarFichas } from './situacao';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { formatDate } from '../../services/date';
 import { nomeCurto } from '../../services/nome';
 
+/** "Treino A — Inferiores" → ["Treino A", "Inferiores"]. */
+function partesDoTitulo(titulo: string): [string, string | null] {
+  const m = titulo.split(/\s+[—–-]\s+/);
+  return m.length > 1 ? [m[0], m.slice(1).join(' — ')] : [titulo, null];
+}
+
 /**
- * O treino de um aluno em leitura: alerta de saúde no topo e as fichas
- * ativas logo abaixo.
+ * O treino de um aluno durante a aula: alerta de saúde, uma aba por ficha e
+ * os exercícios da ficha escolhida.
  *
- * Vive separado porque aparece em dois lugares que não se parecem: no pop-up
- * do celular e no painel lateral do tablet, onde fica aberto o tempo todo ao
- * lado da lista da turma. O que muda entre os dois é só a moldura.
+ * Quem tem Treino A, B e C tinha as três fichas empilhadas numa rolagem só —
+ * 25 exercícios em sequência, e o professor procurando onde começava a de
+ * hoje. Agora é uma aba por ficha, e a de hoje já vem aberta: é a que está
+ * há mais tempo sem carga registrada (ver `fichaSugerida`), com o motivo
+ * escrito embaixo para o professor concordar ou trocar num toque.
+ *
+ * Vive separado porque aparece no celular (tela da sala) e no tablet (painel
+ * ao lado da turma). O que muda entre os dois é só a moldura.
  */
 
 interface Props {
   alunoId?: string;
-  /** Falso desliga as consultas — o pop-up fechado não busca nada. */
+  /** Falso desliga as consultas — a tela fechada não busca nada. */
   ativo: boolean;
-  onAbrirCarga: (exercicio: { nome: string; reps: string }) => void;
+  onAbrirCarga: (exercicio: ExercicioAberto & { sequencia: ExercicioAberto[] }) => void;
   /** Abre a ficha de saúde completa. */
   onVerFicha: () => void;
-  /** Limita a rolagem (pop-up). Sem isto, ocupa a altura que o pai der. */
+  /** Limita a rolagem. Sem isto, ocupa a altura que o pai der. */
   alturaMax?: number;
 }
 
@@ -37,86 +50,160 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
 
   const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;
 
-  // A ficha que interessa em aula é a que está valendo; as concluídas ficam
-  // só como contagem, para o professor saber que existe histórico.
-  const todas = treinos.data ?? [];
-  const ativos = todas.filter((t) => !t.concluido);
-  const concluidos = todas.length - ativos.length;
+  const ativos = useMemo(() => ordenarFichas((treinos.data ?? []).filter((t) => !t.concluido)), [treinos.data]);
+  const arquivadas = (treinos.data ?? []).length - ativos.length;
+  const sugestao = useMemo(() => fichaSugerida(ativos, cargas.data ?? []), [ativos, cargas.data]);
 
-  // Mesma regra da ficha em tela cheia — a lista de alertas mora num lugar só.
+  // A aba aberta: a escolhida pelo professor, senão a sugerida, senão a primeira.
+  const [escolhida, setEscolhida] = useState<string | null>(null);
+  useEffect(() => setEscolhida(null), [alunoId]);
+  const aberta = ativos.find((t) => t.id === escolhida) ?? ativos.find((t) => t.id === sugestao?.id) ?? ativos[0];
+
   const alertas = alertasDaFicha(anamnese.data);
+
+  const feitos = aberta ? aberta.exercicios.filter((e) => cargaDeHoje(evolucaoDe(e.nome))).length : 0;
+  const total = aberta?.exercicios.length ?? 0;
+  const diasVenc = aberta?.vencimento ? diasAte(aberta.vencimento) : null;
 
   return (
     <>
       {alertas.length > 0 ? (
-        <Pressable style={s.alerta} onPress={onVerFicha} accessibilityRole="button">
-          <Icon name="warning-outline" size={16} color={LC.warningFg} />
-          <Text style={s.alertaTexto} numberOfLines={2}>{alertas.join(' • ')}</Text>
+        <Pressable style={s.alerta} onPress={onVerFicha} accessibilityRole="button" accessibilityLabel="Ver ficha de saúde">
+          <View style={s.alertaIcone}>
+            <Icon name="medkit" size={15} color="#fff" />
+          </View>
+          <Text style={s.alertaTexto} numberOfLines={2}>{alertas.join(' · ')}</Text>
           <Icon name="chevron-forward" size={15} color={LC.warningFg} />
         </Pressable>
       ) : anamnese.data ? (
-        <Pressable style={s.fichaLink} onPress={onVerFicha} accessibilityRole="button">
-          <Icon name="clipboard-outline" size={15} color={LC.primary} />
-          <Text style={s.fichaLinkTexto}>Ver ficha de saúde</Text>
+        <Pressable style={s.saudeOk} onPress={onVerFicha} accessibilityRole="button" accessibilityLabel="Ver ficha de saúde">
+          <Icon name="shield-checkmark-outline" size={15} color={LC.successFg} />
+          <Text style={s.saudeOkTexto}>Ficha de saúde sem alertas</Text>
         </Pressable>
+      ) : anamnese.isSuccess ? (
+        <View style={s.saudeOk}>
+          <Icon name="help-circle-outline" size={15} color={LC.textMuted} />
+          <Text style={[s.saudeOkTexto, { color: LC.textMuted }]}>Ainda não preencheu a ficha de saúde</Text>
+        </View>
       ) : null}
 
       {/*
-        Barra de rolagem à mostra de propósito. Com ela escondida, um treino
-        longo terminava numa linha cortada no meio e parecia defeito — o
-        professor não tinha como saber que faltavam dez exercícios abaixo.
+        Uma aba por ficha — só quando há mais de uma. Até três cabem lado a
+        lado, com o nome em duas linhas ("Treino A" / "Inferiores"); mais do
+        que isso vira uma fileira que rola.
       */}
-      <ScrollView
-        style={alturaMax ? { maxHeight: alturaMax } : { flex: 1 }}
-        showsVerticalScrollIndicator
-      >
+      {ativos.length > 1 ? (
+        <ScrollView
+          horizontal
+          scrollEnabled={ativos.length > 3}
+          showsHorizontalScrollIndicator={false}
+          style={s.abasScroll}
+          contentContainerStyle={[s.abas, ativos.length <= 3 && { flexGrow: 1 }]}
+        >
+          {ativos.map((t) => {
+            const sel = t.id === aberta?.id;
+            const hoje = t.id === sugestao?.id;
+            const [principal, detalhe] = partesDoTitulo(t.titulo);
+            return (
+              <Pressable
+                key={t.id}
+                style={[s.aba, ativos.length <= 3 && s.abaCheia, sel && s.abaSel]}
+                onPress={() => setEscolhida(t.id)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: sel }}
+                accessibilityLabel={`${t.titulo}${hoje ? ' (sugerido para hoje)' : ''}`}
+              >
+                <View style={s.abaLinha}>
+                  <Text style={[s.abaTexto, sel && s.abaTextoSel]} numberOfLines={1}>{principal}</Text>
+                  {hoje ? (
+                    <View style={[s.hojeSelo, sel && s.hojeSeloSel]}>
+                      <Text style={[s.hojeSeloTexto, sel && { color: LC.primary }]}>HOJE</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {detalhe ? (
+                  <Text style={[s.abaDetalhe, sel && s.abaDetalheSel]} numberOfLines={1}>{detalhe}</Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+      {sugestao && aberta?.id === sugestao.id && ativos.length > 1 ? (
+        <Text style={s.motivo}>
+          <Icon name="sparkles-outline" size={12} color={LC.primary} /> Sugerido para hoje: {sugestao.motivo}.
+        </Text>
+      ) : null}
+
+      <ScrollView style={alturaMax ? { maxHeight: alturaMax } : { flex: 1 }} showsVerticalScrollIndicator>
         {treinos.isLoading ? (
           <View style={{ height: 120 }}>
             <Loading />
           </View>
         ) : treinos.isError ? (
           <ErrorState onRetry={() => treinos.refetch()} />
-        ) : ativos.length === 0 ? (
-          <Text style={s.vazio}>
-            {concluidos > 0
-              ? `Nenhuma ficha ativa — ${concluidos} já concluída${concluidos > 1 ? 's' : ''}. Abra os treinos do aluno para montar a próxima.`
-              : 'Este aluno ainda não tem treino montado.'}
-          </Text>
+        ) : !aberta ? (
+          <View style={s.vazio}>
+            <View style={s.vazioIcone}>
+              <Icon name="document-text-outline" size={26} color={LC.danger} />
+            </View>
+            <Text style={s.vazioTitulo}>Sem ficha de treino</Text>
+            <Text style={s.vazioTexto}>
+              {arquivadas > 0
+                ? `${arquivadas === 1 ? 'A ficha anterior está arquivada' : `As ${arquivadas} fichas anteriores estão arquivadas`}. Toque em "Montar ficha" para fazer a próxima.`
+                : 'Toque em "Montar ficha" para criar o primeiro treino.'}
+            </Text>
+          </View>
         ) : (
-          ativos.map((t) => (
-            <View key={t.id} style={s.treino}>
-              <View style={s.treinoTopo}>
-                <Text style={s.treinoTitulo}>{t.titulo.toUpperCase()}</Text>
-                {/* A contagem avisa que o treino é longo antes de o professor
-                    descobrir rolando — e confirma que ele viu tudo. */}
-                {t.exercicios.length > 0 ? (
-                  <Text style={s.treinoMeta}>
-                    {t.exercicios.length} {t.exercicios.length === 1 ? 'exercício' : 'exercícios'}
-                  </Text>
-                ) : null}
-                {t.frequencia ? <Text style={s.treinoMeta}>{t.frequencia}</Text> : null}
-                {t.professor ? <Text style={s.treinoMeta}>prof. {nomeCurto(t.professor.nome)}</Text> : null}
+          <View>
+            <View style={s.fichaTopo}>
+              <View style={{ flex: 1 }}>
+                {ativos.length === 1 ? <Text style={s.fichaTitulo}>{aberta.titulo}</Text> : null}
+                <Text style={s.fichaMeta}>
+                  {[
+                    total ? `${total} exercícios` : null,
+                    aberta.frequencia,
+                    aberta.professor ? `prof. ${nomeCurto(aberta.professor.nome)}` : null,
+                  ].filter(Boolean).join(' · ')}
+                </Text>
               </View>
-
-              {/*
-                A observação do aluno vem antes de tudo: em aula o professor lê
-                de cima para baixo e começa a série. Se "dor no ombro" está no
-                rodapé, ele lê depois de já ter mandado fazer.
-              */}
-              {t.observacoes ? (
-                <View style={s.obsAluno}>
-                  <Icon name="alert-circle-outline" size={15} color={LC.warningFg} />
-                  <Text style={s.obsAlunoTexto}>{t.observacoes}</Text>
+              {diasVenc !== null ? (
+                <View style={[s.venc, diasVenc < 0 ? s.vencVencida : diasVenc <= 10 ? s.vencPerto : null]}>
+                  <Text style={[s.vencTexto, diasVenc < 0 ? { color: LC.dangerFg } : diasVenc <= 10 ? { color: LC.warningFg } : null]}>
+                    {diasVenc < 0 ? `Venceu ${formatDate(aberta.vencimento!, 'DD/MM')}` : `Vence ${formatDate(aberta.vencimento!, 'DD/MM')}`}
+                  </Text>
                 </View>
               ) : null}
-
-              <FichaExercicios exercicios={t.exercicios} evolucaoDe={evolucaoDe} onAbrirCarga={onAbrirCarga} />
-              {t.conteudo ? <Text style={s.conteudo}>{t.conteudo}</Text> : null}
-              {t.vencimento ? (
-                <Text style={s.venc}>Ficha vence em {formatDate(t.vencimento, 'DD/MM/YYYY')}</Text>
-              ) : null}
             </View>
-          ))
+
+            {/* Progresso da aula: quantos exercícios já têm carga de hoje. */}
+            {total > 0 && feitos > 0 ? (
+              <View style={s.progresso}>
+                <View style={s.progressoTrilho}>
+                  <View style={[s.progressoBarra, { width: `${Math.round((feitos / total) * 100)}%` }]} />
+                </View>
+                <Text style={s.progressoTexto}>
+                  {feitos === total ? 'Ficha completa hoje!' : `${feitos} de ${total} com carga hoje`}
+                </Text>
+              </View>
+            ) : null}
+
+            {/*
+              A observação vem antes dos exercícios: em aula o professor lê de
+              cima para baixo e começa a série. "Dor no ombro" no rodapé é lida
+              depois de já ter mandado fazer.
+            */}
+            {aberta.observacoes ? (
+              <View style={s.obs}>
+                <Icon name="alert-circle" size={16} color={LC.warningFg} />
+                <Text style={s.obsTexto}>{aberta.observacoes}</Text>
+              </View>
+            ) : null}
+
+            <FichaExercicios exercicios={aberta.exercicios} evolucaoDe={evolucaoDe} onAbrirCarga={onAbrirCarga} />
+            {aberta.conteudo ? <Text style={s.conteudo}>{aberta.conteudo}</Text> : null}
+            <View style={{ height: 12 }} />
+          </View>
         )}
       </ScrollView>
     </>
@@ -125,24 +212,59 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
 
 const s = StyleSheet.create({
   alerta: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10,
-    backgroundColor: LC.warningBg, borderRadius: LC.radius.md, paddingHorizontal: 12, paddingVertical: 9,
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10,
+    backgroundColor: LC.warningBg, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 9,
+    borderWidth: 1, borderColor: '#FDE68A',
   },
-  alertaTexto: { flex: 1, fontSize: 12.5, fontWeight: '700', color: LC.warningFg },
-  fichaLink: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  fichaLinkTexto: { fontSize: 12.5, fontWeight: '700', color: LC.primary },
+  alertaIcone: { width: 28, height: 28, borderRadius: 9, backgroundColor: LC.warning, alignItems: 'center', justifyContent: 'center' },
+  alertaTexto: { flex: 1, fontSize: 13, fontWeight: '700', color: LC.warningFg, lineHeight: 18 },
+  saudeOk: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  saudeOkTexto: { fontSize: 12.5, fontWeight: '700', color: LC.successFg },
 
-  vazio: { fontSize: 13.5, color: LC.textSecondary, lineHeight: 20, paddingVertical: 18 },
-  treino: { marginBottom: 14 },
-  treinoTopo: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  treinoTitulo: { fontSize: 14.5, fontWeight: '800', color: LC.primary, letterSpacing: 0.4 },
-  treinoMeta: { fontSize: 12, color: LC.textSecondary },
-  conteudo: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, marginTop: 8 },
-  obsAluno: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 7,
-    backgroundColor: LC.warningBg, borderRadius: 9,
-    padding: 9, marginTop: 8,
+  abasScroll: { flexGrow: 0, flexShrink: 0, marginBottom: 4 },
+  abas: { gap: 8, paddingVertical: 2 },
+  aba: {
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12,
+    backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.borderStrong, maxWidth: 220,
   },
-  obsAlunoTexto: { flex: 1, fontSize: 12.5, color: LC.warningFg, lineHeight: 18, fontWeight: '600' },
-  venc: { fontSize: 11.5, color: LC.textMuted, marginTop: 6 },
+  abaCheia: { flex: 1, maxWidth: undefined },
+  abaLinha: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  abaDetalhe: { fontSize: 11.5, fontWeight: '600', color: LC.textMuted, marginTop: 1 },
+  abaDetalheSel: { color: 'rgba(255,255,255,0.85)' },
+  abaSel: { backgroundColor: LC.primary, borderColor: LC.primary },
+  abaTexto: { fontSize: 13.5, fontWeight: '700', color: LC.textSecondary, flexShrink: 1 },
+  abaTextoSel: { color: '#fff', fontWeight: '800' },
+  hojeSelo: { backgroundColor: LC.primaryLight, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
+  hojeSeloSel: { backgroundColor: '#fff' },
+  hojeSeloTexto: { fontSize: 9.5, fontWeight: '900', color: LC.primary, letterSpacing: 0.6 },
+  motivo: { fontSize: 12, color: LC.textSecondary, marginTop: 4, marginBottom: 4, lineHeight: 17 },
+
+  fichaTopo: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
+  fichaTitulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
+  fichaMeta: { fontSize: 12.5, color: LC.textSecondary, marginTop: 2 },
+  venc: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: LC.neutralBg },
+  vencPerto: { backgroundColor: LC.warningBg },
+  vencVencida: { backgroundColor: LC.dangerBg },
+  vencTexto: { fontSize: 11.5, fontWeight: '800', color: LC.textSecondary },
+
+  progresso: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  progressoTrilho: { flex: 1, height: 8, borderRadius: 4, backgroundColor: LC.neutralBg, overflow: 'hidden' },
+  progressoBarra: { height: '100%', borderRadius: 4, backgroundColor: LC.success },
+  progressoTexto: { fontSize: 12, fontWeight: '800', color: LC.successFg },
+
+  obs: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: LC.warningBg, borderRadius: 12, padding: 11, marginTop: 10,
+  },
+  obsTexto: { flex: 1, fontSize: 13, color: LC.warningFg, lineHeight: 19, fontWeight: '700' },
+
+  vazio: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 12 },
+  vazioIcone: {
+    width: 56, height: 56, borderRadius: 28, backgroundColor: LC.dangerBg,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 10,
+  },
+  vazioTitulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
+  vazioTexto: { fontSize: 13, color: LC.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 19 },
+
+  conteudo: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, marginTop: 8 },
 });

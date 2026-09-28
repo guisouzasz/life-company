@@ -23,6 +23,7 @@ export const queryKeys = {
   financeiroAluno: (usuarioId?: string) => ['financeiro', 'aluno', usuarioId ?? 'all'] as const,
   treinosMeus: ['treinos', 'meus'] as const,
   treinosAluno: (alunoId?: string) => ['treinos', 'aluno', alunoId ?? 'all'] as const,
+  treinosResumo: ['treinos', 'resumo'] as const,
   treinoDiaMeu: ['treinos', 'dia', 'meu'] as const,
   treinoDia: (data?: string) => ['treinos', 'dia', data ?? ''] as const,
   cargasMinhas: ['cargas', 'meus'] as const,

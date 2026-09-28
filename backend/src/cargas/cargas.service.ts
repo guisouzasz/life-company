@@ -130,7 +130,11 @@ export class CargasService {
         peso: dto.peso,
         repeticoes: dto.repeticoes,
         observacao: dto.observacao,
-        data: dto.data ? dayjs(dto.data).startOf('day').toDate() : new Date(),
+        // O dia, não o instante: gravado como `new Date()`, a carga das 21h em
+        // diante (aula das 20h) caía em UTC no dia seguinte, e o histórico do
+        // aluno mostrava um treino "de amanhã". Meia-noite local, como a data
+        // escolhida e como as aulas.
+        data: dto.data ? dayjs(dto.data).startOf('day').toDate() : dayjs().startOf('day').toDate(),
       },
     });
     return { ...registro, peso: Number(registro.peso) };
