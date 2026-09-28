@@ -64,22 +64,23 @@ model Usuario {
   createdAt             DateTime    @default(now()) @map("created_at")
   updatedAt             DateTime    @updatedAt @map("updated_at")
 
-  agendamentos        Agendamento[]
-  usuarioPlanos       UsuarioPlano[]
-  primeiroAcesso      PrimeiroAcesso?
-  refreshTokens       RefreshToken[]
-  creditosReposicao   CreditoReposicao[]
-  horariosFixos       HorarioFixo[]
-  pagamentos          Pagamento[]
-  treinosRecebidos    Treino[]           @relation("TreinosDoAluno")
-  treinosCriados      Treino[]           @relation("TreinosDoProfessor")
-  cargasRecebidas     RegistroCarga[]    @relation("CargasDoAluno")
-  cargasRegistradas   RegistroCarga[]    @relation("CargasDoProfessor")
-  treinosDia          TreinoDia[]        @relation("TreinosDiaDoProfessor")
-  anamnese            Anamnese?
-  aceitesTermo        AceiteTermo[]
-  logsAcao            LogAcao[]
-  modalidadeProfessor Modalidade?        @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
+  agendamentos         Agendamento[]
+  usuarioPlanos        UsuarioPlano[]
+  primeiroAcesso       PrimeiroAcesso?
+  refreshTokens        RefreshToken[]
+  creditosReposicao    CreditoReposicao[]
+  horariosFixos        HorarioFixo[]
+  pagamentos           Pagamento[]
+  treinosRecebidos     Treino[]              @relation("TreinosDoAluno")
+  treinosCriados       Treino[]              @relation("TreinosDoProfessor")
+  cargasRecebidas      RegistroCarga[]       @relation("CargasDoAluno")
+  cargasRegistradas    RegistroCarga[]       @relation("CargasDoProfessor")
+  treinosDia           TreinoDia[]           @relation("TreinosDiaDoProfessor")
+  anamnese             Anamnese?
+  aceitesTermo         AceiteTermo[]
+  logsAcao             LogAcao[]
+  modalidadeProfessor  Modalidade?           @relation("ProfessorModalidade", fields: [modalidadeProfessorId], references: [id])
+  modalidadesProfessor ProfessorModalidade[]
 
   @@map("usuarios")
 }
@@ -334,12 +335,29 @@ model Modalidade {
 
   horarios      Horario[]
   usuariosPlano UsuarioPlano[]
-  professores   Usuario[]       @relation("ProfessorModalidade")
+  professores   Usuario[]             @relation("ProfessorModalidade")
+  equipe        ProfessorModalidade[]
   treinos       Treino[]
   cargas        RegistroCarga[]
   treinosDia    TreinoDia[]
 
   @@map("modalidades")
+}
+
+/// Todas as modalidades em que o professor dá aula — a Gabriele pode ser de
+/// Musculação e de Funcional ao mesmo tempo. `Usuario.modalidadeProfessorId`
+/// continua existindo como a PRINCIPAL (a primeira desta lista): versões
+/// anteriores do app e da API leem só ela, e mantê-la em dia deixa voltar
+/// uma versão sem que nenhum professor perca acesso.
+model ProfessorModalidade {
+  professorId  String @map("professor_id")
+  modalidadeId String @map("modalidade_id")
+
+  professor  Usuario    @relation(fields: [professorId], references: [id], onDelete: Cascade)
+  modalidade Modalidade @relation(fields: [modalidadeId], references: [id], onDelete: Cascade)
+
+  @@id([professorId, modalidadeId])
+  @@map("professor_modalidades")
 }
 
 model Horario {

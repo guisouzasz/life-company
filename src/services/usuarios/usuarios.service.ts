@@ -59,9 +59,15 @@ export const usuariosService = {
     return data;
   },
 
-  /** Apaga o aluno de vez (dados pessoais e conteúdo; histórico fica anônimo). */
-  async excluirDefinitivamente(id: string): Promise<{ mensagem: string }> {
-    const { data } = await http.delete<{ mensagem: string }>(`/usuarios/${id}/definitivo`);
+  /**
+   * Apaga o aluno ou professor de vez (dados pessoais e conteúdo; histórico
+   * fica anônimo). No professor, `fichasPara` é quem passa a assinar as
+   * fichas de treino que ele montou.
+   */
+  async excluirDefinitivamente(id: string, fichasPara?: string): Promise<{ mensagem: string }> {
+    const { data } = await http.delete<{ mensagem: string }>(`/usuarios/${id}/definitivo`, {
+      params: fichasPara ? { fichasPara } : {},
+    });
     return data;
   },
 };

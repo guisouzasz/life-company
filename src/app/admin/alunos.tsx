@@ -348,17 +348,6 @@ export default function AdminAlunos() {
               {todos.length ? ` · ${treinando} treinando` : ''}
             </Text>
           </View>
-          {/* Professor não aparece nesta lista (ela é só de alunos); a gestão
-              deles fica a um toque daqui, que é onde se procura por pessoas. */}
-          <Pressable
-            style={({ pressed }) => [s.professoresBtn, pressed && s.professoresBtnPress]}
-            onPress={() => router.push('/admin/professores')}
-            accessibilityRole="button"
-            accessibilityLabel="Ver professores"
-          >
-            <Icon name="people-outline" size={15} color={LC.primary} />
-            <Text style={s.professoresTexto}>Professores</Text>
-          </Pressable>
         </View>
       </View>
 
@@ -729,13 +718,6 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
-  professoresBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: LC.radius.full,
-    backgroundColor: LC.primaryLight,
-  },
-  professoresBtnPress: { opacity: 0.75 },
-  professoresTexto: { fontSize: 12.5, fontWeight: '700', color: LC.primary },
   searchWrap: { paddingHorizontal: 16, paddingVertical: 10 },
   scroll: { paddingHorizontal: 16, paddingBottom: 16 },
   // ── Recortes ────────────────────────────────────────────────

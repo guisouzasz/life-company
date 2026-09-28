@@ -17,6 +17,7 @@ import { AlterarSenhaDto } from './dto/alterar-senha.dto';
 import { EmailService } from '../email/email.service';
 import { modeloRedefinirSenha } from '../email/modelo-redefinir-senha';
 import { nomeCurto } from '../comum/nome';
+import { juntarModalidades } from '../usuarios/modalidades-do-professor';
 import { PrimeiroAcessoDto } from "./dto/primeiro-acesso.dto";
 import { AtivarContaDto, erroDeEmail } from "./dto/ativar-conta.dto";
 import { segredoJwt } from "./jwt.config";
@@ -70,9 +71,18 @@ export class AuthService {
       await tx.primeiroAcesso.deleteMany({ where: { usuarioId } });
       await tx.horarioFixo.deleteMany({ where: { usuarioId } });
       await tx.creditoReposicao.deleteMany({ where: { usuarioId } });
-      await tx.registroCarga.deleteMany({ where: { OR: [{ alunoId: usuarioId }, { professorId: usuarioId }] } });
-      await tx.treino.deleteMany({ where: { OR: [{ alunoId: usuarioId }, { professorId: usuarioId }] } });
-      await tx.treinoDia.deleteMany({ where: { professorId: usuarioId } });
+      /**
+       * Só o que é DO aluno: as fichas e cargas que ele recebeu.
+       *
+       * Antes também apagava o que a pessoa tinha montado como professor — e
+       * isso não é dela, é dos alunos. Excluir um professor que saiu levava
+       * junto o treino de cada aluno que ele atendeu, e o histórico de carga
+       * de todos eles. As fichas ficam com os alunos (a dona pode passá-las
+       * para outro professor na exclusão) e o nome dele some com o cadastro.
+       */
+      await tx.registroCarga.deleteMany({ where: { alunoId: usuarioId } });
+      await tx.treino.deleteMany({ where: { alunoId: usuarioId } });
+      await tx.professorModalidade.deleteMany({ where: { professorId: usuarioId } });
       /**
        * A ficha de anamnese também sai — e ela é o dado mais sensível que o
        * sistema guarda: lesão, cirurgia, medicamento controlado, patologia.
@@ -97,6 +107,11 @@ export class AuthService {
           cpf: `REMOVIDO-${usuarioId}`,
           email: null,
           telefone: null,
+          // A ficha cadastral também é dado pessoal e ficava para trás.
+          rg: null,
+          endereco: null,
+          cep: null,
+          dataNascimento: null,
           senhaHash: null,
           fcmToken: null,
           ativo: false,
@@ -118,10 +133,12 @@ export class AuthService {
         // registro. É só uma dica de tela — quem manda é o guard na API.
         dono: true,
         modalidadeProfessor: { select: { id: true, nome: true } },
+        modalidadesProfessor: { select: { modalidade: { select: { id: true, nome: true } } } },
       },
     });
     if (!u) throw new UnauthorizedException();
-    return { ...u, tipo: u.tipoUsuario };
+    const { modalidadesProfessor, ...resto } = u;
+    return { ...resto, tipo: u.tipoUsuario, modalidades: juntarModalidades(u.modalidadeProfessor, modalidadesProfessor) };
   }
 
   async login(dto: LoginDto) {

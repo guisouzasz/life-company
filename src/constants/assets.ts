@@ -25,6 +25,27 @@ export function nomeModalidade(nome?: string): string {
   return n.toLowerCase() === 'academia' ? 'Musculação' : n;
 }
 
+type Mod = { id: string; nome: string };
+
+/**
+ * Modalidades de um professor, a principal primeiro.
+ *
+ * Um professor pode dar aula em mais de uma (Gabriele: Musculação e
+ * Funcional). Cai na modalidade única quando a lista não vem — é o que uma
+ * API anterior devolve —, para a tela nunca ficar sem nenhuma.
+ */
+export function modalidadesDe(p?: { modalidades?: Mod[]; modalidadeProfessor?: Mod | null } | null): Mod[] {
+  if (p?.modalidades?.length) return p.modalidades;
+  return p?.modalidadeProfessor ? [p.modalidadeProfessor] : [];
+}
+
+/** "Musculação", "Musculação e Funcional", "Musculação, Funcional e Pilates". */
+export function juntarNomes(mods: { nome: string }[]): string {
+  const nomes = mods.map((m) => nomeModalidade(m.nome));
+  if (nomes.length <= 1) return nomes[0] ?? '';
+  return `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
+}
+
 /** Ignora acento, caixa e espaço em volta — "MUSCULAÇÃO " casa com "musculacao". */
 const chave = (nome?: string | null) =>
   (nome ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();

@@ -67,3 +67,23 @@ export function useExcluirAlunoDefinitivamente() {
     },
   });
 }
+
+/**
+ * Apaga o professor de vez. As fichas que ele montou ficam com os alunos —
+ * `fichasPara` diz quem passa a assiná-las.
+ */
+export function useExcluirProfessor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, fichasPara }: { id: string; fichasPara?: string }) =>
+      usuariosService.excluirDefinitivamente(id, fichasPara),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['treinos'] });
+      qc.invalidateQueries({ queryKey: ['usuarios'] });
+      qc.invalidateQueries({ queryKey: ['agendamentos'] });
+      qc.invalidateQueries({ queryKey: ['horarios'] });
+      qc.invalidateQueries({ queryKey: ['horarios-fixos'] });
+      qc.invalidateQueries({ queryKey: ['financeiro'] });
+    },
+  });
+}

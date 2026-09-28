@@ -9,6 +9,7 @@ import * as isoWeek from "dayjs/plugin/isoWeek";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { CriarUsuarioDto } from "./dto/criar-usuario.dto";
+import { juntarModalidades } from "./modalidades-do-professor";
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -82,7 +83,27 @@ export class UsuariosService {
     return data;
   }
 
-  /** A ficha cadastral completa é exigida do ALUNO; do PROFESSOR, não. */
+  /**
+   * As modalidades do professor que vieram no corpo, sem repetir e conferidas
+   * no banco. `undefined` quando o corpo não fala de modalidade.
+   *
+   * Aceita a lista nova (`modalidadeIds`) e o campo antigo (`modalidadeId`),
+   * que é o que o app instalado nos celulares ainda manda — com ele, a
+   * modalidade escolhida SUBSTITUI as outras, que era o significado de
+   * "trocar a modalidade" quando só existia uma.
+   */
+  private async modalidadesDoCorpo(
+    data: { modalidadeIds?: string[]; modalidadeId?: string },
+  ): Promise<string[] | undefined> {
+    const ids = data.modalidadeIds ?? (data.modalidadeId ? [data.modalidadeId] : undefined);
+    if (!ids) return undefined;
+    const unicos = [...new Set(ids.map((i) => i.trim()).filter(Boolean))];
+    if (unicos.length === 0) throw new ConflictException("Escolha pelo menos uma modalidade");
+    const existem = await this.prisma.modalidade.count({ where: { id: { in: unicos } } });
+    if (existem !== unicos.length) throw new NotFoundException("Modalidade não encontrada");
+    return unicos;
+  }
+
   /**
    * A ficha do aluno é preenchida por ELE, no primeiro acesso — não pela dona.
    *
@@ -108,8 +129,10 @@ export class UsuariosService {
       throw new ConflictException("Aluno precisa de plano e modalidade");
     }
     if (tipo === "ALUNO") this.exigirFichaDoAluno(dto);
-    // Professor pertence a UMA modalidade: só vê a agenda e os treinos dela.
-    if (tipo === "PROFESSOR" && !dto.modalidadeId) {
+    // O professor só vê a agenda e os treinos das modalidades dele.
+    const modalidadesProfessor =
+      tipo === "PROFESSOR" ? await this.modalidadesDoCorpo(dto) : undefined;
+    if (tipo === "PROFESSOR" && !modalidadesProfessor) {
       throw new ConflictException("Professor precisa de uma modalidade");
     }
     const cpfNorm = dto.cpf.replace(/\D/g, "");
@@ -131,7 +154,14 @@ export class UsuariosService {
         cep: this.normalizarCep(dto.cep) ?? null,
         dataNascimento: this.converterNascimento(dto.dataNascimento) ?? null,
         tipoUsuario: tipo as any,
-        ...(tipo === "PROFESSOR" ? { modalidadeProfessorId: dto.modalidadeId } : {}),
+        ...(modalidadesProfessor
+          ? {
+              modalidadeProfessorId: modalidadesProfessor[0],
+              modalidadesProfessor: {
+                create: modalidadesProfessor.map((modalidadeId) => ({ modalidadeId })),
+              },
+            }
+          : {}),
         // Mensalidade é coisa de aluno; professor não paga plano.
         ...(tipo === "ALUNO"
           ? {
@@ -238,14 +268,24 @@ export class UsuariosService {
         cpf: true,
         email: true,
         telefone: true,
+        dataNascimento: true,
         ativo: true,
         senhaHash: true,
         createdAt: true,
         modalidadeProfessor: { select: { id: true, nome: true } },
+        modalidadesProfessor: { select: { modalidade: { select: { id: true, nome: true } } } },
+        // Quantas fichas em uso ele assina: é o que a exclusão precisa decidir
+        // para onde vai.
+        _count: { select: { treinosCriados: { where: { ativo: true } } } },
       },
       orderBy: { nome: "asc" },
     });
-    return professores.map(({ senhaHash, ...p }) => ({ ...p, ativado: !!senhaHash }));
+    return professores.map(({ senhaHash, modalidadesProfessor, _count, ...p }) => ({
+      ...p,
+      modalidades: juntarModalidades(p.modalidadeProfessor, modalidadesProfessor),
+      fichas: _count.treinosCriados,
+      ativado: !!senhaHash,
+    }));
   }
 
   /**
@@ -255,7 +295,7 @@ export class UsuariosService {
    * na lista é convidar ao engano.
    */
   async listarNomesDeProfessores() {
-    return this.prisma.usuario.findMany({
+    const professores = await this.prisma.usuario.findMany({
       where: {
         tipoUsuario: 'PROFESSOR',
         ativo: true,
@@ -265,9 +305,14 @@ export class UsuariosService {
         id: true,
         nome: true,
         modalidadeProfessor: { select: { id: true, nome: true } },
+        modalidadesProfessor: { select: { modalidade: { select: { id: true, nome: true } } } },
       },
       orderBy: { nome: 'asc' },
     });
+    return professores.map(({ modalidadesProfessor, ...p }) => ({
+      ...p,
+      modalidades: juntarModalidades(p.modalidadeProfessor, modalidadesProfessor),
+    }));
   }
 
   /** Define a senha de um aluno/professor (o estúdio não envia e-mail). */
@@ -299,15 +344,20 @@ export class UsuariosService {
   async atualizar(id: string, data: Partial<CriarUsuarioDto> & { ativo?: boolean }) {
     const atual = await this.buscarPorId(id);
 
-    // Corrigir a modalidade do professor. Só vale para PROFESSOR: no aluno o
+    // As modalidades do professor. Só vale para PROFESSOR: no aluno o
     // `modalidadeId` pertence ao plano, e quem troca isso é `atualizarPlano`.
-    // Sem esta linha, professor cadastrado na modalidade errada só se resolvia
-    // apagando e refazendo a conta — e a modalidade decide o que ele enxerga:
-    // a agenda dela e o formato da ficha de treino.
-    const modalidadeProfessorId =
-      atual.tipoUsuario === "PROFESSOR" && data.modalidadeId
-        ? data.modalidadeId
-        : undefined;
+    // Sem isto, professor cadastrado na modalidade errada só se resolvia
+    // apagando e refazendo a conta — e as modalidades decidem o que ele
+    // enxerga: a agenda delas e o formato da ficha de treino.
+    const modalidadesProfessor =
+      atual.tipoUsuario === "PROFESSOR" ? await this.modalidadesDoCorpo(data) : undefined;
+    // A principal continua a mesma enquanto ele seguir nela — trocar a ordem
+    // de quem já estava certo só mudaria o título da agenda dele à toa.
+    const modalidadeProfessorId = modalidadesProfessor
+      ? modalidadesProfessor.includes(atual.modalidadeProfessorId ?? "")
+        ? atual.modalidadeProfessorId!
+        : modalidadesProfessor[0]
+      : undefined;
 
     const cpfNorm = data.cpf !== undefined ? data.cpf.replace(/\D/g, "") : undefined;
     if (cpfNorm !== undefined && cpfNorm.length !== 11) {
@@ -344,6 +394,17 @@ export class UsuariosService {
             : undefined,
         ativo: data.ativo,
         modalidadeProfessorId,
+        ...(modalidadesProfessor
+          ? {
+              modalidadesProfessor: {
+                deleteMany: { modalidadeId: { notIn: modalidadesProfessor } },
+                createMany: {
+                  data: modalidadesProfessor.map((modalidadeId) => ({ modalidadeId })),
+                  skipDuplicates: true,
+                },
+              },
+            }
+          : {}),
       },
     });
 
@@ -491,7 +552,7 @@ export class UsuariosService {
    * É a mesma rotina que o aluno usa para excluir a própria conta pelo app
    * (exigência das lojas e da LGPD), agora acessível ao estúdio.
    */
-  async excluirDefinitivamente(id: string) {
+  async excluirDefinitivamente(id: string, fichasPara?: string) {
     const usuario = await this.buscarPorId(id);
     if (usuario.tipoUsuario === "ADMIN") {
       throw new ForbiddenException(
@@ -499,15 +560,49 @@ export class UsuariosService {
       );
     }
 
+    /**
+     * Professor que sai deixa as fichas dos alunos: elas são dos alunos, não
+     * dele. A dona escolhe quem passa a assinar; sem escolher, as fichas
+     * continuam onde estão e qualquer professor da modalidade segue abrindo
+     * (o acesso é pela modalidade da ficha, não pelo nome de quem montou).
+     */
+    let destino: { id: string; nome: string } | null = null;
+    if (fichasPara) {
+      if (usuario.tipoUsuario !== "PROFESSOR" || fichasPara === id) {
+        throw new ConflictException("Escolha outro professor para receber as fichas");
+      }
+      const outro = await this.prisma.usuario.findUnique({
+        where: { id: fichasPara },
+        select: { id: true, nome: true, tipoUsuario: true, ativo: true },
+      });
+      if (!outro || outro.tipoUsuario !== "PROFESSOR" || !outro.ativo) {
+        throw new NotFoundException("Professor para receber as fichas não encontrado");
+      }
+      destino = outro;
+    }
+
     // Antes de anonimizar, tira das turmas — senão as vagas ficariam ocupadas
     // por um registro que nem nome tem mais.
     await this.excluir(id);
-    const r = await this.authService.excluirMinhaConta(id);
+    const passadas = destino
+      ? (
+          await this.prisma.treino.updateMany({
+            where: { professorId: id },
+            data: { professorId: destino.id },
+          })
+        ).count
+      : 0;
+    await this.authService.excluirMinhaConta(id);
 
     // "O cadastro de Fulana" e não "Fulana foi excluído": o sistema não sabe o
     // gênero de ninguém, e metade do estúdio é mulher.
+    const fichas =
+      destino && passadas > 0
+        ? ` ${passadas === 1 ? "A ficha de treino montada" : `As ${passadas} fichas de treino montadas`} por ${usuario.nome} ${passadas === 1 ? "agora é" : "agora são"} de ${destino.nome}.`
+        : "";
     return {
-      mensagem: `O cadastro de ${usuario.nome} foi excluído definitivamente. ${r.mensagem.replace(/^Sua conta foi excluída\. /, "")}`,
+      mensagem: `O cadastro de ${usuario.nome} foi excluído definitivamente e os dados pessoais foram apagados.${fichas}`,
+      fichasPassadas: passadas,
     };
   }
 

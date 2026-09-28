@@ -61,6 +61,11 @@ export interface UsuarioLogado {
   tipo: TipoUsuario;
   /** Dono do sistema: ADMIN que também vê o registro de ações. */
   dono?: boolean;
-  /** Modalidade do professor (null para admin/aluno). */
+  /** Modalidade principal do professor (null para admin/aluno). */
   modalidadeProfessor?: { id: string; nome: string } | null;
+  /**
+   * Todas as modalidades do professor, a principal primeiro. Vazia para
+   * admin/aluno. Pode não vir de uma API anterior — use `modalidadesDe`.
+   */
+  modalidades?: { id: string; nome: string }[];
 }

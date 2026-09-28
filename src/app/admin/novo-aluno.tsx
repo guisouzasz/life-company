@@ -19,7 +19,18 @@ import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, mascaraReal, real
 import { linkWhatsapp, mensagemPrimeiroAcesso, telefoneParaWhatsapp } from '../../services/whatsapp';
 
 export default function NovoAluno() {
-  const [tipo, setTipo] = useState<'ALUNO' | 'PROFESSOR'>('ALUNO');
+  return <NovoCadastro tipo="ALUNO" />;
+}
+
+/**
+ * Cadastro de aluno ou de professor.
+ *
+ * Um formulário só, aberto de dois lugares: o "+" da aba Alunos cadastra
+ * aluno, o da aba Professores cadastra professor. Antes era um formulário com
+ * a escolha "Aluno | Professor" no topo — e professor cadastrado por engano
+ * como aluno ganhava plano, mensalidade e vaga em turma.
+ */
+export function NovoCadastro({ tipo }: { tipo: 'ALUNO' | 'PROFESSOR' }) {
   const [nome, setNome] = useState('');
   const [rg, setRg] = useState('');
   const [cpf, setCpf] = useState('');
@@ -31,7 +42,8 @@ export default function NovoAluno() {
   const [planoId, setPlanoId] = useState('');
   const [valorTexto, setValorTexto] = useState('');
   const [diaTexto, setDiaTexto] = useState('5');
-  const [modalidadeProfId, setModalidadeProfId] = useState('');
+  /** Professor pode dar aula em mais de uma (Musculação e Funcional). */
+  const [modalidadesProf, setModalidadesProf] = useState<string[]>([]);
 
   const planos = usePlanos();
   const modalidades = useModalidades();
@@ -48,12 +60,21 @@ export default function NovoAluno() {
       setErro('Preencha nome completo e CPF (11 dígitos).');
       return;
     }
-    if (ehProfessor && !modalidadeProfId) {
-      setErro('Escolha a modalidade do professor.');
+    if (ehProfessor && modalidadesProf.length === 0) {
+      setErro('Escolha pelo menos uma modalidade do professor.');
       return;
     }
     // A ficha completa é exigida só do aluno; o professor entra com nome e CPF.
+    // O nascimento vale para os dois: é ele que põe a pessoa no card de
+    // aniversariantes do painel.
     let nascimentoIso: string | undefined;
+    if (nascimento.trim()) {
+      nascimentoIso = dataParaIso(nascimento) ?? undefined;
+      if (!nascimentoIso) {
+        setErro('Data de nascimento inválida — confira o dia, o mês e o ano.');
+        return;
+      }
+    }
     if (!ehProfessor) {
       if (!planoId) {
         setErro('Escolha o plano do aluno.');
@@ -75,13 +96,6 @@ export default function NovoAluno() {
       if (erros.length > 0) {
         setErro(`Confira: ${erros.join(', ')}.`);
         return;
-      }
-      if (nascimento.trim()) {
-        nascimentoIso = dataParaIso(nascimento) ?? undefined;
-        if (!nascimentoIso) {
-          setErro('Data de nascimento inválida — confira o dia, o mês e o ano.');
-          return;
-        }
       }
     }
     // O plano dá acesso a todas as modalidades; o backend exige um modalidadeId
@@ -110,15 +124,15 @@ export default function NovoAluno() {
         email: email.trim() || undefined,
         telefone: soDigitos(telefone) || undefined,
         tipoUsuario: tipo,
+        dataNascimento: nascimentoIso,
         ...(ehProfessor
-          ? { modalidadeId: modalidadeProfId }
+          ? { modalidadeIds: modalidadesProf }
           : {
               planoId,
               modalidadeId,
               rg: rg.trim(),
               endereco: endereco.trim(),
               cep: soDigitos(cep),
-              dataNascimento: nascimentoIso,
               ...(valor !== null ? { valorMensalidade: valor } : {}),
               diaVencimento: dia,
             }),
@@ -158,33 +172,9 @@ export default function NovoAluno() {
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
-      <Header title="Novo aluno" showBack />
+      <Header title={ehProfessor ? 'Novo professor' : 'Novo aluno'} showBack />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          {/* Tipo de cadastro */}
-          <Card style={s.section} padding={16}>
-            <Text style={s.sectionTitle}>Tipo de cadastro</Text>
-            <View style={s.chips}>
-              {(['ALUNO', 'PROFESSOR'] as const).map((t) => {
-                const sel = tipo === t;
-                return (
-                  <Pressable key={t} style={[s.chip, sel && s.chipSel]} onPress={() => setTipo(t)}>
-                    <Icon name={t === 'ALUNO' ? 'person-outline' : 'school-outline'} size={14} color={sel ? LC.primary : LC.textSecondary} />
-                    <Text style={[s.chipText, sel && s.chipTextSel]}>{t === 'ALUNO' ? 'Aluno' : 'Professor'}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {ehProfessor ? (
-              <View style={s.hintRow}>
-                <Icon name="information-circle-outline" size={16} color={LC.primary} />
-                <Text style={s.hintText}>
-                  Professor acessa somente a agenda (sem alterar horários) e monta os treinos dos alunos.
-                </Text>
-              </View>
-            ) : null}
-          </Card>
-
           {/* Dados pessoais */}
           <Card style={s.section} padding={16}>
             <Text style={s.sectionTitle}>Dados pessoais</Text>
@@ -220,9 +210,7 @@ export default function NovoAluno() {
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-              {ehProfessor ? null : (
-                <Input label="Data de nascimento" placeholder="DD/MM/AAAA" value={nascimento} onChangeText={(t) => setNascimento(mascaraData(t))} keyboardType="numeric" />
-              )}
+              <Input label="Data de nascimento" placeholder="DD/MM/AAAA" value={nascimento} onChangeText={(t) => setNascimento(mascaraData(t))} keyboardType="numeric" />
               <Input label="Telefone" placeholder="(00) 00000-0000" value={telefone} onChangeText={(t) => setTelefone(mascaraTelefone(t))} keyboardType="phone-pad" />
             </View>
           </Card>
@@ -230,13 +218,23 @@ export default function NovoAluno() {
           {/* Modalidade do professor */}
           {ehProfessor ? (
             <Card style={s.section} padding={16}>
-              <Text style={s.sectionTitle}>Modalidade do professor *</Text>
+              <Text style={s.sectionTitle}>Modalidades do professor *</Text>
               <View style={s.chips}>
                 {modalidades.data?.map((m) => {
-                  const sel = modalidadeProfId === m.id;
+                  const sel = modalidadesProf.includes(m.id);
                   return (
-                    <Pressable key={m.id} style={[s.chip, sel && s.chipSel]} onPress={() => setModalidadeProfId(m.id)}>
-                      <Icon name={iconePorModalidade(m.nome)} size={14} color={sel ? LC.primary : LC.textSecondary} />
+                    <Pressable
+                      key={m.id}
+                      style={[s.chip, sel && s.chipSel]}
+                      // Liga e desliga: a ordem em que foram marcadas define a
+                      // principal (a primeira), que é o título da agenda dele.
+                      onPress={() =>
+                        setModalidadesProf((atual) => (sel ? atual.filter((x) => x !== m.id) : [...atual, m.id]))
+                      }
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: sel }}
+                    >
+                      <Icon name={sel ? 'checkmark-circle' : iconePorModalidade(m.nome)} size={14} color={sel ? LC.primary : LC.textSecondary} />
                       <Text style={[s.chipText, sel && s.chipTextSel]}>{nomeModalidade(m.nome)}</Text>
                     </Pressable>
                   );
@@ -245,7 +243,8 @@ export default function NovoAluno() {
               <View style={s.hintRow}>
                 <Icon name="information-circle-outline" size={16} color={LC.primary} />
                 <Text style={s.hintText}>
-                  O professor vê apenas a agenda desta modalidade e monta treinos só dela.
+                  Marque todas as modalidades em que dá aula. A agenda e os treinos que aparecem
+                  para o professor são só os das marcadas.
                 </Text>
               </View>
             </Card>

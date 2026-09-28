@@ -134,6 +134,51 @@ const AJUSTES: { descricao: string; sql: string }[] = [
             ADD COLUMN IF NOT EXISTS "regioes_dor" TEXT,
             ADD COLUMN IF NOT EXISTS "parq" TEXT`,
   },
+  {
+    // Professor em mais de uma modalidade (Gabriele: Musculação e Funcional).
+    // Sem esta tabela, qualquer tela de professor quebraria: é daqui que sai
+    // o que ele enxerga na agenda e nos treinos.
+    descricao: 'professor_modalidades: modalidades de cada professor',
+    sql: `CREATE TABLE IF NOT EXISTS "professor_modalidades" (
+            "professor_id" TEXT NOT NULL,
+            "modalidade_id" TEXT NOT NULL,
+            CONSTRAINT "professor_modalidades_pkey" PRIMARY KEY ("professor_id", "modalidade_id")
+          )`,
+  },
+  {
+    descricao: 'professor_modalidades: chave estrangeira para usuarios',
+    sql: `DO $$ BEGIN
+            ALTER TABLE "professor_modalidades"
+              ADD CONSTRAINT "professor_modalidades_professor_id_fkey"
+              FOREIGN KEY ("professor_id") REFERENCES "usuarios"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+  },
+  {
+    descricao: 'professor_modalidades: chave estrangeira para modalidades',
+    sql: `DO $$ BEGIN
+            ALTER TABLE "professor_modalidades"
+              ADD CONSTRAINT "professor_modalidades_modalidade_id_fkey"
+              FOREIGN KEY ("modalidade_id") REFERENCES "modalidades"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+  },
+  {
+    /**
+     * Traz para a tabela nova a modalidade que cada professor já tinha.
+     *
+     * Roda em todo boot e não desfaz nada: a modalidade principal
+     * (`modalidade_professor_id`) é sempre a primeira da lista — a edição
+     * mantém as duas em dia —, então ela já está na tabela e o INSERT não
+     * encontra nada a fazer. Só tem efeito na primeira subida, e se uma versão
+     * anterior da API trocar a principal de alguém no meio do caminho.
+     */
+    descricao: 'professor_modalidades: modalidade que cada professor já tinha',
+    sql: `INSERT INTO "professor_modalidades" ("professor_id", "modalidade_id")
+            SELECT "id", "modalidade_professor_id" FROM "usuarios"
+            WHERE "tipo_usuario" = 'PROFESSOR' AND "modalidade_professor_id" IS NOT NULL
+          ON CONFLICT DO NOTHING`,
+  },
 ];
 
 /**

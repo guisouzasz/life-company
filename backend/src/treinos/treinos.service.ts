@@ -3,13 +3,14 @@ import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
 import { SalvarTreinoDiaDto } from './dto/salvar-treino-dia.dto';
+import { escolherModalidade, modalidadesDoProfessor, modalidadesQueLimitam } from '../usuarios/modalidades-do-professor';
 
 type Solicitante = { id: string; tipo: string };
 
 /**
  * Treinos montados pelo professor para os alunos.
- * Cada professor pertence a UMA modalidade: cria treinos carimbados com ela
- * e só vê/edita treinos da própria modalidade. Admin vê e gerencia tudo.
+ * O professor dá aula em uma ou mais modalidades: cria treinos carimbados com
+ * uma delas e só vê/edita treinos das suas. Admin vê e gerencia tudo.
  * O aluno lê os próprios treinos (todas as modalidades).
  */
 @Injectable()
@@ -23,17 +24,9 @@ export class TreinosService {
     modalidade: { select: { id: true, nome: true } },
   };
 
-  /** Modalidade do professor (null para admin). Professor sem modalidade é barrado. */
-  private async modalidadeDe(solicitante: Solicitante): Promise<string | null> {
-    if (solicitante.tipo !== 'PROFESSOR') return null;
-    const prof = await this.prisma.usuario.findUnique({
-      where: { id: solicitante.id },
-      select: { modalidadeProfessorId: true },
-    });
-    if (!prof?.modalidadeProfessorId) {
-      throw new ForbiddenException('Seu cadastro de professor não tem modalidade definida — fale com a administração');
-    }
-    return prof.modalidadeProfessorId;
+  /** Modalidades do professor (null para admin). Professor sem modalidade é barrado. */
+  private modalidadesDe(solicitante: Solicitante): Promise<string[] | null> {
+    return modalidadesQueLimitam(this.prisma, solicitante);
   }
 
   /** Treinos ativos do aluno logado (todas as modalidades). */
@@ -45,11 +38,11 @@ export class TreinosService {
     });
   }
 
-  /** Treinos de um aluno — professor vê só os da própria modalidade. */
+  /** Treinos de um aluno — professor vê só os das suas modalidades. */
   async doAluno(alunoId: string, solicitante: Solicitante) {
-    const modalidadeId = await this.modalidadeDe(solicitante);
+    const modalidades = await this.modalidadesDe(solicitante);
     return this.prisma.treino.findMany({
-      where: { alunoId, ativo: true, ...(modalidadeId ? { modalidadeId } : {}) },
+      where: { alunoId, ativo: true, ...(modalidades ? { modalidadeId: { in: modalidades } } : {}) },
       include: this.incluir,
       orderBy: [{ concluido: 'asc' }, { updatedAt: 'desc' }],
     });
@@ -84,7 +77,7 @@ export class TreinosService {
     /** Na edição: quem assina hoje. Sem professor no corpo, é quem continua. */
     atual?: { professorId: string; modalidadeId: string | null },
   ) {
-    const modalidadeDoSolicitante = await this.modalidadeDe(solicitante);
+    const modalidadesDoSolicitante = await this.modalidadesDe(solicitante);
 
     /**
      * Editar não troca o dono da ficha por omissão.
@@ -97,7 +90,9 @@ export class TreinosService {
      *
      * Trocar de professor continua possível: é só mandar o novo.
      */
-    if (atual && !dto.professorId) return atual;
+    if (atual && !dto.professorId && (!dto.modalidadeId || dto.modalidadeId === atual.modalidadeId)) {
+      return atual;
+    }
 
     /**
      * A dona não assina ficha em nome próprio.
@@ -114,31 +109,48 @@ export class TreinosService {
       );
     }
 
-    if (!dto.professorId || dto.professorId === solicitante.id) {
-      return { professorId: solicitante.id, modalidadeId: modalidadeDoSolicitante };
-    }
-
-    const escolhido = await this.prisma.usuario.findUnique({
-      where: { id: dto.professorId },
-      select: { id: true, tipoUsuario: true, ativo: true, modalidadeProfessorId: true },
-    });
-    if (!escolhido || escolhido.tipoUsuario !== 'PROFESSOR' || !escolhido.ativo) {
-      throw new NotFoundException('Professor não encontrado');
+    const professorId = dto.professorId || atual?.professorId || solicitante.id;
+    let opcoes: string[];
+    if (professorId === solicitante.id && modalidadesDoSolicitante) {
+      opcoes = modalidadesDoSolicitante;
+    } else {
+      const escolhido = await this.prisma.usuario.findUnique({
+        where: { id: professorId },
+        select: { id: true, tipoUsuario: true, ativo: true },
+      });
+      if (!escolhido || escolhido.tipoUsuario !== 'PROFESSOR' || !escolhido.ativo) {
+        throw new NotFoundException('Professor não encontrado');
+      }
+      opcoes = await modalidadesDoProfessor(this.prisma, escolhido.id);
+      /**
+       * Professor não passa ficha para colega de outra modalidade: quem monta
+       * um treino de musculação carimba musculação, e o carimbo é o que dá
+       * acesso. Com várias modalidades, vale o que os dois têm em comum.
+       * Admin não tem essa amarra — é ela quem distribui o trabalho.
+       */
+      if (modalidadesDoSolicitante) {
+        opcoes = opcoes.filter((m) => modalidadesDoSolicitante.includes(m));
+        if (opcoes.length === 0) throw new ForbiddenException('Esse professor é de outra modalidade');
+      }
     }
 
     /**
-     * Professor não passa ficha para colega de outra modalidade: quem monta um
-     * treino de musculação carimba musculação, e o carimbo é o que dá acesso.
-     * Admin não tem essa amarra — é ela quem distribui o trabalho.
+     * Com qual das modalidades do professor a ficha fica carimbada. Na edição,
+     * a que ela já tinha continua valendo se o professor ainda for dela —
+     * trocar a Gabriele de uma ficha para o Vinicius, os dois de Musculação e
+     * Funcional, não pode transformar treino de musculação em funcional.
      */
-    if (solicitante.tipo === 'PROFESSOR' && escolhido.modalidadeProfessorId !== modalidadeDoSolicitante) {
-      throw new ForbiddenException('Esse professor é de outra modalidade');
+    const modalidadeId = await escolherModalidade(this.prisma, opcoes, dto.alunoId, [
+      dto.modalidadeId,
+      atual?.modalidadeId,
+    ]);
+    if (!modalidadeId) {
+      throw new BadRequestException('Esse professor ainda não tem modalidade. Defina na aba Professores.');
     }
-
-    return {
-      professorId: escolhido.id,
-      modalidadeId: escolhido.modalidadeProfessorId ?? modalidadeDoSolicitante,
-    };
+    if (dto.modalidadeId && dto.modalidadeId !== modalidadeId) {
+      throw new BadRequestException('Esse professor não dá aula nessa modalidade');
+    }
+    return { professorId, modalidadeId };
   }
 
   /** Treino de Musculação usa exercicios[]; Funcional/Pilates usa texto livre. */
@@ -159,7 +171,7 @@ export class TreinosService {
       data: {
         alunoId: dto.alunoId,
         professorId,
-        modalidadeId, // null quando a dona monta sem escolher professor
+        modalidadeId,
         titulo: dto.titulo,
         conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
@@ -184,11 +196,9 @@ export class TreinosService {
   private async buscarComPermissao(id: string, solicitante: Solicitante) {
     const treino = await this.prisma.treino.findUnique({ where: { id } });
     if (!treino || !treino.ativo) throw new NotFoundException('Treino não encontrado');
-    if (solicitante.tipo === 'PROFESSOR') {
-      const modalidadeId = await this.modalidadeDe(solicitante);
-      if (treino.modalidadeId !== modalidadeId) {
-        throw new ForbiddenException('Este treino é de outra modalidade');
-      }
+    const modalidades = await this.modalidadesDe(solicitante);
+    if (modalidades && !modalidades.includes(treino.modalidadeId ?? '')) {
+      throw new ForbiddenException('Este treino é de outra modalidade');
     }
     return treino;
   }
@@ -250,10 +260,32 @@ export class TreinosService {
     return dayjs(data).startOf('day').toDate();
   }
 
-  /** Treino do dia da modalidade (professor usa a própria; admin passa modalidadeId). */
+  /**
+   * De qual modalidade é o treino do dia. A dona diz qual; o professor também
+   * pode dizer, desde que seja uma das dele — e, se não disser, vale a que é
+   * de treino do dia (Funcional), ou a única que ele tem.
+   */
+  private async modalidadeDoDia(solicitante: Solicitante, pedida?: string): Promise<string> {
+    const minhas = await this.modalidadesDe(solicitante);
+    if (!minhas) {
+      if (!pedida) throw new BadRequestException('Informe a modalidade');
+      return pedida;
+    }
+    if (pedida) {
+      if (!minhas.includes(pedida)) throw new ForbiddenException('Esta modalidade não é sua');
+      return pedida;
+    }
+    if (minhas.length === 1) return minhas[0];
+    const nomes = await this.prisma.modalidade.findMany({ where: { id: { in: minhas } }, select: { id: true, nome: true } });
+    const funcional = nomes.find((m) =>
+      m.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('funcional'),
+    );
+    return funcional?.id ?? minhas[0];
+  }
+
+  /** Treino do dia da modalidade (professor usa a sua; admin passa modalidadeId). */
   async diaVer(solicitante: Solicitante, data: string, modalidadeIdParam?: string) {
-    const modalidadeId = (await this.modalidadeDe(solicitante)) ?? modalidadeIdParam;
-    if (!modalidadeId) throw new BadRequestException('Informe a modalidade');
+    const modalidadeId = await this.modalidadeDoDia(solicitante, modalidadeIdParam);
     return this.prisma.treinoDia.findUnique({
       where: { modalidadeId_data: { modalidadeId, data: this.normalizarData(data) } },
       include: { modalidade: { select: { id: true, nome: true } }, professor: { select: { id: true, nome: true } } },
@@ -262,8 +294,7 @@ export class TreinosService {
 
   /** Cria ou substitui o treino do dia (upsert por modalidade+data). */
   async diaSalvar(solicitante: Solicitante, dto: SalvarTreinoDiaDto) {
-    const modalidadeId = (await this.modalidadeDe(solicitante)) ?? dto.modalidadeId;
-    if (!modalidadeId) throw new BadRequestException('Informe a modalidade');
+    const modalidadeId = await this.modalidadeDoDia(solicitante, dto.modalidadeId);
     const data = this.normalizarData(dto.data);
     return this.prisma.treinoDia.upsert({
       where: { modalidadeId_data: { modalidadeId, data } },
@@ -276,9 +307,9 @@ export class TreinosService {
   async diaRemover(id: string, solicitante: Solicitante) {
     const treino = await this.prisma.treinoDia.findUnique({ where: { id } });
     if (!treino) throw new NotFoundException('Treino do dia não encontrado');
-    if (solicitante.tipo === 'PROFESSOR') {
-      const modalidadeId = await this.modalidadeDe(solicitante);
-      if (treino.modalidadeId !== modalidadeId) throw new ForbiddenException('Este treino é de outra modalidade');
+    const modalidades = await this.modalidadesDe(solicitante);
+    if (modalidades && !modalidades.includes(treino.modalidadeId)) {
+      throw new ForbiddenException('Este treino é de outra modalidade');
     }
     await this.prisma.treinoDia.delete({ where: { id } });
     return { mensagem: 'Treino do dia removido' };

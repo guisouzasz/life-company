@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
-import { corPorModalidade, iconePorModalidade, nomeModalidade, usaTreinoDoDia } from '../../constants/assets';
+import { corPorModalidade, iconePorModalidade, juntarNomes, modalidadesDe, nomeModalidade } from '../../constants/assets';
 import { useAuthStore } from '../../store/auth';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
@@ -31,8 +31,6 @@ export default function ProfessorAgenda() {
     .filter((h) => h.diaSemana === diaSel?.diaSemana)
     .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio));
 
-  // O backend já devolve só a modalidade do professor — usamos para o título
-  const minhaModalidade = vagas.data?.[0]?.modalidade?.nome;
 
   // Aula de agora: sempre a de hoje, independente do dia escolhido acima.
   // No fim de semana `dias[0]` já é a segunda, e aí não há aula de hoje.
@@ -45,10 +43,10 @@ export default function ProfessorAgenda() {
     return (vagasHoje.data ?? []).filter((h) => h.diaSemana === chaveHoje);
   }, [hojeEhUtil, vagasHoje.data]);
 
-  // Funcional monta um treino por dia para a turma toda; as outras
-  // modalidades têm ficha por aluno.
+  // O título diz de quais modalidades é a agenda (o backend já devolve só
+  // as do professor): "Agenda — Musculação e Funcional".
   const me = useMe();
-  const porAluno = !usaTreinoDoDia(me.data?.modalidadeProfessor?.nome);
+  const minhasModalidades = juntarNomes(modalidadesDe(me.data));
 
   // No tablet a tela inteira acompanha a largura do cartão da aula; senão o
   // título e a lista de aulas ficariam numa coluna estreita ao lado dele.
@@ -59,11 +57,11 @@ export default function ProfessorAgenda() {
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
       <View style={[s.header, largo]}>
-        <Text style={s.title}>Agenda{minhaModalidade ? ` — ${nomeModalidade(minhaModalidade)}` : ''}</Text>
+        <Text style={s.title}>Agenda{minhasModalidades ? ` — ${minhasModalidades}` : ''}</Text>
         <Text style={s.subtitle}>Olá, {nome ? primeiroNome(nome) : 'Professor'} — toque numa aula para ver os alunos</Text>
       </View>
 
-      {hojeEhUtil ? <AulaAgora aulasDeHoje={aulasDeHoje} hoje={hoje} porAluno={porAluno} /> : null}
+      {hojeEhUtil ? <AulaAgora aulasDeHoje={aulasDeHoje} hoje={hoje} /> : null}
 
       {/* Dias */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[s.daysScroll, largo]} contentContainerStyle={s.daysRow}>

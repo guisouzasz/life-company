@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-
 import { router } from 'expo-router';
 import { useAuthStore } from '../../store/auth';
 import { LC } from '../../constants/theme';
-import { nomeModalidade } from '../../constants/assets';
+import { juntarNomes, modalidadesDe } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Avatar } from '../../components/ui/avatar';
 import { Card } from '../../components/ui/card';
@@ -23,7 +23,8 @@ export default function ProfessorPerfil() {
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [erroExcluir, setErroExcluir] = useState<string | null>(null);
 
-  const modalidade = me.data?.modalidadeProfessor?.nome;
+  // "Musculação e Funcional" quando ele dá aula nas duas.
+  const modalidade = juntarNomes(modalidadesDe(me.data));
 
   const excluirConta = () => {
     excluir.mutate(undefined, {
@@ -54,12 +55,12 @@ export default function ProfessorPerfil() {
           <View style={s.tag}>
             <Icon name="school-outline" size={13} color={LC.primary} />
             <Text style={s.tagText}>
-              {modalidade ? `Professor de ${nomeModalidade(modalidade)}` : 'Professor'}
+              {modalidade ? `Professor de ${modalidade}` : 'Professor'}
             </Text>
           </View>
           {me.isSuccess && !modalidade ? (
             <Text style={s.semModalidade}>
-              Sem modalidade definida. Peça à administração para ajustar em Alunos → Professores.
+              Sem modalidade definida. Peça à administração para ajustar na aba Professores.
             </Text>
           ) : null}
           {me.data?.email ? <Text style={s.email}>{me.data.email}</Text> : null}

@@ -78,5 +78,7 @@ export interface SalvarTreinoPayload {
    * sempre é quem acompanha: a dona cadastra e a ficha é do professor.
    */
   professorId?: string;
+  /** Modalidade da ficha, para o professor que dá aula em mais de uma. */
+  modalidadeId?: string;
   exercicios?: ExercicioPayload[];
 }

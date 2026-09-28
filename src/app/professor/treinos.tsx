@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
-import { nomeModalidade, usaTreinoDoDia } from '../../constants/assets';
+import { modalidadesDe, usaTreinoDoDia } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -25,7 +25,7 @@ type Dia = ReturnType<typeof getProximosDiasUteis>[number];
  * Funcional: UM treino por dia, igual para todas as aulas — o professor
  * escolhe a data e escreve o treino do dia.
  */
-function TreinoDoDia() {
+function TreinoDoDia({ compacto = false }: { compacto?: boolean }) {
   const dias = useMemo(() => getProximosDiasUteis(10), []);
   const [diaSel, setDiaSel] = useState<Dia>(dias[0]);
   const treinoDia = useTreinoDia(diaSel?.data);
@@ -78,7 +78,7 @@ function TreinoDoDia() {
 
   return (
     <>
-      <View style={s.header}>
+      <View style={[s.header, compacto && s.headerCompacto]}>
         <Text style={s.title}>Treino do dia</Text>
         <Text style={s.subtitle}>Um treino para todas as aulas de Funcional do dia</Text>
       </View>
@@ -163,13 +163,13 @@ function TreinoDoDia() {
 }
 
 /** Musculação/Pilates: treino por aluno — escolhe o aluno na lista. */
-function TreinosPorAluno() {
+function TreinosPorAluno({ compacto = false }: { compacto?: boolean }) {
   const [busca, setBusca] = useState('');
   const alunos = useAlunos(busca.trim() || undefined);
 
   return (
     <>
-      <View style={s.header}>
+      <View style={[s.header, compacto && s.headerCompacto]}>
         <Text style={s.title}>Treinos</Text>
         <Text style={s.subtitle}>Escolha um aluno para montar ou revisar o treino</Text>
       </View>
@@ -220,12 +220,53 @@ function TreinosPorAluno() {
 
 export default function ProfessorTreinos() {
   const me = useMe();
-  const ehFuncional = usaTreinoDoDia(me.data?.modalidadeProfessor?.nome);
+  const mods = modalidadesDe(me.data);
+  /**
+   * Funcional tem o treino do dia; as outras, ficha por aluno. Quem dá aula
+   * nas duas (Gabriele: Musculação e Funcional) precisa das duas telas, e
+   * escolhe no topo qual está usando.
+   */
+  const temDia = mods.some((m) => usaTreinoDoDia(m.nome));
+  const temFichas = mods.length === 0 || mods.some((m) => !usaTreinoDoDia(m.nome));
+  const [aba, setAba] = useState<'fichas' | 'dia'>('fichas');
+  const mostraDia = temDia && (!temFichas || aba === 'dia');
 
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
-      {me.isLoading ? <Loading /> : ehFuncional ? <TreinoDoDia /> : <TreinosPorAluno />}
+      {me.isLoading ? (
+        <Loading />
+      ) : (
+        <>
+          {temDia && temFichas ? (
+            <View style={s.abasWrap}>
+              <View style={s.abas} accessibilityRole="tablist">
+                {(
+                  [
+                    ['fichas', 'Fichas dos alunos', 'people-outline'],
+                    ['dia', 'Treino do dia', 'today-outline'],
+                  ] as const
+                ).map(([chave, rotulo, icone]) => {
+                  const sel = (chave === 'dia') === mostraDia;
+                  return (
+                    <Pressable
+                      key={chave}
+                      style={[s.aba, sel && s.abaSel]}
+                      onPress={() => setAba(chave)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: sel }}
+                    >
+                      <Icon name={icone} size={15} color={sel ? LC.primary : LC.textSecondary} />
+                      <Text style={[s.abaTexto, sel && s.abaTextoSel]} numberOfLines={1}>{rotulo}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+          {mostraDia ? <TreinoDoDia compacto={temFichas} /> : <TreinosPorAluno compacto={temDia} />}
+        </>
+      )}
       <TabBar isProfessor />
     </View>
   );
@@ -234,6 +275,20 @@ export default function ProfessorTreinos() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  // Com as abas no topo, elas já ocupam o espaço da barra de status.
+  headerCompacto: { paddingTop: 12 },
+  abasWrap: { ...LC.coluna, paddingHorizontal: 16, paddingTop: 52 },
+  abas: {
+    flexDirection: 'row', gap: 4, padding: 4, borderRadius: LC.radius.md,
+    backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border,
+  },
+  aba: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 10, paddingHorizontal: 8, borderRadius: LC.radius.sm,
+  },
+  abaSel: { backgroundColor: LC.primary + '14' },
+  abaTexto: { fontSize: 13, fontWeight: '700', color: LC.textSecondary, flexShrink: 1 },
+  abaTextoSel: { color: LC.primary },
   title: { fontSize: 22, fontWeight: '800', color: LC.textPrimary },
   subtitle: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
   buscaWrap: { paddingHorizontal: 16, paddingBottom: 6 },

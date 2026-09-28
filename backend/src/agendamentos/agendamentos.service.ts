@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { nomeCurto } from '../comum/nome';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
 import { CriarAgendamentoAdminDto } from './dto/criar-agendamento-admin.dto';
+import { modalidadesDoProfessor } from '../usuarios/modalidades-do-professor';
 import {
   DIAS_PERIODO_REPOSICOES,
   DIAS_VALIDADE_CREDITO,
@@ -471,13 +472,13 @@ export class AgendamentosService {
   }
 
   async listarPorHorario(horarioId: string, data: string, solicitante?: { id: string; tipo: string }) {
-    // Professor só enxerga aulas da própria modalidade
+    // Professor só enxerga aulas das próprias modalidades
     if (solicitante?.tipo === 'PROFESSOR') {
-      const [horario, prof] = await Promise.all([
+      const [horario, minhas] = await Promise.all([
         this.prisma.horario.findUnique({ where: { id: horarioId }, select: { modalidadeId: true } }),
-        this.prisma.usuario.findUnique({ where: { id: solicitante.id }, select: { modalidadeProfessorId: true } }),
+        modalidadesDoProfessor(this.prisma, solicitante.id),
       ]);
-      if (!horario || !prof?.modalidadeProfessorId || horario.modalidadeId !== prof.modalidadeProfessorId) {
+      if (!horario || !minhas.includes(horario.modalidadeId)) {
         throw new ForbiddenException('Esta aula não é da sua modalidade');
       }
     }

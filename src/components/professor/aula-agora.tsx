@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import { LC } from '../../constants/theme';
-import { nomeModalidade } from '../../constants/assets';
+import { nomeModalidade, usaTreinoDoDia } from '../../constants/assets';
 import { Card } from '../ui/card';
 import { Icon } from '../ui/icon';
 import { Avatar } from '../ui/avatar';
@@ -37,17 +37,21 @@ interface Props {
   aulasDeHoje: HorarioVaga[];
   /** Data de hoje em YYYY-MM-DD. */
   hoje: string;
+}
+
+export function AulaAgora({ aulasDeHoje, hoje }: Props) {
+  const { foco, anterior } = useAulaAgora(aulasDeHoje);
+  const aula = foco?.aula ?? null;
+
   /**
    * A modalidade tem ficha por aluno (Musculação, Pilates). No Funcional o
    * treino é um só para a turma, então tocar num aluno não levaria a lugar
    * nenhum — a lista serve para saber quem está na sala.
+   *
+   * Vem da aula, não do professor: quem dá Musculação e Funcional tem as
+   * duas coisas ao longo do mesmo dia.
    */
-  porAluno: boolean;
-}
-
-export function AulaAgora({ aulasDeHoje, hoje, porAluno }: Props) {
-  const { foco, anterior } = useAulaAgora(aulasDeHoje);
-  const aula = foco?.aula ?? null;
+  const porAluno = !usaTreinoDoDia(aula?.modalidade?.nome);
 
   const agendamentos = useAgendamentosDoHorario(aula?.id, hoje, !!aula);
   // Turma que acabou de sair, quando a próxima já começou: quem estourou o

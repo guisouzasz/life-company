@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegistrarCargaDto } from './dto/registrar-carga.dto';
+import { escolherModalidade, modalidadesQueLimitam } from '../usuarios/modalidades-do-professor';
 
 type Solicitante = { id: string; tipo: string };
 
@@ -29,17 +30,9 @@ export interface EvolucaoExercicio {
 export class CargasService {
   constructor(private prisma: PrismaService) {}
 
-  /** Modalidade do professor (null = admin, sem filtro). */
-  private async modalidadeDe(solicitante: Solicitante): Promise<string | null> {
-    if (solicitante.tipo !== 'PROFESSOR') return null;
-    const prof = await this.prisma.usuario.findUnique({
-      where: { id: solicitante.id },
-      select: { modalidadeProfessorId: true },
-    });
-    if (!prof?.modalidadeProfessorId) {
-      throw new ForbiddenException('Seu cadastro de professor não tem modalidade definida — fale com a administração');
-    }
-    return prof.modalidadeProfessorId;
+  /** Modalidades do professor (null = admin, sem filtro). */
+  private modalidadesDe(solicitante: Solicitante): Promise<string[] | null> {
+    return modalidadesQueLimitam(this.prisma, solicitante);
   }
 
   private montarEvolucao(
@@ -79,11 +72,11 @@ export class CargasService {
       .sort((a, b) => a.exercicio.localeCompare(b.exercicio));
   }
 
-  /** Evolução do aluno em todos os exercícios (professor vê só a modalidade dele). */
+  /** Evolução do aluno em todos os exercícios (professor vê só as modalidades dele). */
   async doAluno(alunoId: string, solicitante: Solicitante): Promise<EvolucaoExercicio[]> {
-    const modalidadeId = await this.modalidadeDe(solicitante);
+    const modalidades = await this.modalidadesDe(solicitante);
     const registros = await this.prisma.registroCarga.findMany({
-      where: { alunoId, ...(modalidadeId ? { modalidadeId } : {}) },
+      where: { alunoId, ...(modalidades ? { modalidadeId: { in: modalidades } } : {}) },
       select: { id: true, exercicio: true, peso: true, repeticoes: true, observacao: true, data: true },
       orderBy: { data: 'asc' },
     });
@@ -101,9 +94,32 @@ export class CargasService {
   }
 
   async registrar(solicitante: Solicitante, dto: RegistrarCargaDto) {
-    const modalidadeId = await this.modalidadeDe(solicitante);
+    const modalidades = await this.modalidadesDe(solicitante);
     const aluno = await this.prisma.usuario.findUnique({ where: { id: dto.alunoId } });
     if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
+    // A dona registra sem carimbo, como sempre. O professor de mais de uma
+    // modalidade carimba a da ficha em que o exercício está — a carga do leg
+    // press é da ficha de musculação, mesmo que ele também dê funcional.
+    let modalidadeId: string | null = null;
+    if (modalidades) {
+      const ficha =
+        modalidades.length > 1 && !dto.modalidadeId
+          ? await this.prisma.treino.findFirst({
+              where: {
+                alunoId: dto.alunoId,
+                ativo: true,
+                modalidadeId: { in: modalidades },
+                exercicios: { some: { nome: dto.exercicio.trim() } },
+              },
+              orderBy: { updatedAt: 'desc' },
+              select: { modalidadeId: true },
+            })
+          : null;
+      modalidadeId = await escolherModalidade(this.prisma, modalidades, dto.alunoId, [
+        dto.modalidadeId,
+        ficha?.modalidadeId,
+      ]);
+    }
 
     const registro = await this.prisma.registroCarga.create({
       data: {
@@ -123,11 +139,9 @@ export class CargasService {
   async remover(id: string, solicitante: Solicitante) {
     const registro = await this.prisma.registroCarga.findUnique({ where: { id } });
     if (!registro) throw new NotFoundException('Registro não encontrado');
-    if (solicitante.tipo === 'PROFESSOR') {
-      const modalidadeId = await this.modalidadeDe(solicitante);
-      if (registro.modalidadeId !== modalidadeId) {
-        throw new ForbiddenException('Este registro é de outra modalidade');
-      }
+    const modalidades = await this.modalidadesDe(solicitante);
+    if (modalidades && !modalidades.includes(registro.modalidadeId ?? '')) {
+      throw new ForbiddenException('Este registro é de outra modalidade');
     }
     await this.prisma.registroCarga.delete({ where: { id } });
     return { mensagem: 'Registro de carga removido' };

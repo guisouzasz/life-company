@@ -135,7 +135,8 @@ export class RelatoriosController {
    * já teria virado o dia, marcando como "hoje" quem é de amanhã.
    *
    * Só entram alunos ativos: quem foi desativado não deve mais aparecer no
-   * painel.
+   * painel. Os professores entram também — a dona pediu para lembrar do
+   * aniversário da equipe —, marcados para o card dizer quem é quem.
    */
   private async aniversariantesDaSemana() {
     /**
@@ -170,14 +171,15 @@ export class RelatoriosController {
     );
 
     const linhas = await this.prisma.$queryRaw<
-      { id: string; nome: string; telefone: string | null; ano: number; mes: number; dia: number }[]
+      { id: string; nome: string; telefone: string | null; professor: boolean; ano: number; mes: number; dia: number }[]
     >`
       SELECT id, nome, telefone,
+             (tipo_usuario = 'PROFESSOR') AS professor,
              EXTRACT(YEAR FROM data_nascimento)::int  AS ano,
              EXTRACT(MONTH FROM data_nascimento)::int AS mes,
              EXTRACT(DAY FROM data_nascimento)::int   AS dia
       FROM usuarios
-      WHERE tipo_usuario = 'ALUNO'
+      WHERE tipo_usuario IN ('ALUNO', 'PROFESSOR')
         AND ativo = true
         AND cpf NOT LIKE 'REMOVIDO-%'
         AND data_nascimento IS NOT NULL
@@ -197,6 +199,7 @@ export class RelatoriosController {
           // Para o botão de parabéns pelo WhatsApp. Vem null em cadastro
           // antigo sem telefone — aí a tela não oferece o botão.
           telefone: l.telefone,
+          professor: l.professor,
           idade: alvo.data.year() - l.ano,
           data: alvo.data.format('YYYY-MM-DD'),
           hoje: alvo.data.isSame(hoje, 'day'),

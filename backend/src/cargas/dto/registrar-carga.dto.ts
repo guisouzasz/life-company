@@ -18,6 +18,10 @@ export class RegistrarCargaDto {
   @IsOptional() @IsString()
   observacao?: string;
 
+  /** Modalidade da ficha, para o professor que dá aula em mais de uma. */
+  @IsOptional() @IsString()
+  modalidadeId?: string;
+
   /** Dia do treino (YYYY-MM-DD). Default: hoje. */
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'data deve estar no formato YYYY-MM-DD' })
   data?: string;

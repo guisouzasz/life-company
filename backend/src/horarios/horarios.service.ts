@@ -6,6 +6,7 @@ import { AtualizarHorarioDto, CriarHorarioDto } from './dto/criar-horario.dto';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { capacidadeEfetiva, tetoDaModalidade } from './capacidade';
 import { AutoAgendamentoService } from '../auto-agendamento/auto-agendamento.service';
+import { modalidadesDoProfessor } from '../usuarios/modalidades-do-professor';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -165,19 +166,18 @@ export class HorariosService {
 
   /**
    * `modalidadeId` opcional: sem ele, retorna todas as modalidades.
-   * PROFESSOR sempre enxerga apenas a própria modalidade (filtro forçado).
+   * PROFESSOR sempre enxerga apenas as próprias modalidades (filtro forçado):
+   * pode pedir uma delas, e sem pedir vê todas as suas.
    */
   async listarComVagas(
     modalidadeId: string | undefined,
     dataAula: string,
     solicitante?: { id: string; tipo: string },
   ) {
+    let filtro: string | { in: string[] } | undefined = modalidadeId || undefined;
     if (solicitante?.tipo === 'PROFESSOR') {
-      const prof = await this.prisma.usuario.findUnique({
-        where: { id: solicitante.id },
-        select: { modalidadeProfessorId: true },
-      });
-      modalidadeId = prof?.modalidadeProfessorId ?? '__sem_modalidade__';
+      const minhas = await modalidadesDoProfessor(this.prisma, solicitante.id);
+      filtro = modalidadeId && minhas.includes(modalidadeId) ? modalidadeId : { in: minhas };
     }
     // `new Date('2026-08-17')` é meia-noite em UTC — 21h do dia anterior no
     // fuso do estúdio. Como o agendamento é gravado à meia-noite LOCAL, a
@@ -185,7 +185,7 @@ export class HorariosService {
     // mesmo lotada. dayjs respeita o fuso do processo, igual ao que grava.
     const data = dayjs(dataAula).startOf('day').toDate();
     const horarios = await this.prisma.horario.findMany({
-      where: { ativo: true, ...(modalidadeId ? { modalidadeId } : {}) },
+      where: { ativo: true, ...(filtro ? { modalidadeId: filtro } : {}) },
       include: {
         modalidade: true,
         agendamentos: { where: { dataAula: data, status: 'CONFIRMADO' } },

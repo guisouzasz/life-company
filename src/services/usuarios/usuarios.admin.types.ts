@@ -42,6 +42,8 @@ export interface CriarAlunoPayload {
   diaVencimento?: number;
   planoId?: string; // obrigatório para ALUNO
   modalidadeId?: string; // obrigatório para ALUNO
+  /** Só PROFESSOR: as modalidades em que dá aula (a primeira é a principal). */
+  modalidadeIds?: string[];
 }
 
 export interface CriarAlunoResposta {
@@ -70,6 +72,8 @@ export interface AtualizarAlunoPayload {
    * No aluno a modalidade pertence ao plano, e quem troca é `atualizarPlano`.
    */
   modalidadeId?: string;
+  /** Só PROFESSOR: substitui a lista de modalidades dele. */
+  modalidadeIds?: string[];
 }
 
 /** PUT /usuarios/:id/plano — encerra o plano ativo e cria um novo. */
@@ -95,6 +99,8 @@ export interface NomeDeProfessor {
   id: string;
   nome: string;
   modalidadeProfessor?: { id: string; nome: string } | null;
+  /** Todas as modalidades dele, a principal primeiro. */
+  modalidades?: { id: string; nome: string }[];
 }
 
 /**
@@ -113,5 +119,10 @@ export interface ProfessorAdmin {
   ativo: boolean;
   ativado: boolean;
   createdAt: string;
+  dataNascimento?: string | null; // ISO
   modalidadeProfessor?: { id: string; nome: string } | null;
+  /** Todas as modalidades dele, a principal primeiro. */
+  modalidades?: { id: string; nome: string }[];
+  /** Fichas de treino em uso que ele assina — a exclusão pergunta para quem vão. */
+  fichas?: number;
 }

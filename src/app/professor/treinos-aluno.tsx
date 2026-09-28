@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LC } from '../../constants/theme';
-import { nomeModalidade, usaFichaEstruturada } from '../../constants/assets';
+import { juntarNomes, modalidadesDe, nomeModalidade, usaFichaEstruturada } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
@@ -22,7 +22,7 @@ import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { FichaSaude, alertasDaFicha } from '../../components/professor/ficha-saude';
 import { useMe } from '../../services/auth/auth.queries';
-import { useNomesDeProfessores } from '../../services/usuarios/usuarios.queries';
+import { useAlunos, useNomesDeProfessores } from '../../services/usuarios/usuarios.queries';
 import type { ExercicioPayload, Treino } from '../../services/treinos/treinos.types';
 import { ApiError } from '../../services/http';
 import { formatDate } from '../../services/date';
@@ -175,10 +175,35 @@ export default function TreinosAluno() {
    * Ordem: o professor escolhido (é quem vai usar a ficha), depois a própria
    * ficha, depois quem está logado.
    */
+  const [modalidadeId, setModalidadeId] = useState('');
+  const professorDaFicha = (professores.data ?? []).find((p) => p.id === professorId) ?? null;
+  // A lista de alunos já vem com o plano: é o que sugere a modalidade da
+  // ficha nova quando o professor dá aula em mais de uma.
+  const alunos = useAlunos();
+  const modalidadeDoPlano = (alunos.data ?? []).find((a) => a.id === alunoId)?.usuarioPlanos?.[0]?.modalidade?.id;
+  /**
+   * Em quais modalidades esta ficha pode ficar: as do professor escolhido
+   * (ou as minhas, se não escolhi ninguém). Professor passando ficha para
+   * colega só pode usar o que os dois têm em comum — o servidor exige o mesmo.
+   */
+  const opcoesDeModalidade = useMemo(() => {
+    const minhas = modalidadesDe(me.data);
+    if (!professorDaFicha) return ehDona ? [] : minhas;
+    const dele = modalidadesDe(professorDaFicha);
+    return ehDona ? dele : dele.filter((m) => minhas.some((x) => x.id === m.id));
+  }, [me.data, professorDaFicha, ehDona]);
+  /**
+   * Com duas modalidades, a ficha precisa dizer de qual é — é isso que
+   * decide entre a tabela de exercícios e o texto livre. Sugestão: a que a
+   * ficha já tinha, depois a do plano do aluno, depois a principal.
+   */
+  const modalidadeEscolhida =
+    opcoesDeModalidade.find((m) => m.id === modalidadeId) ??
+    opcoesDeModalidade.find((m) => m.id === editando?.modalidade?.id) ??
+    opcoesDeModalidade.find((m) => m.id === modalidadeDoPlano) ??
+    opcoesDeModalidade[0];
   const modalidadeDaFicha =
-    (professores.data ?? []).find((p) => p.id === professorId)?.modalidadeProfessor?.nome ??
-    editando?.modalidade?.nome ??
-    me.data?.modalidadeProfessor?.nome;
+    modalidadeEscolhida?.nome ?? editando?.modalidade?.nome ?? me.data?.modalidadeProfessor?.nome;
   const formatoCarga = usaFichaEstruturada(modalidadeDaFicha);
 
   const abrirNovo = () => {
@@ -190,6 +215,7 @@ export default function TreinosAluno() {
     setFrequencia('');
     setVencimentoTexto('');
     setProfessorId('');
+    setModalidadeId('');
     setFormAberto(true);
   };
 
@@ -201,6 +227,7 @@ export default function TreinosAluno() {
     setFrequencia(t.frequencia ?? '');
     setVencimentoTexto(isoParaData(t.vencimento));
     setProfessorId(t.professor?.id ?? '');
+    setModalidadeId(t.modalidade?.id ?? '');
     setSecoes(agrupar(t.exercicios));
     setFormAberto(true);
   };
@@ -261,7 +288,10 @@ export default function TreinosAluno() {
     const meta = {
       frequencia: frequencia || undefined,
       vencimento: vencimento || undefined,
-      professorId: professorId || undefined,
+      // Professor que já saiu não está na lista: sem mandar ninguém, a
+      // ficha continua com quem assina hoje em vez de o salvar ser recusado.
+      professorId: professorDaFicha ? professorId : undefined,
+      modalidadeId: modalidadeEscolhida?.id,
     };
     let payload;
     if (formatoCarga) {
@@ -369,7 +399,7 @@ export default function TreinosAluno() {
                   <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>
                     {nomeCurto(p.nome)}
                     {/* A dona escolhe entre professores de todas as modalidades. */}
-                    {ehDona && p.modalidadeProfessor ? ` · ${nomeModalidade(p.modalidadeProfessor.nome)}` : ''}
+                    {ehDona && modalidadesDe(p).length > 0 ? ` · ${juntarNomes(modalidadesDe(p))}` : ''}
                   </Text>
                 </Pressable>
               );
@@ -389,6 +419,35 @@ export default function TreinosAluno() {
           ) : null}
     </>
   );
+
+  /**
+   * De qual modalidade é a ficha — só aparece para quem tem mais de uma
+   * opção. Fica no alto porque muda o formulário inteiro: musculação monta a
+   * tabela de exercícios, funcional e pilates escrevem em texto.
+   */
+  const seletorDeModalidade =
+    opcoesDeModalidade.length > 1 ? (
+      <>
+        <Text style={s.metaLabel}>Modalidade da ficha</Text>
+        <View style={s.grupoChips}>
+          {opcoesDeModalidade.map((m) => {
+            const sel = modalidadeEscolhida?.id === m.id;
+            return (
+              <Pressable
+                key={m.id}
+                style={[s.grupoChip, sel && s.grupoChipSel]}
+                onPress={() => setModalidadeId(m.id)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: sel }}
+              >
+                <Text style={[s.grupoChipText, sel && s.grupoChipTextSel]}>{nomeModalidade(m.nome)}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={{ height: 6 }} />
+      </>
+    ) : null;
 
   if (formAberto) {
     return (
@@ -413,6 +472,7 @@ export default function TreinosAluno() {
             ela preenchia a tabela inteira e só no fim o formulário virava.
           */}
           {ehDona ? seletorDeProfessor : null}
+          {seletorDeModalidade}
           <Input
             label="Nome do treino"
             placeholder={formatoCarga ? 'Treino A — Superiores' : 'Treino de terça'}
@@ -931,7 +991,7 @@ export default function TreinosAluno() {
 
       {/* FAB novo treino — só faz sentido na aba de treinos */}
       {abaAtual === 'ficha' ? null : (
-      <Pressable style={s.fab} onPress={abrirNovo}>
+      <Pressable style={s.fab} onPress={abrirNovo} accessibilityRole="button" accessibilityLabel="Novo treino">
         <Icon name="add" size={26} color="#fff" />
       </Pressable>
       )}

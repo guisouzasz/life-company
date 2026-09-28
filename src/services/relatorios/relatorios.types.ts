@@ -34,6 +34,8 @@ export interface RelatorioDashboard {
     nome: string;
     /** Do cadastro; null nos antigos, e aí não há botão de parabéns. */
     telefone?: string | null;
+    /** É da equipe (professor), não aluno — o card marca. */
+    professor?: boolean;
     /** Idade que faz nesta data. */
     idade: number;
     /** YYYY-MM-DD do aniversário nesta semana. */

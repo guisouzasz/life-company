@@ -1,4 +1,4 @@
-import { IsEmail, IsString, IsOptional, IsIn, IsInt, IsNumber, Matches, Max, Min, MinLength, MaxLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsString, IsOptional, IsIn, IsInt, IsNumber, Matches, Max, Min, MinLength, MaxLength, ValidateIf } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -65,4 +65,14 @@ export class CriarUsuarioDto {
 
   @ApiProperty({ required: false }) @IsOptional() @IsString() planoId?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() modalidadeId?: string;
+
+  /**
+   * Só PROFESSOR: todas as modalidades em que ele dá aula (Musculação e
+   * Funcional, por exemplo). A primeira é a principal. Quando não vem, vale o
+   * `modalidadeId` sozinho — é o que as versões anteriores do app mandam.
+   */
+  @ApiProperty({ required: false, type: [String] })
+  @IsOptional() @IsArray() @ArrayMinSize(1, { message: 'Escolha pelo menos uma modalidade' }) @ArrayMaxSize(10)
+  @IsString({ each: true })
+  modalidadeIds?: string[];
 }

@@ -64,6 +64,14 @@ export class SalvarTreinoDto {
   @IsOptional() @IsString()
   professorId?: string;
 
+  /**
+   * Com qual modalidade a ficha fica carimbada, quando o professor dá aula em
+   * mais de uma. Opcional: sem ela vale a do plano do aluno (ver
+   * `escolherModalidade`), e com uma modalidade só não há o que escolher.
+   */
+  @IsOptional() @IsString()
+  modalidadeId?: string;
+
   /** Vencimento em YYYY-MM-DD (ou vazio para sem prazo). */
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'vencimento deve ser YYYY-MM-DD' })
   vencimento?: string;

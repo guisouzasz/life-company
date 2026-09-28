@@ -8,7 +8,6 @@ import { Badge } from '../ui/badge';
 import { Avatar } from '../ui/avatar';
 import { Loading } from '../ui/states';
 import { useAgendamentosDoHorario } from '../../services/agendamentos/agendamentos.queries';
-import { useMe } from '../../services/auth/auth.queries';
 import type { HorarioVaga } from '../../services/horarios/horarios.types';
 import { formatDate } from '../../services/date';
 
@@ -25,9 +24,10 @@ interface Props {
 export function AlunosAulaModal({ aula, data, onClose }: Props) {
   const agendamentos = useAgendamentosDoHorario(aula?.id, data, !!aula && !!data);
 
-  // Funcional usa treino do DIA (não por aluno) → sem botão "Treinos" aqui
-  const me = useMe();
-  const treinoPorAluno = !usaTreinoDoDia(me.data?.modalidadeProfessor?.nome);
+  // Funcional usa treino do DIA (não por aluno) → sem botão "Treinos" aqui.
+  // Vale a modalidade da AULA: quem dá Musculação e Funcional abre a ficha
+  // na aula de musculação e não na de funcional.
+  const treinoPorAluno = !usaTreinoDoDia(aula?.modalidade?.nome);
 
   const titulo = aula ? `${aula.horaInicio} — ${nomeModalidade(aula.modalidade.nome)}` : '';
 

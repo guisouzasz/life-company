@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SalvarAnamneseDto } from './dto/salvar-anamnese.dto';
+import { modalidadesQueLimitam } from '../usuarios/modalidades-do-professor';
 
 type Solicitante = { id: string; tipo: string };
 
@@ -88,17 +89,15 @@ export class AnamneseService {
     });
     if (!aluno || aluno.tipoUsuario !== 'ALUNO') throw new NotFoundException('Aluno não encontrado');
 
-    if (solicitante.tipo === 'PROFESSOR') {
-      const prof = await this.prisma.usuario.findUnique({
-        where: { id: solicitante.id },
-        select: { modalidadeProfessorId: true },
-      });
-      if (!prof?.modalidadeProfessorId) {
-        throw new ForbiddenException('Seu cadastro de professor não tem modalidade definida');
-      }
-      // O professor precisa ter o aluno na própria modalidade (plano vigente).
+    const modalidades = await modalidadesQueLimitam(
+      this.prisma,
+      solicitante,
+      'Seu cadastro de professor não tem modalidade definida',
+    );
+    if (modalidades) {
+      // O professor precisa ter o aluno numa das suas modalidades (plano vigente).
       const vinculo = await this.prisma.usuarioPlano.findFirst({
-        where: { usuarioId: alunoId, vigenciaFim: null, modalidadeId: prof.modalidadeProfessorId },
+        where: { usuarioId: alunoId, vigenciaFim: null, modalidadeId: { in: modalidades } },
         select: { id: true },
       });
       if (!vinculo) throw new ForbiddenException('Este aluno não é da sua modalidade');

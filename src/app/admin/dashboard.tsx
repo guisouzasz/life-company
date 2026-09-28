@@ -233,6 +233,8 @@ function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
 
   const deHoje = todos.filter((a) => a.hoje);
   const restante = todos.filter((a) => !a.hoje);
+  // Com professor na lista, "alunos" deixa de ser verdade.
+  const quem = todos.some((a) => a.professor) ? 'pessoas' : 'alunos';
 
   return (
     <Card style={s.aniversarioCard} padding={16}>
@@ -246,10 +248,10 @@ function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
             {deHoje.length > 0
               ? deHoje.length === 1
                 ? 'Tem alguém de aniversário hoje!'
-                : `${deHoje.length} alunos fazem aniversário hoje!`
+                : `${deHoje.length} ${quem} fazem aniversário hoje!`
               : todos.length === 1
-                ? '1 aluno faz aniversário nesta semana'
-                : `${todos.length} alunos fazem aniversário nesta semana`}
+                ? `1 ${todos[0].professor ? 'professor' : 'aluno'} faz aniversário nesta semana`
+                : `${todos.length} ${quem} fazem aniversário nesta semana`}
           </Text>
         </View>
       </View>
@@ -265,7 +267,7 @@ function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
             <Avatar nome={a.nome} size={34} />
             <View style={{ flex: 1 }}>
               <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
-              <Text style={s.aniversarioHojeTag}>HOJE · {a.idade} anos</Text>
+              <Text style={s.aniversarioHojeTag}>HOJE · {a.idade} anos{a.professor ? ' · EQUIPE' : ''}</Text>
             </View>
             {zap ? (
               <Pressable
@@ -291,7 +293,10 @@ function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
           <Avatar nome={a.nome} size={34} />
           <View style={{ flex: 1 }}>
             <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
-            <Text style={s.aniversarioDia}>{capitalize(formatDate(a.data, 'dddd, DD/MM'))}</Text>
+            <Text style={s.aniversarioDia}>
+              {capitalize(formatDate(a.data, 'dddd, DD/MM'))}
+              {a.professor ? ' · Professor' : ''}
+            </Text>
           </View>
           <Text style={s.aniversarioIdadeFraca}>{a.idade} anos</Text>
         </View>

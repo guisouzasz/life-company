@@ -63,8 +63,10 @@ export class UsuariosController {
    */
   @Delete(':id/definitivo')
   @UseGuards(AdminGuard)
-  @ApiOperation({ summary: 'Excluir aluno definitivamente (dados pessoais e conteúdo)' })
-  excluirDefinitivo(@Param('id') id: string) { return this.service.excluirDefinitivamente(id); }
+  @ApiOperation({ summary: 'Excluir aluno ou professor definitivamente (dados pessoais e conteúdo)' })
+  excluirDefinitivo(@Param('id') id: string, @Query('fichasPara') fichasPara?: string) {
+    return this.service.excluirDefinitivamente(id, fichasPara || undefined);
+  }
 
   @Post(':id/gerar-link') @UseGuards(AdminGuard) gerarLink(@Param('id') id: string) { return this.service.gerarLink(id); }
 }

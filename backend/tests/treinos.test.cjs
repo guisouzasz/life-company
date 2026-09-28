@@ -14,16 +14,37 @@ const RUBENS = { id: 'rubens', tipoUsuario: 'PROFESSOR', ativo: true, modalidade
 const DONA = { id: 'dona', tipo: 'ADMIN' };
 const EX = [{ grupo: 'Pernas', nome: 'LEG PRESS 45', series: 4, repeticoes: '12' }];
 
-function ambiente() {
+// Professores de duas modalidades, como a Gabriele e o Vinicius do estúdio.
+const GABRIELE = {
+  id: 'gabriele', tipoUsuario: 'PROFESSOR', ativo: true, modalidadeProfessorId: 'musculacao',
+  modalidadesProfessor: [{ modalidadeId: 'musculacao' }, { modalidadeId: 'funcional' }],
+};
+const VINICIUS = {
+  id: 'vinicius', tipoUsuario: 'PROFESSOR', ativo: true, modalidadeProfessorId: 'funcional',
+  modalidadesProfessor: [{ modalidadeId: 'funcional' }, { modalidadeId: 'musculacao' }],
+};
+const HELENA_PILATES = { id: 'helena', tipoUsuario: 'PROFESSOR', ativo: true, modalidadeProfessorId: 'pilates' };
+// Plano vigente de cada aluno: Ana treina musculação, Bia faz funcional.
+const PLANOS = [
+  { usuarioId: 'ana', modalidadeId: 'musculacao' },
+  { usuarioId: 'bia', modalidadeId: 'funcional' },
+];
+
+function ambiente(fichaInicial) {
   const gravado = [];
-  const ficha = { id: 'ficha', ativo: true, alunoId: 'ana', professorId: 'rubens', modalidadeId: 'musculacao' };
+  const ficha = fichaInicial ?? { id: 'ficha', ativo: true, alunoId: 'ana', professorId: 'rubens', modalidadeId: 'musculacao' };
   const db = {
     usuario: {
       findUnique: async ({ where }) => {
-        if (where.id === 'rubens') return RUBENS;
-        if (where.id === 'ana') return { id: 'ana', tipoUsuario: 'ALUNO' };
+        const pessoas = { rubens: RUBENS, gabriele: GABRIELE, vinicius: VINICIUS, helena: HELENA_PILATES };
+        if (pessoas[where.id]) return pessoas[where.id];
+        if (where.id === 'ana' || where.id === 'bia') return { id: where.id, tipoUsuario: 'ALUNO' };
         return null;
       },
+    },
+    usuarioPlano: {
+      findMany: async ({ where }) =>
+        PLANOS.filter((p) => p.usuarioId === where.usuarioId && where.modalidadeId.in.includes(p.modalidadeId)),
     },
     treino: {
       findUnique: async () => ficha,
@@ -85,4 +106,64 @@ test('o professor continua criando sem escolher ninguem: a ficha e dele', async 
   const c = gravado.find((g) => g.tipo === 'criar').data;
   assert.equal(c.professorId, 'rubens');
   assert.equal(c.modalidadeId, 'musculacao');
+});
+
+// ── Professor em mais de uma modalidade ─────────────────────────────────
+
+const GAB = { id: 'gabriele', tipo: 'PROFESSOR' };
+
+test('a Gabriele (musculacao e funcional) monta ficha: o carimbo segue o plano do aluno', async () => {
+  const { servico, gravado } = ambiente();
+  await servico.criar(GAB, { alunoId: 'ana', titulo: 'A', exercicios: EX });
+  await servico.criar(GAB, { alunoId: 'bia', titulo: 'B', conteudo: 'circuito' });
+  const [ana, bia] = gravado.filter((g) => g.tipo === 'criar').map((g) => g.data);
+  assert.equal(ana.modalidadeId, 'musculacao', 'Ana é da musculação');
+  assert.equal(bia.modalidadeId, 'funcional', 'Bia é do funcional');
+  assert.equal(bia.professorId, 'gabriele');
+});
+
+test('a modalidade pedida vale, se for uma das dela; outra e recusada', async () => {
+  const { servico, gravado } = ambiente();
+  await servico.criar(GAB, { alunoId: 'ana', titulo: 'A', conteudo: 'x', modalidadeId: 'funcional' });
+  assert.equal(gravado[0].data.modalidadeId, 'funcional');
+  await assert.rejects(
+    servico.criar(GAB, { alunoId: 'ana', titulo: 'A', conteudo: 'x', modalidadeId: 'pilates' }),
+    /não dá aula nessa modalidade/,
+  );
+});
+
+test('a Gabriele abre ficha das duas modalidades; o Rubens (so musculacao) nao abre a do funcional', async () => {
+  const funcional = { id: 'f', ativo: true, alunoId: 'bia', professorId: 'vinicius', modalidadeId: 'funcional' };
+  const { servico, gravado } = ambiente(funcional);
+  await servico.definirStatus('f', true, GAB);
+  assert.equal(gravado.length, 1, 'a Gabriele arquivou');
+  await assert.rejects(servico.definirStatus('f', true, { id: 'rubens', tipo: 'PROFESSOR' }), /outra modalidade/);
+});
+
+test('editar a ficha do funcional sem trocar ninguem nao vira musculacao', async () => {
+  const funcional = { id: 'f', ativo: true, alunoId: 'ana', professorId: 'gabriele', modalidadeId: 'funcional' };
+  const { servico, gravado } = ambiente(funcional);
+  // A tela manda o professor marcado de volta — é o caso de todo salvar.
+  await servico.atualizar('f', { alunoId: 'ana', titulo: 'x', conteudo: 'y', professorId: 'gabriele' }, GAB);
+  assert.equal(gravado[0].data.modalidadeId, 'funcional', 'mesmo a Ana sendo da musculação');
+});
+
+test('a dona passa a ficha da Gabriele para o Vinicius: continua sendo musculacao', async () => {
+  const ficha = { id: 'm', ativo: true, alunoId: 'bia', professorId: 'gabriele', modalidadeId: 'musculacao' };
+  const { servico, gravado } = ambiente(ficha);
+  await servico.atualizar('m', { alunoId: 'bia', titulo: 'x', exercicios: EX, professorId: 'vinicius' }, DONA);
+  assert.equal(gravado[0].data.professorId, 'vinicius');
+  assert.equal(gravado[0].data.modalidadeId, 'musculacao', 'o Vinicius também é da musculação');
+});
+
+test('professor passa ficha para colega so no que os dois tem em comum', async () => {
+  const { servico, gravado } = ambiente();
+  // Gabriele → Rubens: só musculação em comum, mesmo a Bia sendo do funcional.
+  await servico.criar(GAB, { alunoId: 'bia', titulo: 'x', exercicios: EX, professorId: 'rubens' });
+  assert.equal(gravado[0].data.modalidadeId, 'musculacao');
+  // Gabriele → Helena (pilates): nada em comum.
+  await assert.rejects(
+    servico.criar(GAB, { alunoId: 'bia', titulo: 'x', conteudo: 'x', professorId: 'helena' }),
+    /outra modalidade/,
+  );
 });
