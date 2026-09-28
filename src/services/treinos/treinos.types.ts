@@ -45,7 +45,7 @@ export interface ResumoAluno {
   atualizadaEm: string | null;
   ultimaCarga: string | null;
   /** A próxima aula dele com o professor, nos próximos 7 dias. */
-  proximaAula: { data: string; hora: string } | null;
+  proximaAula: { data: string; hora: string; modalidade?: string } | null;
 }
 
 export interface ExercicioPayload {

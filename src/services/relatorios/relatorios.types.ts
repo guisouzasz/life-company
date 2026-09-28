@@ -7,6 +7,9 @@ export interface AulaHoje {
   modalidade: string;
   agendados: number;
   capacidade: number;
+  /** Chamada feita: quantos vieram e quantos faltaram (0 antes da aula). */
+  presentes?: number;
+  faltas?: number;
 }
 
 export interface RelatorioDashboard {
@@ -16,6 +19,8 @@ export interface RelatorioDashboard {
   presencas: number;
   faltas: number;
   ocupacao: number;
+  /** Presentes ÷ (presentes + faltas) na semana; null sem chamada feita. */
+  taxaPresenca?: number | null;
   // Opcionais: presentes só após o deploy do backend ampliado
   aulasPorDia?: { dia: DiaSemanaRelatorio; total: number }[];
   aulasHoje?: AulaHoje[];

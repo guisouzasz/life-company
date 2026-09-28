@@ -1,500 +1,589 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { openBrowserAsync } from 'expo-web-browser';
 import { useAuthStore } from '../../store/auth';
 import { LC } from '../../constants/theme';
 import { DIAS_PT } from '../../constants/app';
+import { corPorModalidade, iconePorModalidade, nomeModalidade, usaFichaEstruturada } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
-import { Card } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
 import { Avatar } from '../../components/ui/avatar';
 import { Icon, type IconName } from '../../components/ui/icon';
 import { Loading, ErrorState } from '../../components/ui/states';
-import { useRelatorioDashboard } from '../../services/relatorios/relatorios.queries';
-import { useResumoFinanceiro } from '../../services/financeiro/financeiro.queries';
-import { useLogout } from '../../services/auth/auth.mutations';
-import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { AppModal } from '../../components/ui/modal';
 import { AlunosHorarioModal, type HorarioDoModal } from '../../components/admin/alunos-horario-modal';
-import { formatDate, getDiaSemanaKey } from '../../services/date';
-import { nomeModalidade } from '../../constants/assets';
-import { openBrowserAsync } from 'expo-web-browser';
-import { linkWhatsapp, mensagemAniversario, telefoneParaWhatsapp } from '../../services/whatsapp';
-import type { RelatorioDashboard } from '../../services/relatorios/relatorios.types';
+import { situacaoDoAluno } from '../../components/professor/situacao';
+import { useRelatorioDashboard } from '../../services/relatorios/relatorios.queries';
+import { useResumoFinanceiro } from '../../services/financeiro/financeiro.queries';
+import { useResumoTreinos } from '../../services/treinos/treinos.queries';
+import { useAlunos } from '../../services/usuarios/usuarios.queries';
+import { useLogout } from '../../services/auth/auth.mutations';
 import { useMe } from '../../services/auth/auth.queries';
-
-type StatDef = { label: string; value: number | string; icon: IconName; color: string; bg: string };
-type AcaoDef = { label: string; desc: string; icon: IconName; route: string; color: string; bg: string };
-
-const ACOES: AcaoDef[] = [
-  { label: 'Alunos', desc: 'Gerenciar cadastros', icon: 'people-outline', route: '/admin/alunos', color: '#4F46E5', bg: '#EEF2FF' },
-  { label: 'Horários', desc: 'Grade de aulas', icon: 'calendar-outline', route: '/admin/horarios', color: LC.primary, bg: LC.primaryLight },
-  { label: 'Financeiro', desc: 'Mensalidades e recebimentos', icon: 'wallet-outline', route: '/admin/financeiro', color: '#15803D', bg: LC.successBg },
-  { label: 'Frequência', desc: 'Presenças e faltas', icon: 'stats-chart-outline', route: '/admin/frequencia', color: '#F59E0B', bg: '#FEF3C7' },
-  { label: 'Novo aluno', desc: 'Cadastrar e gerar link', icon: 'person-add-outline', route: '/admin/novo-aluno', color: LC.info, bg: LC.infoBg },
-];
+import { useIsDesktop } from '../../hooks/use-is-desktop';
+import { useMinutoAtual } from '../../hooks/use-aula-agora';
+import { formatDate, getDiaSemanaKey } from '../../services/date';
+import { linkWhatsapp, mensagemAniversario, telefoneParaWhatsapp } from '../../services/whatsapp';
+import { nomeCurto, primeiroNome } from '../../services/nome';
+import type { AulaHoje, RelatorioDashboard } from '../../services/relatorios/relatorios.types';
+import type { ResumoFinanceiro } from '../../services/financeiro/financeiro.types';
 
 /**
- * Só o dono vê. Fora do ACOES para não vazar na tela de quem não é.
+ * O painel da dona: o que acontece hoje, o que precisa dela e como está o mês.
  *
- * As duas moram aqui porque a barra de abas do celular já está cheia — e
- * porque no desktop elas ficam na barra lateral, que no celular não existe.
- * Sem esta lista quem administra pelo telefone não tem caminho nenhum até
- * elas: a tela existe, responde, e mesmo assim é inalcançável.
+ * O painel anterior mostrava números soltos em cartões enormes (cinco telas
+ * de celular para "27 alunos, 26 ativos, 135 aulas, 13 presenças, 6
+ * faltas"), não dizia um real sequer, e o que pedia ação ficava espalhado. A
+ * ordem agora é a da cabeça de quem abre o estúdio:
+ *
+ *  1. Hoje — quantos alunos, quantas aulas, quão cheias; e o dia inteiro
+ *     numa linha, da aula das 6h à das 20h, com a de agora marcada.
+ *  2. Precisa de você — uma lista só, na ordem do que custa mais esperar:
+ *     mensalidade atrasada, aniversário de hoje, aluno treinando sem ficha,
+ *     reposição, acesso ao app. Cada linha abre o lugar onde se resolve.
+ *  3. O mês em dinheiro — recebido, previsto e o que falta, em reais.
+ *  4. A semana, os aniversários e os atalhos.
  */
-const ACOES_DO_DONO: AcaoDef[] = [
-  {
-    label: 'Conferir horários',
-    desc: 'Achar e desfazer problema nos fixos',
-    icon: 'shield-checkmark-outline',
-    route: '/admin/diagnostico',
-    color: '#0F766E',
-    bg: LC.primaryLight,
-  },
-  {
-    label: 'O que foi feito',
-    desc: 'Registro de ações do sistema',
-    icon: 'document-text-outline',
-    route: '/admin/logs',
-    color: '#7C3AED',
-    bg: '#EDE9FE',
-  },
-];
 
-// ── Blocos reutilizados nos dois layouts ─────────────────────────────
+// ── Formatos ─────────────────────────────────────────────────────────
 
-function AulasPorDiaChart({ d }: { d?: RelatorioDashboard }) {
-  const dados = d?.aulasPorDia ?? [];
-  const max = Math.max(1, ...dados.map((x) => x.total));
-  const diaAtual = getDiaSemanaKey(new Date());
+/** 4921.5 → "R$ 4.922" — no painel o centavo é ruído. */
+function reais(v?: number | null): string {
+  const n = Math.round(v ?? 0);
+  return `R$ ${n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
+}
+const capitalizar = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+const emMinutos = (h: string) => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(h ?? '');
+  return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+};
+const juntar = (nomes: string[], max = 3) =>
+  nomes.length <= max ? nomes.join(', ') : `${nomes.slice(0, max).join(', ')} e mais ${nomes.length - max}`;
 
-  return (
-    <Card style={s.chartCard} padding={18}>
-      <Text style={s.blockTitle}>Agendamentos por dia</Text>
-      <Text style={s.blockSub}>Esta semana</Text>
-      {dados.length === 0 ? (
-        <Text style={s.blockEmpty}>Sem dados ainda.</Text>
-      ) : (
-        <View style={s.chartArea}>
-          {dados.map((item) => {
-            const hoje = item.dia === diaAtual;
-            return (
-              <View key={item.dia} style={s.chartCol}>
-                <Text style={[s.chartValue, hoje && s.chartValueHoje]}>{item.total}</Text>
-                <View style={s.chartBarTrack}>
-                  <View
-                    style={[
-                      s.chartBar,
-                      { height: `${Math.max((item.total / max) * 100, item.total > 0 ? 8 : 3)}%` },
-                      hoje ? s.chartBarHoje : null,
-                    ]}
-                  />
-                </View>
-                <Text style={[s.chartDia, hoje && s.chartDiaHoje]}>{DIAS_PT[item.dia]?.slice(0, 3)}</Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </Card>
-  );
+type EstadoAula = 'dada' | 'agora' | 'proxima';
+function estadoDa(a: AulaHoje, minuto: number): EstadoAula {
+  if (minuto >= emMinutos(a.horaFim)) return 'dada';
+  if (minuto >= emMinutos(a.horaInicio)) return 'agora';
+  return 'proxima';
 }
 
-function AulasHojeCard({ d }: { d?: RelatorioDashboard }) {
-  const todas = d?.aulasHoje ?? [];
-  // '' = todas as modalidades
-  const [filtro, setFiltro] = useState('');
-  // Horário aberto no modal de "quem está agendado"
+// ── Hoje ─────────────────────────────────────────────────────────────
+
+/** Os números de hoje, contados das aulas da grade. */
+function numerosDeHoje(d?: RelatorioDashboard) {
+  const aulas = d?.aulasHoje ?? [];
+  const alunos = aulas.reduce((t, a) => t + a.agendados, 0);
+  const vagas = aulas.reduce((t, a) => t + a.capacidade, 0);
+  const comAluno = aulas.filter((a) => a.agendados > 0).length;
+  return { alunos, aulas: comAluno, grade: aulas.length, lotacao: vagas > 0 ? Math.round((alunos / vagas) * 100) : 0 };
+}
+
+/**
+ * O dia inteiro numa fileira: cada turma é um cartão com a hora, a
+ * modalidade e quão cheia está. A que está acontecendo fica em destaque, as
+ * que já passaram mostram quem veio. A fileira já abre na aula de agora.
+ */
+function LinhaDoDia({ d, largo }: { d?: RelatorioDashboard; largo?: boolean }) {
+  const aulas = d?.aulasHoje ?? [];
+  const minuto = useMinutoAtual();
   const [verAlunos, setVerAlunos] = useState<HorarioDoModal | null>(null);
   const hoje = getDiaSemanaKey(new Date()) as HorarioDoModal['diaSemana'];
+  const ref = useRef<ScrollView>(null);
+  const LARGURA = 136;
+  const GAP_TILE = 10;
+  const foco = Math.max(aulas.findIndex((a) => estadoDa(a, minuto) !== 'dada'), 0);
 
-  // Modalidades que têm aula hoje, já com o nome usado no app (Academia → Musculação)
-  const modalidades = [...new Set(todas.map((a) => nomeModalidade(a.modalidade)))];
-  const aulas = filtro ? todas.filter((a) => nomeModalidade(a.modalidade) === filtro) : todas;
+  useEffect(() => {
+    if (largo || !aulas.length) return;
+    const t = setTimeout(() => ref.current?.scrollTo({ x: Math.max(foco * (LARGURA + GAP_TILE) - 16, 0), animated: false }), 60);
+    return () => clearTimeout(t);
+  }, [foco, aulas.length, largo]);
 
-  return (
-    <Card style={s.hojeCard} padding={18}>
-      <Text style={s.blockTitle}>Aulas de hoje</Text>
-      <Text style={s.blockSub}>
-        {todas.length > 0
-          ? filtro
-            ? `${aulas.length} de ${todas.length} horários`
-            : `${todas.length} horários na grade`
-          : ' '}
-      </Text>
-
-      {modalidades.length > 1 ? (
-        <View style={s.filtroRow}>
-          {['', ...modalidades].map((m) => {
-            const sel = filtro === m;
-            return (
-              <Pressable key={m || 'todas'} style={[s.filtroChip, sel && s.filtroChipSel]} onPress={() => setFiltro(m)}>
-                <Text style={[s.filtroTexto, sel && s.filtroTextoSel]}>{m || 'Todas'}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {aulas.length === 0 ? (
-        <View style={s.hojeEmpty}>
-          <Icon name="cafe-outline" size={26} color={LC.textMuted} />
-          <Text style={s.blockEmpty}>{todas.length === 0 ? 'Sem aulas hoje.' : 'Nenhuma aula desta modalidade hoje.'}</Text>
-        </View>
-      ) : (
-        aulas.map((a) => {
-          const lotado = a.agendados >= a.capacidade;
-          const pct = a.capacidade > 0 ? (a.agendados / a.capacidade) * 100 : 0;
-          return (
-            <Pressable
-              key={a.horarioId}
-              style={({ pressed }) => [s.hojeRow, pressed && s.hojeRowPressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`Ver alunos de ${nomeModalidade(a.modalidade)} às ${a.horaInicio}`}
-              onPress={() =>
-                setVerAlunos({
-                  id: a.horarioId,
-                  diaSemana: hoje,
-                  horaInicio: a.horaInicio,
-                  modalidade: { nome: a.modalidade },
-                  capacidadeMaxima: a.capacidade,
-                })
-              }
-            >
-              <Text style={s.hojeHora}>{a.horaInicio}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={s.hojeModalidade}>{nomeModalidade(a.modalidade)}</Text>
-                <View style={s.hojeTrack}>
-                  <View style={[s.hojeFill, { width: `${pct}%` }, lotado && { backgroundColor: LC.danger }]} />
-                </View>
-              </View>
-              <Text style={s.hojeVagas}>{a.agendados}/{a.capacidade}</Text>
-              <Badge label={lotado ? 'Lotado' : 'Disponível'} variant={lotado ? 'danger' : 'success'} />
-              <Icon name="chevron-forward" size={15} color={LC.textMuted} />
-            </Pressable>
-          );
-        })
-      )}
-
-      <AlunosHorarioModal horario={verAlunos} onClose={() => setVerAlunos(null)} />
-    </Card>
-  );
-}
-
-/** Hero mobile: o que vai acontecer nas próximas horas (substitui a taxa de ocupação). */
-function ProximasAulasHero({ d }: { d?: RelatorioDashboard }) {
-  const agora = formatDate(new Date(), 'HH:mm');
-  const proximas = (d?.aulasHoje ?? []).filter((a) => a.horaFim > agora).slice(0, 3);
-
-  return (
-    <View style={s.ocupacaoCard}>
-      <View style={s.ocupacaoHead}>
-        <Text style={s.ocupacaoLabel}>Próximas aulas</Text>
-        <Text style={s.ocupacaoWeek}>Hoje</Text>
+  if (aulas.length === 0) {
+    return (
+      <View style={[s.bloco, s.vazioDia]}>
+        <Icon name="cafe-outline" size={24} color={LC.textMuted} />
+        <Text style={s.vazioTexto}>Sem aulas hoje. Bom descanso!</Text>
       </View>
+    );
+  }
 
-      {proximas.length === 0 ? (
-        <Text style={s.heroVazio}>Sem mais aulas hoje. Bom descanso! 🌙</Text>
-      ) : (
-        proximas.map((a) => (
-          <View key={a.horarioId} style={s.heroAulaRow}>
-            <Text style={s.heroAulaHora}>{a.horaInicio}</Text>
-            <Text style={s.heroAulaModalidade} numberOfLines={1}>{nomeModalidade(a.modalidade)}</Text>
-            <View style={s.heroAulaVagas}>
-              <Icon name="people" size={13} color="rgba(255,255,255,0.85)" />
-              <Text style={s.heroAulaVagasText}>{a.agendados}/{a.capacidade}</Text>
+  const tiles = aulas.map((a) => {
+    const estado = estadoDa(a, minuto);
+    const cor = corPorModalidade(a.modalidade);
+    const lotada = a.agendados >= a.capacidade;
+    const pct = a.capacidade > 0 ? Math.min(a.agendados / a.capacidade, 1) : 0;
+    const chamada = (a.presentes ?? 0) + (a.faltas ?? 0) > 0;
+    return (
+      <Pressable
+        key={a.horarioId}
+        style={({ pressed }) => [
+          s.tile,
+          largo && s.tileLargo,
+          estado === 'agora' && s.tileAgora,
+          estado === 'dada' && s.tileDada,
+          pressed && { opacity: 0.8 },
+        ]}
+        onPress={() => setVerAlunos({ id: a.horarioId, diaSemana: hoje, horaInicio: a.horaInicio, modalidade: { nome: a.modalidade }, capacidadeMaxima: a.capacidade })}
+        accessibilityRole="button"
+        accessibilityLabel={`Ver alunos de ${nomeModalidade(a.modalidade)} às ${a.horaInicio}`}
+      >
+        <View style={s.tileTopo}>
+          <Text style={[s.tileHora, estado === 'agora' && { color: '#fff' }]}>{a.horaInicio}</Text>
+          {estado === 'agora' ? (
+            <View style={s.agoraSelo}>
+              <View style={s.agoraPonto} />
+              <Text style={s.agoraTexto}>AGORA</Text>
             </View>
-          </View>
-        ))
-      )}
-
-      <Pressable style={s.heroAgendaBtn} onPress={() => router.push('/admin/horarios' as any)}>
-        <Text style={s.heroAgendaBtnText}>Ver agenda</Text>
-        <Icon name="arrow-forward" size={15} color={LC.primaryDark} />
-      </Pressable>
-    </View>
-  );
-}
-
-/** "sexta-feira, 28/08" — o formatador devolve o dia em minúscula. */
-const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
-
-/**
- * Aniversariantes da semana, com quem é hoje em destaque.
- *
- * Some da tela quando não há ninguém na semana, em vez de ocupar espaço com
- * uma lista vazia. Antes mostrava só o dia: o card quase nunca aparecia, e
- * quando aparecia já era em cima da hora para preparar qualquer coisa.
- */
-function AniversariantesCard({ d }: { d?: RelatorioDashboard }) {
-  const todos = d?.aniversariantes ?? [];
-  if (todos.length === 0) return null;
-
-  const deHoje = todos.filter((a) => a.hoje);
-  const restante = todos.filter((a) => !a.hoje);
-  // Com professor na lista, "alunos" deixa de ser verdade.
-  const quem = todos.some((a) => a.professor) ? 'pessoas' : 'alunos';
-
-  return (
-    <Card style={s.aniversarioCard} padding={16}>
-      <View style={s.aniversarioHead}>
-        <View style={s.aniversarioIcone}>
-          <Icon name="gift" size={20} color="#fff" />
+          ) : estado === 'dada' ? (
+            <Icon name="checkmark-circle" size={16} color={LC.textMuted} />
+          ) : lotada ? (
+            <Text style={s.lotadaTexto}>LOTADA</Text>
+          ) : null}
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.blockTitle}>Aniversariantes da semana</Text>
-          <Text style={s.aniversarioSub}>
-            {deHoje.length > 0
-              ? deHoje.length === 1
-                ? 'Tem alguém de aniversário hoje!'
-                : `${deHoje.length} ${quem} fazem aniversário hoje!`
-              : todos.length === 1
-                ? `1 ${todos[0].professor ? 'professor' : 'aluno'} faz aniversário nesta semana`
-                : `${todos.length} ${quem} fazem aniversário nesta semana`}
+        <View style={s.tileMod}>
+          <Icon name={iconePorModalidade(a.modalidade)} size={12} color={estado === 'agora' ? '#fff' : cor} />
+          <Text style={[s.tileModTexto, { color: estado === 'agora' ? '#fff' : cor }]} numberOfLines={1}>
+            {nomeModalidade(a.modalidade)}
           </Text>
         </View>
-      </View>
-
-      {/* Quem é hoje vem primeiro e com fundo próprio: é o que precisa de
-          ação agora, e some no meio da lista se ficar em ordem de data. */}
-      {deHoje.map((a) => {
-        // Só quem é do dia ganha o botão: parabéns adiantado soa estranho, e
-        // um botão por linha em toda a semana viraria ruído no card.
-        const zap = telefoneParaWhatsapp(a.telefone);
-        return (
-          <View key={a.id} style={[s.aniversarioLinha, s.aniversarioHoje]}>
-            <Avatar nome={a.nome} size={34} />
-            <View style={{ flex: 1 }}>
-              <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
-              <Text style={s.aniversarioHojeTag}>HOJE · {a.idade} anos{a.professor ? ' · EQUIPE' : ''}</Text>
-            </View>
-            {zap ? (
-              <Pressable
-                style={s.parabensBtn}
-                accessibilityRole="button"
-                accessibilityLabel={`Mandar parabéns para ${a.nome} no WhatsApp`}
-                onPress={() => openBrowserAsync(linkWhatsapp(zap, mensagemAniversario(a.nome))).catch(() => {})}
-              >
-                <Icon name="logo-whatsapp" size={15} color="#fff" />
-                <Text style={s.parabensTexto}>Parabenizar</Text>
-              </Pressable>
-            ) : (
-              // Sem telefone no cadastro não há para onde mandar; dizer o
-              // motivo evita a dona procurar um botão que não existe.
-              <Text style={s.semTelefone}>Sem telefone{'\n'}no cadastro</Text>
-            )}
-          </View>
-        );
-      })}
-
-      {restante.map((a) => (
-        <View key={a.id} style={s.aniversarioLinha}>
-          <Avatar nome={a.nome} size={34} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.aniversarioNome} numberOfLines={1}>{a.nome}</Text>
-            <Text style={s.aniversarioDia}>
-              {capitalize(formatDate(a.data, 'dddd, DD/MM'))}
-              {a.professor ? ' · Professor' : ''}
-            </Text>
-          </View>
-          <Text style={s.aniversarioIdadeFraca}>{a.idade} anos</Text>
+        <View style={[s.tileTrilho, estado === 'agora' && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+          <View
+            style={[
+              s.tileBarra,
+              { width: `${Math.max(pct * 100, a.agendados > 0 ? 8 : 0)}%`, backgroundColor: estado === 'agora' ? '#fff' : lotada ? LC.danger : cor },
+            ]}
+          />
         </View>
-      ))}
-    </Card>
+        <Text style={[s.tileConta, estado === 'agora' && { color: 'rgba(255,255,255,0.9)' }]}>
+          {estado === 'dada' && chamada
+            ? `${a.presentes} vieram${a.faltas ? ` · ${a.faltas} faltou` : ''}`
+            : `${a.agendados} de ${a.capacidade}`}
+        </Text>
+      </Pressable>
+    );
+  });
+
+  return (
+    <>
+      {largo ? (
+        <View style={s.tilesGrade}>{tiles}</View>
+      ) : (
+        <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false} style={s.tilesScroll} contentContainerStyle={s.tilesLinha}>
+          {tiles}
+        </ScrollView>
+      )}
+      <AlunosHorarioModal horario={verAlunos} onClose={() => setVerAlunos(null)} />
+    </>
   );
 }
 
-/** Pendências acionáveis: reposições, primeiro acesso e cancelamentos de ontem. */
-function AtencaoSection({ d }: { d?: RelatorioDashboard }) {
-  const reposicoes = d?.reposicoesPendentes;
-  const acesso = d?.aguardandoAcesso;
-  const cancelados = d?.canceladosOntem ?? [];
-  // Qual lista está aberta. Antes o toque no card jogava na lista completa de
-  // alunos, sem filtro — não dava para saber QUEM precisava de quê.
-  const [lista, setLista] = useState<'reposicoes' | 'acesso' | null>(null);
+// ── Precisa de você ──────────────────────────────────────────────────
 
-  const temAlgo = (reposicoes?.total ?? 0) > 0 || (acesso?.total ?? 0) > 0 || cancelados.length > 0;
-  if (!temAlgo) return null;
+type Item = {
+  chave: string;
+  icone: IconName;
+  cor: string;
+  fundo: string;
+  titulo: string;
+  sub?: string;
+  onPress?: () => void;
+  acao?: { rotulo: string; icone: IconName; cor: string; onPress: () => void };
+};
 
-  /**
-   * Abre a tela de Alunos já filtrada por este aluno. É lá que ficam as ações
-   * (gerar link de acesso, gerenciar créditos, editar plano), então não vale
-   * duplicá-las aqui.
-   */
+type Lista = { titulo: string; dica: string; linhas: { chave: string; nome: string; detalhe?: string; onPress: () => void }[] };
+
+function PrecisaDeVoce({ d, fin }: { d?: RelatorioDashboard; fin?: ResumoFinanceiro }) {
+  const resumo = useResumoTreinos();
+  const alunos = useAlunos();
+  const [lista, setLista] = useState<Lista | null>(null);
+
   const abrirAluno = (nome: string) => {
     setLista(null);
     router.push({ pathname: '/admin/alunos', params: { busca: nome } } as any);
   };
 
+  /**
+   * Alunos de musculação que treinam esta semana sem ficha em dia (sem
+   * nenhuma, ou vencida). Só musculação: é onde a ficha é o treino — no
+   * Pilates e no Funcional o professor conduz a aula, e contar essas alunas
+   * enchia o painel de "pendências" que ninguém precisa resolver.
+   */
+  const semFicha = useMemo(() => {
+    const nomes = new Map((alunos.data ?? []).map((a) => [a.id, a.nome]));
+    const musculacao = (m?: string) => !!m && usaFichaEstruturada(m) && !/pilates|funcional|yoga/i.test(m);
+    return (resumo.data ?? [])
+      .filter((r) => r.proximaAula && musculacao(r.proximaAula.modalidade) && nomes.has(r.alunoId))
+      .map((r) => ({ r, sit: situacaoDoAluno(r), nome: nomes.get(r.alunoId)! }))
+      .filter((x) => x.sit.urgente)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }, [resumo.data, alunos.data]);
+
+  const itens: Item[] = [];
+
+  const atrasados = (fin?.alunos ?? []).filter((a) => a.status === 'ATRASADO').sort((a, b) => b.dias - a.dias);
+  if (atrasados.length > 0) {
+    const soma = atrasados.reduce((t, a) => t + (a.valorMensalidade ?? 0), 0);
+    itens.push({
+      chave: 'atraso', icone: 'wallet', cor: LC.dangerFg, fundo: LC.dangerBg,
+      titulo: `${atrasados.length} ${atrasados.length === 1 ? 'mensalidade atrasada' : 'mensalidades atrasadas'}${soma > 0 ? ` · ${reais(soma)}` : ''}`,
+      sub: juntar(atrasados.map((a) => nomeCurto(a.nome))),
+      onPress: () => router.push('/admin/financeiro' as any),
+    });
+  }
+
+  for (const a of (d?.aniversariantes ?? []).filter((x) => x.hoje)) {
+    const zap = telefoneParaWhatsapp(a.telefone);
+    itens.push({
+      chave: `niver-${a.id}`, icone: 'gift', cor: '#BE185D', fundo: '#FCE7F3',
+      titulo: `${nomeCurto(a.nome)} faz ${a.idade} anos hoje`,
+      sub: a.professor ? 'Da equipe' : zap ? 'Mande um parabéns pelo WhatsApp' : 'Sem telefone no cadastro',
+      acao: zap
+        ? { rotulo: 'Parabenizar', icone: 'logo-whatsapp', cor: '#25D366', onPress: () => openBrowserAsync(linkWhatsapp(zap, mensagemAniversario(a.nome))).catch(() => {}) }
+        : undefined,
+    });
+  }
+
+  if (semFicha.length > 0) {
+    itens.push({
+      chave: 'fichas', icone: 'barbell', cor: '#C2410C', fundo: '#FFEDD5',
+      titulo: `${semFicha.length} ${semFicha.length === 1 ? 'aluno de musculação' : 'alunos de musculação'} sem ficha em dia`,
+      sub: juntar(semFicha.map((x) => nomeCurto(x.nome))),
+      onPress: () =>
+        setLista({
+          titulo: 'Sem ficha em dia',
+          dica: 'Treinam musculação esta semana e estão sem ficha, ou com ela vencida. Toque para abrir os treinos e montar a nova.',
+          linhas: semFicha.map((x) => ({
+            chave: x.r.alunoId,
+            nome: x.nome,
+            detalhe: `${x.sit.rotulo}${x.r.proximaAula?.modalidade ? ` · ${nomeModalidade(x.r.proximaAula.modalidade)}` : ''}`,
+            onPress: () => {
+              setLista(null);
+              router.push({ pathname: '/admin/treinos-aluno' as any, params: { id: x.r.alunoId, nome: x.nome } });
+            },
+          })),
+        }),
+    });
+  }
+
+  const reposicoes = d?.reposicoesPendentes;
+  if (reposicoes && reposicoes.total > 0) {
+    itens.push({
+      chave: 'repo', icone: 'ticket', cor: LC.warningFg, fundo: LC.warningBg,
+      titulo: `${reposicoes.total} ${reposicoes.total === 1 ? 'reposição para agendar' : 'reposições para agendar'}`,
+      sub: juntar(reposicoes.alunos.map((a) => nomeCurto(a.nome))),
+      onPress: () =>
+        setLista({
+          titulo: 'Reposições para agendar',
+          dica: 'Têm crédito de reposição sem usar. Toque no nome para abrir o cadastro.',
+          linhas: reposicoes.alunos.map((a) => ({
+            chave: a.nome, nome: a.nome, detalhe: a.creditos === 1 ? '1 crédito' : `${a.creditos} créditos`, onPress: () => abrirAluno(a.nome),
+          })),
+        }),
+    });
+  }
+
+  const venceLogo = (fin?.alunos ?? []).filter((a) => a.status === 'A_VENCER' && a.dias <= 3);
+  if (venceLogo.length > 0) {
+    itens.push({
+      chave: 'vence', icone: 'time', cor: '#1D4ED8', fundo: LC.infoBg,
+      titulo: `${venceLogo.length} ${venceLogo.length === 1 ? 'mensalidade vence' : 'mensalidades vencem'} nos próximos 3 dias`,
+      sub: juntar(venceLogo.map((a) => nomeCurto(a.nome))),
+      onPress: () => router.push('/admin/financeiro' as any),
+    });
+  }
+
+  const acesso = d?.aguardandoAcesso;
+  if (acesso && acesso.total > 0) {
+    itens.push({
+      chave: 'acesso', icone: 'phone-portrait', cor: '#0F766E', fundo: '#CCFBF1',
+      titulo: `${acesso.total} ${acesso.total === 1 ? 'aluno ainda não entrou' : 'alunos ainda não entraram'} no app`,
+      sub: juntar(acesso.nomes.map(nomeCurto)),
+      onPress: () =>
+        setLista({
+          titulo: 'Ainda não entraram no app',
+          dica: 'Ainda não criaram a senha. Toque no nome para abrir o cadastro e mandar o link de acesso.',
+          linhas: acesso.nomes.map((nome) => ({ chave: nome, nome, onPress: () => abrirAluno(nome) })),
+        }),
+    });
+  }
+
+  const cancelados = d?.canceladosOntem ?? [];
+  if (cancelados.length > 0) {
+    itens.push({
+      chave: 'cancel', icone: 'close-circle', cor: LC.textSecondary, fundo: LC.neutralBg,
+      titulo: `Ontem: ${cancelados.length} ${cancelados.length === 1 ? 'aula cancelada' : 'aulas canceladas'}`,
+      sub: juntar(cancelados.map((c) => `${nomeCurto(c.nome)} (${c.horaInicio})`), 2),
+    });
+  }
+
   return (
-    <>
-      <Text style={s.sectionTitle}>Precisa de atenção</Text>
-
-      {reposicoes && reposicoes.total > 0 ? (
-        <Pressable onPress={() => setLista('reposicoes')} style={({ pressed }) => [pressed && s.pressed]}>
-          <Card style={s.atCard} padding={14}>
-            <View style={[s.atIcon, { backgroundColor: LC.warningBg }]}>
-              <Icon name="ticket-outline" size={18} color={LC.warning} />
+    <View style={s.bloco}>
+      <View style={s.blocoTopo}>
+        <Text style={s.blocoTitulo}>Precisa de você</Text>
+        {itens.length > 0 ? <View style={s.contaBolha}><Text style={s.contaBolhaTexto}>{itens.length}</Text></View> : null}
+      </View>
+      {itens.length === 0 ? (
+        <View style={s.tudoEmDia}>
+          <View style={s.tudoEmDiaIcone}>
+            <Icon name="checkmark-done" size={20} color={LC.successFg} />
+          </View>
+          <Text style={s.tudoEmDiaTexto}>Tudo em dia por aqui. Nenhuma pendência hoje.</Text>
+        </View>
+      ) : (
+        itens.map((it, i) => {
+          const conteudo = (
+            <>
+            <View style={[s.itemIcone, { backgroundColor: it.fundo }]}>
+              <Icon name={it.icone} size={18} color={it.cor} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.atTitulo}>
-                {reposicoes.total} {reposicoes.total === 1 ? 'reposição para agendar' : 'reposições para agendar'}
-              </Text>
-              <Text style={s.atSub} numberOfLines={1}>
-                {reposicoes.alunos.map((a) => (a.creditos > 1 ? `${a.nome} (${a.creditos})` : a.nome)).join(', ')}
-              </Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={s.itemTitulo}>{it.titulo}</Text>
+              {it.sub ? <Text style={s.itemSub} numberOfLines={1}>{it.sub}</Text> : null}
             </View>
-            <Icon name="chevron-forward" size={16} color={LC.textMuted} />
-          </Card>
-        </Pressable>
-      ) : null}
-
-      {acesso && acesso.total > 0 ? (
-        <Pressable onPress={() => setLista('acesso')} style={({ pressed }) => [pressed && s.pressed]}>
-          <Card style={s.atCard} padding={14}>
-            <View style={[s.atIcon, { backgroundColor: LC.infoBg }]}>
-              <Icon name="key-outline" size={18} color={LC.info} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.atTitulo}>
-                {acesso.total} {acesso.total === 1 ? 'aluno aguardando primeiro acesso' : 'alunos aguardando primeiro acesso'}
-              </Text>
-              <Text style={s.atSub} numberOfLines={1}>{acesso.nomes.join(', ')}</Text>
-            </View>
-            <Icon name="chevron-forward" size={16} color={LC.textMuted} />
-          </Card>
-        </Pressable>
-      ) : null}
-
-      {/* Lista de quem tem reposição pendente */}
-      <AppModal visible={lista === 'reposicoes'} onClose={() => setLista(null)} title="Reposições para agendar">
-        <Text style={s.atListaHint}>
-          Estes alunos têm crédito de reposição sem usar. Toque no nome para abrir o cadastro.
-        </Text>
-        <ScrollView style={s.atListaScroll} showsVerticalScrollIndicator={false}>
-          {(reposicoes?.alunos ?? []).map((a) => (
+            {it.acao ? (
+              <Pressable
+                style={[s.itemAcao, { backgroundColor: it.acao.cor }]}
+                onPress={it.acao.onPress}
+                accessibilityRole="button"
+                accessibilityLabel={`${it.acao.rotulo}: ${it.titulo}`}
+              >
+                <Icon name={it.acao.icone} size={14} color="#fff" />
+                <Text style={s.itemAcaoTexto}>{it.acao.rotulo}</Text>
+              </Pressable>
+            ) : it.onPress ? (
+              <Icon name="chevron-forward" size={17} color={LC.textMuted} />
+            ) : null}
+            </>
+          );
+          /*
+            Linha sem destino é uma View, não um botão desligado: um botão
+            desligado desliga também o que está dentro dele para o leitor de
+            tela — e o "Parabenizar" do aniversário mora aí dentro.
+          */
+          return it.onPress ? (
             <Pressable
-              key={a.nome}
-              onPress={() => abrirAluno(a.nome)}
-              style={({ pressed }) => [s.atLinha, pressed && s.pressed]}
+              key={it.chave}
+              style={({ pressed }) => [s.item, i > 0 && s.itemBorda, pressed && { backgroundColor: LC.neutralBg }]}
+              onPress={it.onPress}
               accessibilityRole="button"
-              accessibilityLabel={`Abrir cadastro de ${a.nome}`}
+              accessibilityLabel={it.titulo}
             >
-              <Avatar nome={a.nome} size={34} />
-              <Text style={s.atLinhaNome} numberOfLines={1}>{a.nome}</Text>
-              <Badge label={a.creditos === 1 ? '1 crédito' : `${a.creditos} créditos`} variant="neutral" />
+              {conteudo}
+            </Pressable>
+          ) : (
+            <View key={it.chave} style={[s.item, i > 0 && s.itemBorda]}>
+              {conteudo}
+            </View>
+          );
+        })
+      )}
+
+      <AppModal visible={!!lista} onClose={() => setLista(null)} title={lista?.titulo ?? ''}>
+        <Text style={s.listaDica}>{lista?.dica}</Text>
+        <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+          {(lista?.linhas ?? []).map((l) => (
+            <Pressable
+              key={l.chave}
+              onPress={l.onPress}
+              style={({ pressed }) => [s.listaLinha, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`Abrir ${l.nome}`}
+            >
+              <Avatar nome={l.nome} size={34} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={s.listaNome} numberOfLines={1}>{nomeCurto(l.nome)}</Text>
+                {l.detalhe ? <Text style={s.listaDetalhe}>{l.detalhe}</Text> : null}
+              </View>
               <Icon name="chevron-forward" size={16} color={LC.textMuted} />
             </Pressable>
           ))}
         </ScrollView>
       </AppModal>
-
-      {/* Lista de quem ainda não ativou a conta */}
-      <AppModal visible={lista === 'acesso'} onClose={() => setLista(null)} title="Aguardando primeiro acesso">
-        <Text style={s.atListaHint}>
-          Cadastrados que ainda não criaram a senha. Toque no nome para abrir o cadastro e gerar o link de acesso.
-        </Text>
-        <ScrollView style={s.atListaScroll} showsVerticalScrollIndicator={false}>
-          {(acesso?.nomes ?? []).map((nome) => (
-            <Pressable
-              key={nome}
-              onPress={() => abrirAluno(nome)}
-              style={({ pressed }) => [s.atLinha, pressed && s.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`Abrir cadastro de ${nome}`}
-            >
-              <Avatar nome={nome} size={34} />
-              <Text style={s.atLinhaNome} numberOfLines={1}>{nome}</Text>
-              <Icon name="chevron-forward" size={16} color={LC.textMuted} />
-            </Pressable>
-          ))}
-        </ScrollView>
-      </AppModal>
-
-      {cancelados.length > 0 ? (
-        <Card style={s.atCard} padding={14}>
-          <View style={[s.atIcon, { backgroundColor: LC.dangerBg }]}>
-            <Icon name="close-circle-outline" size={18} color={LC.danger} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.atTitulo}>
-              Ontem: {cancelados.length} {cancelados.length === 1 ? 'aula cancelada' : 'aulas canceladas'}
-            </Text>
-            <Text style={s.atSub} numberOfLines={2}>
-              {cancelados.map((c) => `${c.nome} (${c.horaInicio} ${nomeModalidade(c.modalidade)})`).join(', ')}
-            </Text>
-          </View>
-        </Card>
-      ) : null}
-    </>
+    </View>
   );
 }
 
-function FinanceiroCard() {
-  const resumo = useResumoFinanceiro();
-  const d = resumo.data;
+// ── O mês em dinheiro ────────────────────────────────────────────────
+
+function DinheiroDoMes({ fin, carregando }: { fin?: ResumoFinanceiro; carregando: boolean }) {
+  const mes = formatDate(new Date(), 'MMMM');
+  const pct = fin && fin.previsto > 0 ? Math.min(fin.recebido / fin.previsto, 1) : 0;
   return (
-    <Pressable onPress={() => router.push('/admin/financeiro' as any)} style={({ pressed }) => [pressed && s.pressed]}>
-      <Card style={s.finCard} padding={18}>
-        <View style={s.finHead}>
-          <Text style={s.blockTitle}>Financeiro do mês</Text>
-          <Icon name="chevron-forward" size={16} color={LC.textMuted} />
-        </View>
-        {resumo.isLoading ? (
-          <Text style={s.blockEmpty}>Carregando…</Text>
-        ) : !d ? (
-          <View style={s.finAlerta}>
-            <Icon name="cloud-offline-outline" size={14} color={LC.textMuted} />
-            <Text style={[s.finAlertaText, { color: LC.textSecondary }]}>Sem conexão — toque para abrir</Text>
+    <Pressable
+      style={({ pressed }) => [s.bloco, pressed && { opacity: 0.9 }]}
+      onPress={() => router.push('/admin/financeiro' as any)}
+      accessibilityRole="button"
+      accessibilityLabel="Abrir o financeiro"
+    >
+      <View style={s.blocoTopo}>
+        <Text style={s.blocoTitulo}>{capitalizar(mes)} em dinheiro</Text>
+        <Icon name="chevron-forward" size={17} color={LC.textMuted} />
+      </View>
+      {carregando ? (
+        <Text style={s.vazioTexto}>Carregando…</Text>
+      ) : !fin ? (
+        <Text style={s.vazioTexto}>Sem conexão — toque para abrir o financeiro.</Text>
+      ) : (
+        <>
+          <View style={s.dinheiroLinha}>
+            <Text style={s.dinheiroRecebido}>{reais(fin.recebido)}</Text>
+            <Text style={s.dinheiroDe}>de {reais(fin.previsto)}</Text>
           </View>
-        ) : (
-          <>
-            <View style={s.finRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.finValor, { color: LC.success }]}>{d.pagos}</Text>
-                <Text style={s.finLabel}>{d.pagos === 1 ? 'Pagou' : 'Pagaram'}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.finValor}>{d.aVencer}</Text>
-                <Text style={s.finLabel}>A vencer</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[s.finValor, d.atrasados > 0 && { color: LC.danger }]}>{d.atrasados}</Text>
-                <Text style={s.finLabel}>{d.atrasados === 1 ? 'Atrasado' : 'Atrasados'}</Text>
-              </View>
-            </View>
-            {d.atrasados > 0 ? (
-              <View style={s.finAlerta}>
-                <Icon name="alert-circle" size={14} color={LC.danger} />
-                <Text style={s.finAlertaText}>
-                  {d.atrasados} {d.atrasados === 1 ? 'aluno precisa' : 'alunos precisam'} de atenção
-                </Text>
-              </View>
-            ) : (
-              <View style={s.finAlerta}>
-                <Icon name="checkmark-circle" size={14} color={LC.success} />
-                <Text style={[s.finAlertaText, { color: LC.success }]}>Nenhum atraso</Text>
-              </View>
-            )}
-          </>
-        )}
-      </Card>
+          <View style={s.dinheiroTrilho}>
+            <View style={[s.dinheiroBarra, { width: `${Math.round(pct * 100)}%` }]} />
+          </View>
+          <Text style={s.dinheiroSub}>
+            {Math.round(pct * 100)}% recebido{fin.emAberto > 0 ? ` · faltam ${reais(fin.emAberto)}` : ' · mês fechado!'}
+          </Text>
+          <View style={s.dinheiroContas}>
+            <Conta n={fin.pagos} rotulo={fin.pagos === 1 ? 'pagou' : 'pagaram'} cor={LC.successFg} fundo={LC.successBg} />
+            <Conta n={fin.aVencer} rotulo="a vencer" cor={LC.textSecondary} fundo={LC.neutralBg} />
+            <Conta n={fin.atrasados} rotulo={fin.atrasados === 1 ? 'atrasado' : 'atrasados'} cor={fin.atrasados ? LC.dangerFg : LC.textSecondary} fundo={fin.atrasados ? LC.dangerBg : LC.neutralBg} />
+          </View>
+          {fin.semValor > 0 ? (
+            <Text style={s.dinheiroAviso}>
+              {fin.semValor === 1 ? '1 aluno está' : `${fin.semValor} alunos estão`} sem valor de mensalidade — o previsto não
+              inclui {fin.semValor === 1 ? 'esse valor' : 'esses valores'}.
+            </Text>
+          ) : null}
+        </>
+      )}
     </Pressable>
+  );
+}
+
+function Conta({ n, rotulo, cor, fundo }: { n: number; rotulo: string; cor: string; fundo: string }) {
+  return (
+    <View style={[s.conta, { backgroundColor: fundo }]}>
+      <Text style={[s.contaN, { color: cor }]}>{n}</Text>
+      <Text style={[s.contaRotulo, { color: cor }]}>{rotulo}</Text>
+    </View>
+  );
+}
+
+// ── A semana ─────────────────────────────────────────────────────────
+
+function Semana({ d }: { d?: RelatorioDashboard }) {
+  const dados = d?.aulasPorDia ?? [];
+  const max = Math.max(1, ...dados.map((x) => x.total));
+  const diaAtual = getDiaSemanaKey(new Date());
+  const taxa = d?.taxaPresenca;
+  return (
+    <View style={s.bloco}>
+      <View style={s.blocoTopo}>
+        <Text style={s.blocoTitulo}>A semana</Text>
+        <Text style={s.blocoMeta}>{d?.aulasSemana ?? 0} aulas marcadas</Text>
+      </View>
+      <View style={s.grafico}>
+        {dados.map((item) => {
+          const hoje = item.dia === diaAtual;
+          return (
+            <View key={item.dia} style={s.graficoCol}>
+              <Text style={[s.graficoValor, hoje && { color: LC.primary }]}>{item.total}</Text>
+              <View style={s.graficoTrilho}>
+                <View style={[s.graficoBarra, { height: `${Math.max((item.total / max) * 100, item.total > 0 ? 8 : 3)}%` }, hoje && { backgroundColor: LC.primary }]} />
+              </View>
+              <Text style={[s.graficoDia, hoje && { color: LC.primary, fontWeight: '800' }]}>{DIAS_PT[item.dia]?.slice(0, 3)}</Text>
+            </View>
+          );
+        })}
+      </View>
+      <View style={s.presenca}>
+        <Icon name="hand-left" size={15} color={LC.infoFg} />
+        <Text style={s.presencaTexto}>
+          {taxa == null
+            ? 'A presença aparece aqui quando a chamada da semana começar.'
+            : `Presença de ${taxa}% nas aulas com chamada (${d?.presencas} vieram, ${d?.faltas} ${d?.faltas === 1 ? 'faltou' : 'faltaram'})`}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Aniversários do resto da semana ─────────────────────────────────
+
+function Aniversarios({ d }: { d?: RelatorioDashboard }) {
+  // Os de hoje já estão em "Precisa de você", com o botão de parabéns.
+  const semana = (d?.aniversariantes ?? []).filter((a) => !a.hoje);
+  if (semana.length === 0) return null;
+  return (
+    <View style={s.bloco}>
+      <View style={s.blocoTopo}>
+        <Text style={s.blocoTitulo}>Aniversários da semana</Text>
+        <Icon name="gift-outline" size={17} color="#BE185D" />
+      </View>
+      {semana.map((a) => (
+        <View key={a.id} style={s.niverLinha}>
+          <Avatar nome={a.nome} size={32} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={s.niverNome} numberOfLines={1}>{nomeCurto(a.nome)}{a.professor ? ' · equipe' : ''}</Text>
+            <Text style={s.niverDia}>{capitalizar(formatDate(a.data, 'dddd, DD/MM'))}</Text>
+          </View>
+          <Text style={s.niverIdade}>{a.idade} anos</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ── Atalhos ──────────────────────────────────────────────────────────
+
+type Atalho = { label: string; icon: IconName; route: string; color: string; bg: string };
+const ATALHOS: Atalho[] = [
+  { label: 'Novo aluno', icon: 'person-add', route: '/admin/novo-aluno', color: LC.primary, bg: LC.primaryLight },
+  { label: 'Alunos', icon: 'people', route: '/admin/alunos', color: '#4F46E5', bg: '#EEF2FF' },
+  { label: 'Professores', icon: 'school', route: '/admin/professores', color: '#0F766E', bg: '#CCFBF1' },
+  { label: 'Agenda', icon: 'calendar', route: '/admin/agenda', color: '#B45309', bg: LC.warningBg },
+  { label: 'Financeiro', icon: 'wallet', route: '/admin/financeiro', color: '#15803D', bg: LC.successBg },
+  { label: 'Frequência', icon: 'stats-chart', route: '/admin/frequencia', color: '#1D4ED8', bg: LC.infoBg },
+];
+/**
+ * Só o dono vê. No celular a barra de abas não tem lugar para elas, e no
+ * computador elas moram na barra lateral — sem estes atalhos, quem administra
+ * pelo telefone não teria caminho até elas.
+ */
+const ATALHOS_DO_DONO: Atalho[] = [
+  { label: 'Conferir horários', icon: 'shield-checkmark', route: '/admin/diagnostico', color: '#0F766E', bg: LC.primaryLight },
+  { label: 'O que foi feito', icon: 'document-text', route: '/admin/logs', color: '#7C3AED', bg: '#EDE9FE' },
+];
+
+function Atalhos({ dono }: { dono: boolean }) {
+  return (
+    <View style={s.atalhos}>
+      {(dono ? [...ATALHOS, ...ATALHOS_DO_DONO] : ATALHOS).map((a) => (
+        <Pressable
+          key={a.label}
+          onPress={() => router.push(a.route as any)}
+          style={({ pressed }) => [s.atalho, pressed && { opacity: 0.8 }]}
+          accessibilityRole="button"
+        >
+          <View style={[s.atalhoIcone, { backgroundColor: a.bg }]}>
+            <Icon name={a.icon} size={20} color={a.color} />
+          </View>
+          <Text style={s.atalhoTexto} numberOfLines={1}>{a.label}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
 // ── Tela ─────────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
-  const nome = useAuthStore((s) => s.nome);
+  const nome = useAuthStore((st) => st.nome);
   const me = useMe();
   const ehDono = me.data?.dono === true;
   const relatorio = useRelatorioDashboard();
+  const financeiro = useResumoFinanceiro();
   const logout = useLogout();
   const isDesktop = useIsDesktop();
+  const minuto = useMinutoAtual();
 
-  const onRefresh = useCallback(() => relatorio.refetch(), [relatorio]);
+  const onRefresh = useCallback(() => {
+    relatorio.refetch();
+    financeiro.refetch();
+  }, [relatorio, financeiro]);
 
   if (relatorio.isLoading) {
     return (
@@ -506,59 +595,58 @@ export default function AdminDashboard() {
   }
 
   const d = relatorio.data;
+  const fin = financeiro.data;
+  const hoje = numerosDeHoje(d);
+  const hora = Math.floor(minuto / 60);
+  const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  const primeiro = nome ? primeiroNome(nome) : '';
+  const data = capitalizar(`${formatDate(new Date(), 'dddd')}, ${formatDate(new Date(), 'DD')} de ${formatDate(new Date(), 'MMMM')}`);
+  const proxima = (d?.aulasHoje ?? []).find((a) => estadoDa(a, minuto) !== 'dada');
 
-  const statsMobile: StatDef[] = [
-    { label: 'Total de alunos', value: d?.totalAlunos ?? 0, icon: 'people', color: '#4F46E5', bg: '#EEF2FF' },
-    { label: 'Alunos ativos', value: d?.alunosAtivos ?? 0, icon: 'checkmark-circle', color: '#15803D', bg: LC.successBg },
-    { label: 'Aulas na semana', value: d?.aulasSemana ?? 0, icon: 'calendar', color: '#B45309', bg: '#FEF3C7' },
-    { label: 'Presenças', value: d?.presencas ?? 0, icon: 'hand-left', color: '#1D4ED8', bg: LC.infoBg },
-    { label: 'Faltas', value: d?.faltas ?? 0, icon: 'close-circle', color: '#B91C1C', bg: LC.dangerBg },
-  ];
-
-  const statsDesktop: StatDef[] = [
-    { label: 'Alunos ativos', value: d?.alunosAtivos ?? 0, icon: 'people', color: '#4F46E5', bg: '#EEF2FF' },
-    { label: 'Aulas na semana', value: d?.aulasSemana ?? 0, icon: 'calendar', color: '#B45309', bg: '#FEF3C7' },
-    { label: 'Presenças', value: d?.presencas ?? 0, icon: 'checkmark-circle', color: '#15803D', bg: LC.successBg },
-    { label: 'Faltas', value: d?.faltas ?? 0, icon: 'close-circle', color: '#B91C1C', bg: LC.dangerBg },
-    { label: 'Ocupação', value: `${d?.ocupacao ?? 0}%`, icon: 'trending-up', color: LC.primary, bg: LC.primaryLight },
-  ];
-
-  // ── Desktop: painel ────────────────────────────────────────────────
+  // ── Computador ─────────────────────────────────────────────────────
   if (isDesktop) {
+    const kpis: { rotulo: string; valor: string; sub: string; icone: IconName; cor: string; fundo: string }[] = [
+      { rotulo: 'Alunos hoje', valor: String(hoje.alunos), sub: `em ${hoje.aulas} ${hoje.aulas === 1 ? 'aula' : 'aulas'}`, icone: 'people', cor: '#4F46E5', fundo: '#EEF2FF' },
+      { rotulo: 'Lotação hoje', valor: `${hoje.lotacao}%`, sub: 'das vagas da grade', icone: 'speedometer', cor: LC.primary, fundo: LC.primaryLight },
+      { rotulo: 'Recebido no mês', valor: fin ? reais(fin.recebido) : '—', sub: fin ? `de ${reais(fin.previsto)}` : '', icone: 'wallet', cor: '#15803D', fundo: LC.successBg },
+      { rotulo: 'Presença na semana', valor: d?.taxaPresenca == null ? '—' : `${d.taxaPresenca}%`, sub: `${d?.presencas ?? 0} vieram · ${d?.faltas ?? 0} faltas`, icone: 'hand-left', cor: '#1D4ED8', fundo: LC.infoBg },
+    ];
     return (
       <View style={s.root}>
         <ScrollView contentContainerStyle={s.deskScroll} showsVerticalScrollIndicator={false}>
-          <View style={s.deskHeader}>
-            <View>
-              <Text style={s.deskTitle}>Dashboard</Text>
-              <Text style={s.deskSub}>Olá, {nome?.split(' ')[0] || 'Admin'} — visão geral do estúdio</Text>
-            </View>
-          </View>
-
+          <Text style={s.deskData}>{data}</Text>
+          <Text style={s.deskTitulo}>{saudacao}{primeiro ? `, ${primeiro}` : ''}</Text>
           {relatorio.isError ? (
             <ErrorState message="Não foi possível carregar o painel." onRetry={() => relatorio.refetch()} />
           ) : (
             <>
-              <AniversariantesCard d={d} />
-              <View style={s.deskStatsRow}>
-                {statsDesktop.map((stat) => (
-                  <Card key={stat.label} style={s.deskStatCard} padding={16}>
-                    <View style={[s.statIcon, { backgroundColor: stat.bg }]}>
-                      <Icon name={stat.icon} size={20} color={stat.color} />
+              <View style={s.kpis}>
+                {kpis.map((k) => (
+                  <View key={k.rotulo} style={s.kpi}>
+                    <View style={[s.kpiIcone, { backgroundColor: k.fundo }]}>
+                      <Icon name={k.icone} size={18} color={k.cor} />
                     </View>
-                    <Text style={s.statValue}>{stat.value}</Text>
-                    <Text style={s.statLabel}>{stat.label}</Text>
-                  </Card>
+                    <Text style={s.kpiValor}>{k.valor}</Text>
+                    <Text style={s.kpiRotulo}>{k.rotulo}</Text>
+                    {k.sub ? <Text style={s.kpiSub}>{k.sub}</Text> : null}
+                  </View>
                 ))}
               </View>
-
-              <View style={s.deskRow}>
-                <View style={{ flex: 3 }}>
-                  <AulasPorDiaChart d={d} />
+              <View style={s.deskColunas}>
+                <View style={{ flex: 3, gap: GAP }}>
+                  <View style={s.bloco}>
+                    <View style={s.blocoTopo}>
+                      <Text style={s.blocoTitulo}>O dia de hoje</Text>
+                      <Text style={s.blocoMeta}>{hoje.grade} horários na grade</Text>
+                    </View>
+                    <LinhaDoDia d={d} largo />
+                  </View>
+                  <Semana d={d} />
                 </View>
                 <View style={{ flex: 2, gap: GAP }}>
-                  <FinanceiroCard />
-                  <AulasHojeCard d={d} />
+                  <PrecisaDeVoce d={d} fin={fin} />
+                  <DinheiroDoMes fin={fin} carregando={financeiro.isLoading} />
+                  <Aniversarios d={d} />
                 </View>
               </View>
             </>
@@ -569,7 +657,7 @@ export default function AdminDashboard() {
     );
   }
 
-  // ── Mobile: layout atual + blocos novos ────────────────────────────
+  // ── Celular ────────────────────────────────────────────────────────
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" />
@@ -578,93 +666,76 @@ export default function AdminDashboard() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={false} onRefresh={onRefresh} colors={[LC.primary]} tintColor={LC.primary} />}
       >
-        {/* Hero */}
         <LinearGradient colors={LC.gradientHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
-          <View style={s.heroTop}>
-            <View>
-              <Text style={s.heroTitle}>Painel Admin</Text>
-              <Text style={s.heroSub}>Olá, {nome?.split(' ')[0] || 'Admin'}</Text>
+          <View style={s.heroTopo}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.heroData}>{data}</Text>
+              <Text style={s.heroTitulo}>{saudacao}{primeiro ? `, ${primeiro}` : ''}</Text>
             </View>
-            <View style={s.heroAcoes}>
-              {/*
-                A chave fica ao lado do sair, no cabeçalho: é o único caminho
-                da dona até a própria senha — o painel não tem tela de perfil,
-                e a rota que define senha de aluno e professor recusa conta de
-                administrador de propósito.
-              */}
-              <Pressable
-                style={s.logoutBtn}
-                onPress={() => router.push('/alterar-senha' as any)}
-                hitSlop={8}
-                accessibilityLabel="Alterar minha senha"
-              >
-                <Icon name="key-outline" size={20} color="#fff" />
-              </Pressable>
-              <Pressable style={s.logoutBtn} onPress={() => logout.mutate()} hitSlop={8} accessibilityLabel="Sair da conta">
-                <Icon name="log-out-outline" size={20} color="#fff" />
-              </Pressable>
-            </View>
+            {/*
+              A chave fica ao lado do sair: é o único caminho da dona até a
+              própria senha — o painel não tem tela de perfil.
+            */}
+            <Pressable style={s.heroBtn} onPress={() => router.push('/alterar-senha' as any)} hitSlop={8} accessibilityLabel="Alterar minha senha">
+              <Icon name="key-outline" size={19} color="#fff" />
+            </Pressable>
+            <Pressable style={s.heroBtn} onPress={() => logout.mutate()} hitSlop={8} accessibilityLabel="Sair da conta">
+              <Icon name="log-out-outline" size={19} color="#fff" />
+            </Pressable>
           </View>
 
-          {relatorio.isError ? null : <ProximasAulasHero d={d} />}
+          {relatorio.isError ? null : (
+            <>
+              <View style={s.heroNumeros}>
+                <View style={s.heroNumero}>
+                  <Text style={s.heroN}>{hoje.alunos}</Text>
+                  <Text style={s.heroNRotulo}>alunos hoje</Text>
+                </View>
+                <View style={s.heroDiv} />
+                <View style={s.heroNumero}>
+                  <Text style={s.heroN}>{hoje.aulas}</Text>
+                  <Text style={s.heroNRotulo}>{hoje.aulas === 1 ? 'aula' : 'aulas'}</Text>
+                </View>
+                <View style={s.heroDiv} />
+                <View style={s.heroNumero}>
+                  <Text style={s.heroN}>{hoje.lotacao}%</Text>
+                  <Text style={s.heroNRotulo}>lotação</Text>
+                </View>
+              </View>
+              {proxima ? (
+                <Text style={s.heroProxima}>
+                  {estadoDa(proxima, minuto) === 'agora' ? 'Agora' : 'Próxima'}: {proxima.horaInicio} · {nomeModalidade(proxima.modalidade)} · {proxima.agendados} de {proxima.capacidade}
+                </Text>
+              ) : (
+                <Text style={s.heroProxima}>As aulas de hoje terminaram. Bom descanso!</Text>
+              )}
+            </>
+          )}
         </LinearGradient>
 
-        {/* Conteúdo */}
-        <View style={s.body}>
+        <View style={s.corpo}>
           {relatorio.isError ? (
             <ErrorState message="Não foi possível carregar o painel." onRetry={() => relatorio.refetch()} />
           ) : (
             <>
-              <AniversariantesCard d={d} />
-              <AtencaoSection d={d} />
-
-              <Text style={s.sectionTitle}>Visão geral</Text>
-              <View style={s.grid}>
-                {statsMobile.map((stat) => (
-                  <Card key={stat.label} style={s.statCard} padding={16}>
-                    <View style={[s.statIcon, { backgroundColor: stat.bg }]}>
-                      <Icon name={stat.icon} size={20} color={stat.color} />
-                    </View>
-                    <Text style={s.statValue}>{stat.value}</Text>
-                    <Text style={s.statLabel}>{stat.label}</Text>
-                  </Card>
-                ))}
+              <View style={s.secaoTopo}>
+                <Text style={s.secao}>O dia de hoje</Text>
+                <Pressable onPress={() => router.push('/admin/agenda' as any)} hitSlop={8} accessibilityRole="button">
+                  <Text style={s.secaoLink}>Agenda</Text>
+                </Pressable>
               </View>
+              <LinhaDoDia d={d} />
 
-              <Text style={s.sectionTitle}>Movimento da semana</Text>
-              <AulasPorDiaChart d={d} />
-              <View style={{ height: GAP }} />
-              <AulasHojeCard d={d} />
-              <View style={{ height: GAP }} />
-              <FinanceiroCard />
+              <PrecisaDeVoce d={d} fin={fin} />
+              <DinheiroDoMes fin={fin} carregando={financeiro.isLoading} />
+              <Semana d={d} />
+              <Aniversarios d={d} />
 
-              <Text style={s.sectionTitle}>Gestão rápida</Text>
-              <View style={s.acoes}>
-                {/*
-                  No celular a barra de abas já está cheia (cinco), e uma sexta
-                  deixaria os rótulos ilegíveis. As ferramentas do dono entram
-                  aqui, na gestão rápida.
-                */}
-                {(ehDono ? [...ACOES, ...ACOES_DO_DONO] : ACOES).map((a) => (
-                  <Pressable
-                    key={a.label}
-                    onPress={() => router.push(a.route as any)}
-                    style={({ pressed }) => [s.acaoPressable, pressed && s.pressed]}
-                  >
-                    <Card style={s.acaoCard} padding={16}>
-                      <View style={[s.acaoIcon, { backgroundColor: a.bg }]}>
-                        <Icon name={a.icon} size={22} color={a.color} />
-                      </View>
-                      <Text style={s.acaoLabel}>{a.label}</Text>
-                      <Text style={s.acaoDesc}>{a.desc}</Text>
-                    </Card>
-                  </Pressable>
-                ))}
-              </View>
+              <Text style={[s.secao, { marginTop: 6 }]}>Atalhos</Text>
+              <Atalhos dono={ehDono} />
             </>
           )}
         </View>
-
         <View style={{ height: 16 }} />
       </ScrollView>
       <TabBar isAdmin />
@@ -678,142 +749,130 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   scroll: { paddingBottom: 16 },
 
-  // ── Desktop ─────────────────────────────────────────────────────
+  // ── Hero (celular) ───────────────────────────────────────────────
+  hero: { paddingTop: 56, paddingHorizontal: 20, paddingBottom: 22, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
+  heroTopo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heroData: { fontSize: 11.5, fontWeight: '800', color: 'rgba(255,255,255,0.7)', letterSpacing: 0.7, textTransform: 'uppercase' },
+  heroTitulo: { fontSize: 24, fontWeight: '800', color: '#fff', marginTop: 2, letterSpacing: -0.3 },
+  heroBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
+  heroNumeros: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 18, paddingVertical: 14,
+  },
+  heroNumero: { flex: 1, alignItems: 'center' },
+  heroN: { fontSize: 26, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  heroNRotulo: { fontSize: 11.5, fontWeight: '600', color: 'rgba(255,255,255,0.75)', marginTop: 1 },
+  heroDiv: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.2)' },
+  heroProxima: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.9)', marginTop: 12, textAlign: 'center' },
+
+  corpo: { paddingHorizontal: 16, marginTop: 16, gap: GAP },
+  secaoTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, marginBottom: -4 },
+  secao: { fontSize: 12, fontWeight: '800', color: LC.textMuted, letterSpacing: 0.8, textTransform: 'uppercase', paddingHorizontal: 4 },
+  secaoLink: { fontSize: 13, fontWeight: '800', color: LC.primary },
+
+  // ── Blocos ───────────────────────────────────────────────────────
+  bloco: {
+    backgroundColor: LC.bgCard, borderRadius: 20, padding: 16,
+    borderWidth: 1, borderColor: LC.border, ...LC.shadowCard,
+  },
+  blocoTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 },
+  blocoTitulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
+  blocoMeta: { fontSize: 12, fontWeight: '600', color: LC.textMuted },
+  vazioTexto: { fontSize: 13.5, color: LC.textSecondary },
+  vazioDia: { alignItems: 'center', gap: 6, paddingVertical: 22 },
+
+  // O dia de hoje
+  tilesScroll: { flexGrow: 0, flexShrink: 0, marginHorizontal: -16 },
+  tilesLinha: { paddingHorizontal: 16, gap: 10, paddingVertical: 4 },
+  tilesGrade: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tile: {
+    width: 136, padding: 12, borderRadius: 16, backgroundColor: LC.bgCard,
+    borderWidth: 1, borderColor: LC.border, ...LC.shadow,
+  },
+  // No computador os cartões dividem a largura em vez de sobrar espaço à direita.
+  tileLargo: { width: undefined, flexBasis: 140, flexGrow: 1, maxWidth: 200 },
+  tileAgora: { backgroundColor: LC.primary, borderColor: LC.primary },
+  tileDada: { backgroundColor: LC.neutralBg, borderColor: LC.neutralBg },
+  tileTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 20 },
+  tileHora: { fontSize: 17, fontWeight: '800', color: LC.textPrimary },
+  agoraSelo: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
+  agoraPonto: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#86EFAC' },
+  agoraTexto: { fontSize: 9.5, fontWeight: '900', color: '#fff', letterSpacing: 0.6 },
+  lotadaTexto: { fontSize: 9.5, fontWeight: '900', color: LC.dangerFg, letterSpacing: 0.6 },
+  tileMod: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  tileModTexto: { flexShrink: 1, fontSize: 12.5, fontWeight: '800' },
+  tileTrilho: { height: 6, borderRadius: 3, backgroundColor: LC.neutralBg, overflow: 'hidden', marginTop: 10 },
+  tileBarra: { height: '100%', borderRadius: 3 },
+  tileConta: { fontSize: 12, fontWeight: '700', color: LC.textSecondary, marginTop: 6 },
+
+  // Precisa de você
+  contaBolha: { minWidth: 24, height: 24, borderRadius: 12, backgroundColor: LC.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7 },
+  contaBolhaTexto: { fontSize: 12, fontWeight: '900', color: '#fff' },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderRadius: 12 },
+  itemBorda: { borderTopWidth: 1, borderTopColor: LC.border },
+  itemIcone: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  itemTitulo: { fontSize: 14, fontWeight: '800', color: LC.textPrimary, lineHeight: 19 },
+  itemSub: { fontSize: 12.5, color: LC.textSecondary, marginTop: 2 },
+  itemAcao: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999 },
+  itemAcaoTexto: { fontSize: 12, fontWeight: '800', color: '#fff' },
+  tudoEmDia: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  tudoEmDiaIcone: { width: 38, height: 38, borderRadius: 12, backgroundColor: LC.successBg, alignItems: 'center', justifyContent: 'center' },
+  tudoEmDiaTexto: { flex: 1, fontSize: 13.5, fontWeight: '700', color: LC.successFg },
+  listaDica: { fontSize: 13, color: LC.textSecondary, lineHeight: 19, marginBottom: 10 },
+  listaLinha: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: LC.border },
+  listaNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
+  listaDetalhe: { fontSize: 12, fontWeight: '700', color: LC.dangerFg, marginTop: 1 },
+
+  // Dinheiro
+  dinheiroLinha: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
+  dinheiroRecebido: { fontSize: 30, fontWeight: '800', color: LC.textPrimary, letterSpacing: -0.6 },
+  dinheiroDe: { fontSize: 15, fontWeight: '700', color: LC.textSecondary },
+  dinheiroTrilho: { height: 10, borderRadius: 5, backgroundColor: LC.neutralBg, overflow: 'hidden', marginTop: 10 },
+  dinheiroBarra: { height: '100%', borderRadius: 5, backgroundColor: LC.success },
+  dinheiroSub: { fontSize: 12.5, fontWeight: '700', color: LC.textSecondary, marginTop: 7 },
+  dinheiroContas: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  conta: { flex: 1, borderRadius: 12, paddingVertical: 9, alignItems: 'center' },
+  contaN: { fontSize: 18, fontWeight: '800' },
+  contaRotulo: { fontSize: 11.5, fontWeight: '700', marginTop: 1 },
+  dinheiroAviso: { fontSize: 12, color: LC.warningFg, marginTop: 10, lineHeight: 17 },
+
+  // Semana
+  grafico: { height: 120, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  graficoCol: { flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' },
+  graficoValor: { fontSize: 12, fontWeight: '800', color: LC.textSecondary, marginBottom: 4 },
+  graficoTrilho: { flex: 1, width: '100%', maxWidth: 40, justifyContent: 'flex-end' },
+  graficoBarra: { width: '100%', borderRadius: 8, backgroundColor: LC.primarySoft },
+  graficoDia: { fontSize: 11.5, fontWeight: '600', color: LC.textMuted, marginTop: 6 },
+  presenca: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: LC.border },
+  presencaTexto: { flex: 1, fontSize: 12.5, fontWeight: '600', color: LC.textSecondary, lineHeight: 17 },
+
+  // Aniversários
+  niverLinha: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: LC.border },
+  niverNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
+  niverDia: { fontSize: 12, color: LC.textMuted, marginTop: 1 },
+  niverIdade: { fontSize: 12.5, fontWeight: '700', color: LC.textSecondary },
+
+  // Atalhos
+  atalhos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  atalho: {
+    width: '30%', flexGrow: 1, alignItems: 'center', gap: 7, paddingVertical: 14, paddingHorizontal: 6,
+    backgroundColor: LC.bgCard, borderRadius: 16, borderWidth: 1, borderColor: LC.border,
+  },
+  atalhoIcone: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  atalhoTexto: { fontSize: 12.5, fontWeight: '700', color: LC.textPrimary },
+
+  // ── Computador ───────────────────────────────────────────────────
   deskScroll: { paddingTop: 24, paddingBottom: 16 },
-  deskHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  deskTitle: { fontSize: 24, fontWeight: '800', color: LC.textPrimary },
-  deskSub: { fontSize: 14, color: LC.textSecondary, marginTop: 2 },
-  deskStatsRow: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
-  deskStatCard: { flex: 1 },
-  deskRow: { flexDirection: 'row', gap: GAP, alignItems: 'flex-start' },
-
-  // Blocos (chart + aulas hoje)
-  chartCard: { width: '100%' },
-  hojeCard: { width: '100%' },
-  blockTitle: { fontSize: 15, fontWeight: '800', color: LC.textPrimary },
-  blockSub: { fontSize: 12, color: LC.textMuted, marginTop: 2, marginBottom: 12 },
-  blockEmpty: { fontSize: 13, color: LC.textSecondary, paddingVertical: 8 },
-  chartArea: { height: 180, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  chartCol: { flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' },
-  chartValue: { fontSize: 12, fontWeight: '700', color: LC.textSecondary, marginBottom: 4 },
-  chartValueHoje: { color: LC.primary },
-  chartBarTrack: { flex: 1, width: '100%', maxWidth: 44, justifyContent: 'flex-end' },
-  chartBar: { width: '100%', borderRadius: 8, backgroundColor: LC.primarySoft },
-  chartBarHoje: { backgroundColor: LC.primary },
-  chartDia: { fontSize: 11, fontWeight: '600', color: LC.textMuted, marginTop: 6 },
-  chartDiaHoje: { color: LC.primary, fontWeight: '800' },
-
-  // Financeiro
-  finCard: { width: '100%' },
-  finHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  finRow: { flexDirection: 'row', gap: 12 },
-  finValor: { fontSize: 18, fontWeight: '800', color: LC.textPrimary },
-  finLabel: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
-  finAlerta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: LC.border },
-  finAlertaText: { fontSize: 12, fontWeight: '700', color: LC.danger },
-
-  hojeEmpty: { alignItems: 'center', paddingVertical: 20, gap: 4 },
-  filtroRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12, marginBottom: 2 },
-  filtroChip: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: LC.radius.full,
-    backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border,
+  deskData: { fontSize: 12, fontWeight: '800', color: LC.textMuted, letterSpacing: 0.8, textTransform: 'uppercase' },
+  deskTitulo: { fontSize: 26, fontWeight: '800', color: LC.textPrimary, marginTop: 2, marginBottom: 18, letterSpacing: -0.4 },
+  kpis: { flexDirection: 'row', gap: GAP, marginBottom: GAP },
+  kpi: {
+    flex: 1, backgroundColor: LC.bgCard, borderRadius: 18, padding: 16,
+    borderWidth: 1, borderColor: LC.border, ...LC.shadowCard,
   },
-  filtroChipSel: { backgroundColor: LC.primaryLight, borderColor: LC.primary },
-  filtroTexto: { fontSize: 12.5, fontWeight: '600', color: LC.textSecondary },
-  filtroTextoSel: { color: LC.primary, fontWeight: '700' },
-  hojeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: LC.border },
-  hojeRowPressed: { opacity: 0.6 },
-  hojeHora: { width: 44, fontSize: 13, fontWeight: '800', color: LC.textPrimary },
-  hojeModalidade: { fontSize: 13, fontWeight: '600', color: LC.textPrimary, marginBottom: 4 },
-  hojeTrack: { height: 5, borderRadius: 3, backgroundColor: LC.border, overflow: 'hidden' },
-  hojeFill: { height: '100%', borderRadius: 3, backgroundColor: LC.primary },
-  hojeVagas: { fontSize: 12, fontWeight: '700', color: LC.textSecondary, width: 30, textAlign: 'right' },
-
-  // ── Mobile (layout original) ────────────────────────────────────
-  hero: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 44, borderBottomLeftRadius: 28, borderBottomRightRadius: 28 },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  heroTitle: { fontSize: 24, fontWeight: '800', color: '#fff' },
-  heroSub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  heroAcoes: { flexDirection: 'row', gap: 8 },
-  logoutBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  ocupacaoCard: { marginTop: 22, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: LC.radius.lg, padding: 18 },
-  ocupacaoHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  ocupacaoLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600' },
-  ocupacaoWeek: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
-  ocupacaoValue: { color: '#fff', fontSize: 40, fontWeight: '800', marginTop: 4 },
-  progressTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)', marginTop: 8, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 4, backgroundColor: '#fff' },
-  ocupacaoMeta: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 10 },
-
-  // Hero: próximas aulas
-  heroVazio: { color: 'rgba(255,255,255,0.85)', fontSize: 14, paddingVertical: 10 },
-  heroAulaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.14)' },
-  heroAulaHora: { color: '#fff', fontSize: 15, fontWeight: '800', width: 52 },
-  heroAulaModalidade: { flex: 1, color: 'rgba(255,255,255,0.95)', fontSize: 14, fontWeight: '600' },
-  heroAulaVagas: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  heroAulaVagasText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '700' },
-  heroAgendaBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: '#fff', borderRadius: LC.radius.md, paddingVertical: 11, marginTop: 14,
-  },
-  heroAgendaBtnText: { color: LC.primaryDark, fontSize: 14, fontWeight: '800' },
-
-  // Precisa de atenção
-  // Aniversariantes: card de destaque, com a borda na cor da marca
-  aniversarioCard: { width: '100%', marginBottom: GAP, borderWidth: 1.5, borderColor: LC.primary },
-  aniversarioHead: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
-  aniversarioIcone: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: LC.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  aniversarioSub: { fontSize: 12, color: LC.textMuted, marginTop: 2 },
-  aniversarioLinha: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 10, marginTop: 8,
-    borderTopWidth: 1, borderTopColor: LC.border,
-  },
-  aniversarioNome: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary },
-  aniversarioHoje: {
-    backgroundColor: LC.primaryLight, borderRadius: LC.radius.md,
-    paddingHorizontal: 10, marginHorizontal: -4,
-  },
-  aniversarioHojeTag: {
-    fontSize: 10.5, fontWeight: '800', color: LC.primary,
-    letterSpacing: 0.6, marginTop: 2,
-  },
-  aniversarioDia: { fontSize: 12, color: LC.textMuted, marginTop: 2 },
-  parabensBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#25D366', paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: LC.radius.full,
-  },
-  parabensTexto: { fontSize: 12.5, fontWeight: '800', color: '#fff' },
-  semTelefone: { fontSize: 11, color: LC.textMuted, textAlign: 'right', lineHeight: 15 },
-  aniversarioIdadeFraca: { fontSize: 13, fontWeight: '600', color: LC.textSecondary },
-
-  atCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
-  // Listas abertas pelos cards de "Precisa de atenção"
-  atListaHint: { fontSize: 13, color: LC.textSecondary, lineHeight: 19, marginBottom: 12 },
-  atListaScroll: { maxHeight: 340 },
-  atLinha: {
-    flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10,
-    borderTopWidth: 1, borderTopColor: LC.border,
-  },
-  atLinhaNome: { flex: 1, fontSize: 14, fontWeight: '700', color: LC.textPrimary },
-  atIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  atTitulo: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
-  atSub: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
-  body: { paddingHorizontal: 16, marginTop: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: LC.textPrimary, marginBottom: 12, marginTop: 8, paddingHorizontal: 4 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-  statCard: { width: `${(100 - 4) / 2}%`, flexGrow: 1, minWidth: 150 },
-  statIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  statValue: { fontSize: 26, fontWeight: '800', color: LC.textPrimary },
-  statLabel: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
-  acoes: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
-  acaoPressable: { width: `${(100 - 4) / 2}%`, flexGrow: 1, minWidth: 150 },
-  acaoCard: { width: '100%', height: '100%' },
-  acaoIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  acaoLabel: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
-  acaoDesc: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
-  pressed: { opacity: 0.8, transform: [{ scale: 0.99 }] },
+  kpiIcone: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  kpiValor: { fontSize: 26, fontWeight: '800', color: LC.textPrimary, letterSpacing: -0.5 },
+  kpiRotulo: { fontSize: 13, fontWeight: '700', color: LC.textSecondary, marginTop: 2 },
+  kpiSub: { fontSize: 12, color: LC.textMuted, marginTop: 1 },
+  deskColunas: { flexDirection: 'row', gap: GAP, alignItems: 'flex-start' },
 });

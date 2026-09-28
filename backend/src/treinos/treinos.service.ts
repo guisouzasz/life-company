@@ -91,7 +91,7 @@ export class TreinosService {
         horario: { modalidadeId: { in: comFicha } },
         usuario: { tipoUsuario: 'ALUNO', ativo: true },
       },
-      select: { usuarioId: true, dataAula: true, horario: { select: { horaInicio: true } } },
+      select: { usuarioId: true, dataAula: true, horario: { select: { horaInicio: true, modalidade: { select: { nome: true } } } } },
       orderBy: [{ dataAula: 'asc' }],
     });
 
@@ -101,7 +101,7 @@ export class TreinosService {
       vencimento: Date | null;
       atualizadaEm: Date | null;
       ultimaCarga: Date | null;
-      proximaAula: { data: string; hora: string } | null;
+      proximaAula: { data: string; hora: string; modalidade: string } | null;
     };
     const porAluno = new Map<string, Linha>();
     const linha = (alunoId: string) => {
@@ -131,7 +131,7 @@ export class TreinosService {
       if (dia === hoje.format('YYYY-MM-DD') && dayjs(`${dia}T${hora}`).add(1, 'hour').isBefore(agora)) continue;
       const l = linha(a.usuarioId);
       if (!l.proximaAula || dia < l.proximaAula.data || (dia === l.proximaAula.data && hora < l.proximaAula.hora)) {
-        l.proximaAula = { data: dia, hora };
+        l.proximaAula = { data: dia, hora, modalidade: a.horario.modalidade.nome };
       }
     }
 

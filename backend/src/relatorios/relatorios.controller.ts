@@ -56,7 +56,16 @@ export class RelatoriosController {
             where: { ativo: true, diaSemana: diaHoje },
             include: {
               modalidade: { select: { nome: true } },
-              _count: { select: { agendamentos: { where: { status: 'CONFIRMADO', dataAula: { gte: inicioHoje, lte: fimHoje } } } } },
+              /**
+               * Confirmados E realizados: a aula das 7h que já aconteceu
+               * continua tendo tido alunos. Contando só CONFIRMADO, cada
+               * presença registrada tirava a pessoa da conta, e à tarde as
+               * turmas da manhã apareciam "0/4, Disponível" no painel.
+               */
+              agendamentos: {
+                where: { status: { in: ['CONFIRMADO', 'REALIZADO'] }, dataAula: { gte: inicioHoje, lte: fimHoje } },
+                select: { presenca: { select: { compareceu: true } } },
+              },
             },
             orderBy: { horaInicio: 'asc' },
           })
@@ -85,6 +94,12 @@ export class RelatoriosController {
     ]);
 
     const ocupacao = aulasSemana > 0 ? Math.round((presencas / aulasSemana) * 100) : 0;
+    /**
+     * De quem teve a chamada feita, quantos vieram. A `ocupacao` acima divide
+     * as presenças pelas aulas da semana INTEIRA — na segunda de manhã dava
+     * 10%, com a semana ainda por acontecer, e parecia estúdio vazio.
+     */
+    const taxaPresenca = presencas + faltas > 0 ? Math.round((presencas / (presencas + faltas)) * 100) : null;
     const aulasPorDia = DIAS.map((dia) => ({
       dia,
       total: agsSemana.filter((a) => a.horario.diaSemana === dia).length,
@@ -94,7 +109,10 @@ export class RelatoriosController {
       horaInicio: h.horaInicio,
       horaFim: h.horaFim,
       modalidade: h.modalidade.nome,
-      agendados: h._count.agendamentos,
+      agendados: h.agendamentos.length,
+      // Chamada feita: quem veio e quem faltou (0 e 0 antes da aula).
+      presentes: h.agendamentos.filter((a) => a.presenca?.compareceu === true).length,
+      faltas: h.agendamentos.filter((a) => a.presenca?.compareceu === false).length,
       // O teto da modalidade, não só o número gravado: turma de Pilates salva
       // com 4 mostraria "3/4" no painel e pareceria ter vaga que a API recusa.
       capacidade: capacidadeEfetiva(h.capacidadeMaxima, h.modalidade.nome),
@@ -120,7 +138,7 @@ export class RelatoriosController {
     };
 
     return {
-      totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, ocupacao, aulasPorDia, aulasHoje,
+      totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, ocupacao, taxaPresenca, aulasPorDia, aulasHoje,
       canceladosOntem, reposicoesPendentes, aguardandoAcesso,
       aniversariantes: await this.aniversariantesDaSemana(),
     };
