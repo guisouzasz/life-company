@@ -81,8 +81,18 @@ export function mensagemPrimeiroAcesso(params: {
   link: string;
   /** Professor recebe outro texto: ele não marca aula, ele monta treino. */
   professor?: boolean;
+  /** Quem já tem conta e só perdeu a senha: não é "criei o seu acesso". */
+  novaSenha?: boolean;
 }): string {
-  const { nome, link, professor = false } = params;
+  const { nome, link, professor = false, novaSenha = false } = params;
+  if (novaSenha) {
+    return (
+      `Oi, ${primeiroNome(nome)}! Tudo bem? ` +
+      `Aqui está o link para você criar uma senha nova no app da ${STUDIO_NOME}:\n\n${link}\n\n` +
+      `É só confirmar o seu CPF e escolher a senha. Depois disso a senha antiga deixa de valer. ` +
+      `O link é só seu, não precisa repassar.`
+    );
+  }
   if (professor) {
     return (
       `Oi, ${primeiroNome(nome)}! Tudo bem? ` +

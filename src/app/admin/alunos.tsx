@@ -7,12 +7,12 @@ import { TabBar } from '../../components/tab-bar';
 import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
 import { Avatar } from '../../components/ui/avatar';
-import { Badge, type BadgeVariant } from '../../components/ui/badge';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { AppModal, ConfirmModal, InfoModal } from '../../components/ui/modal';
 import { CreditosAlunoModal } from '../../components/admin/creditos-aluno-modal';
 import { HorariosFixosAlunoModal } from '../../components/admin/horarios-fixos-aluno-modal';
+import { AlunoPainel, resumoDoPlano } from '../../components/admin/aluno-painel';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import { useGerarLink, useAtualizarAluno, useExcluirAlunoDefinitivamente } from '../../services/usuarios/usuarios.mutations';
@@ -24,52 +24,68 @@ import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, dataParaIso, isoP
 import { openBrowserAsync } from 'expo-web-browser';
 import { linkWhatsapp, mensagemPrimeiroAcesso, telefoneParaWhatsapp } from '../../services/whatsapp';
 
-/**
- * Ficha cadastral no card do aluno. Some inteira quando o cadastro é antigo e
- * não tem nenhum destes dados, para não poluir a lista com linhas vazias.
- */
-function FichaCadastral({ aluno }: { aluno: AlunoAdmin }) {
-  const linhas: { icone: React.ComponentProps<typeof Icon>['name']; texto: string }[] = [];
-  if (aluno.cpf) linhas.push({ icone: 'card-outline', texto: `CPF ${mascaraCpf(aluno.cpf)}` });
-  if (aluno.rg) linhas.push({ icone: 'id-card-outline', texto: `RG ${aluno.rg}` });
-  if (aluno.dataNascimento) {
-    linhas.push({ icone: 'calendar-number-outline', texto: `Nasc. ${isoParaData(aluno.dataNascimento)}` });
-  }
-  if (aluno.telefone) linhas.push({ icone: 'call-outline', texto: mascaraTelefone(aluno.telefone) });
-  if (aluno.endereco || aluno.cep) {
-    const cep = aluno.cep ? `CEP ${mascaraCep(aluno.cep)}` : '';
-    linhas.push({
-      icone: 'location-outline',
-      texto: [aluno.endereco, cep].filter(Boolean).join(' — '),
-    });
-  }
-  if (linhas.length === 0) return null;
-  return (
-    <View style={s.ficha}>
-      {linhas.map((l) => (
-        <View key={l.texto} style={s.fichaLinha}>
-          <Icon name={l.icone} size={13} color={LC.textMuted} />
-          <Text style={s.fichaTexto} numberOfLines={2}>{l.texto}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
+type Filtro = 'todos' | 'treinando' | 'pararam' | 'semAcesso';
 
 /**
- * O selo do canto responde a OUTRA pergunta que não a do botão.
+ * Os recortes que a dona usa para achar gente.
  *
- * São duas coisas independentes: `ativo` = treina aqui (é o botão, que a dona
- * controla) e `ativado` = já abriu o app pela primeira vez (é isto, que
- * depende do aluno). Antes as duas viviam no mesmo campo, e quem nunca tinha
- * entrado aparecia como desligado — sem jeito de dizer que ele treina.
- *
- * Some quando não há o que dizer: repetir "Ativo" ao lado de um botão que já
- * diz "Treina" é ruído, e ruído em toda linha esconde o que importa.
+ * "Sem acesso ao app" é o que mais importa dos quatro: é a lista de quem
+ * ainda precisa receber o link. Antes essa informação existia (um selo no
+ * canto do cartão), mas para achar essas pessoas era preciso rolar a lista
+ * inteira caçando o selo.
  */
-function statusDoAluno(aluno: AlunoAdmin): { label: string; variant: BadgeVariant } | null {
-  if (aluno.ativado) return null;
-  return { label: 'Ainda não abriu o app', variant: 'warning' };
+const FILTROS: { chave: Filtro; rotulo: string; passa: (a: AlunoAdmin) => boolean }[] = [
+  { chave: 'todos', rotulo: 'Todos', passa: () => true },
+  { chave: 'treinando', rotulo: 'Treinando', passa: (a) => a.ativo },
+  { chave: 'pararam', rotulo: 'Pararam', passa: (a) => !a.ativo },
+  { chave: 'semAcesso', rotulo: 'Sem acesso ao app', passa: (a) => !a.ativado },
+];
+
+/** "Álvaro" e "alvaro" ficam juntos na letra A. */
+const letraDe = (nome: string) =>
+  (nome.trim()[0] ?? '#').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+
+/**
+ * A lista em blocos por letra, como uma agenda de telefone.
+ *
+ * A ordem vem do navegador e não do banco: o banco ordena pela collation do
+ * servidor, que pode jogar "Álvaro" depois do Z. Aqui acento não conta.
+ *
+ * E ordena pelo nome QUE APARECE, não pelo completo. Pelo completo, os três
+ * Carlos saíam "Carlos Nunes, Carlos Rocha, Carlos Ferreira" (ALBERTO,
+ * EDUARDO, MAGNO) — em ordem, mas parecendo bagunça para quem só vê o curto.
+ */
+function porLetra(alunos: AlunoAdmin[]): { letra: string; alunos: AlunoAdmin[] }[] {
+  const comparar = (x: string, y: string) => x.localeCompare(y, 'pt-BR', { sensitivity: 'base' });
+  const ordenados = [...alunos].sort(
+    (a, b) => comparar(nomeCurto(a.nome), nomeCurto(b.nome)) || comparar(a.nome, b.nome),
+  );
+  const grupos: { letra: string; alunos: AlunoAdmin[] }[] = [];
+  for (const a of ordenados) {
+    const letra = letraDe(a.nome);
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.letra === letra) ultimo.alunos.push(a);
+    else grupos.push({ letra, alunos: [a] });
+  }
+  return grupos;
+}
+
+/** Os selos da linha: só aparecem quando dizem algo que foge do normal. */
+function Selos({ aluno }: { aluno: AlunoAdmin }) {
+  return (
+    <>
+      {!aluno.ativo ? (
+        <View style={[s.selo, s.seloParou]}>
+          <Text style={[s.seloTexto, { color: LC.textSecondary }]}>Parou</Text>
+        </View>
+      ) : null}
+      {!aluno.ativado ? (
+        <View style={[s.selo, s.seloAcesso]}>
+          <Text style={[s.seloTexto, { color: LC.warningFg }]}>Sem acesso</Text>
+        </View>
+      ) : null}
+    </>
+  );
 }
 
 export default function AdminAlunos() {
@@ -110,6 +126,9 @@ export default function AdminAlunos() {
   /** Quem está no meio da troca treina/não treina, para o botão dar retorno. */
   const [mudandoMatricula, setMudandoMatricula] = useState<string | null>(null);
   const excluirDefinitivo = useExcluirAlunoDefinitivamente();
+  /** O aluno com o painel aberto. Guardado por id para o painel ver a mudança na hora. */
+  const [abertoId, setAbertoId] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<Filtro>('todos');
 
   /**
    * Liga e desliga a matrícula num toque, direto na lista.
@@ -141,7 +160,7 @@ export default function AdminAlunos() {
               texto:
                 (partes.length
                   ? `Foram liberados: ${partes.join(' e ')}. As vagas voltaram para as turmas.\n\n`
-                  : 'Ele sai das turmas e não entra mais no app.\n\n') +
+                  : 'Saiu das turmas e não entra mais no app.\n\n') +
                 'Se foi engano, reative o aluno e confirme os dias atuais em Plano e horários.',
             });
           } else {
@@ -266,11 +285,17 @@ export default function AdminAlunos() {
    * geração falhou (aí o "link" é uma mensagem de erro) ou quando o telefone
    * não forma um número que o WhatsApp abra.
    */
+  /**
+   * O servidor marca o link de quem já tem senha (`redefinir=1`), e é daí que
+   * sai o texto certo: "criei o seu acesso" para quem só perdeu a senha seria
+   * mentira, e deixa o aluno achando que o cadastro dele sumiu.
+   */
+  const linkDeTroca = !!link && link.includes('redefinir=1');
   const numeroWhatsapp = telefoneParaWhatsapp(alunoDoLink?.telefone);
   const podeMandarWhatsapp = !!link && link.startsWith('http') && !!numeroWhatsapp && !!alunoDoLink;
   const enviarWhatsapp = async () => {
     if (!podeMandarWhatsapp || !link || !numeroWhatsapp || !alunoDoLink) return;
-    const texto = mensagemPrimeiroAcesso({ nome: alunoDoLink.nome, link });
+    const texto = mensagemPrimeiroAcesso({ nome: alunoDoLink.nome, link, novaSenha: linkDeTroca });
     await openBrowserAsync(linkWhatsapp(numeroWhatsapp, texto)).catch(() => {});
   };
 
@@ -280,6 +305,37 @@ export default function AdminAlunos() {
     setCopiado(true);
   };
 
+  const todos = alunos.data ?? [];
+  const contagem = (f: Filtro) => todos.filter(FILTROS.find((x) => x.chave === f)!.passa).length;
+  const visiveis = todos.filter(FILTROS.find((x) => x.chave === filtro)!.passa);
+  const aberto = abertoId ? todos.find((a) => a.id === abertoId) ?? null : null;
+  const treinando = contagem('treinando');
+
+  /** Ação do painel que abre outra tela: o painel fecha antes, para não empilhar. */
+  const agir = (fn: (a: AlunoAdmin) => void) => (a: AlunoAdmin) => {
+    setAbertoId(null);
+    fn(a);
+  };
+  const abrirTreinos = (a: AlunoAdmin) =>
+    router.push({ pathname: '/admin/treinos-aluno' as any, params: { id: a.id, nome: a.nome } });
+  const chamarNoWhatsapp = async (a: AlunoAdmin) => {
+    const numero = telefoneParaWhatsapp(a.telefone);
+    if (numero) await openBrowserAsync(`https://wa.me/${numero}`).catch(() => {});
+  };
+
+  const vazio = (
+    <EmptyState
+      icon="people-outline"
+      title={
+        busca ? 'Ninguém encontrado'
+        : filtro === 'semAcesso' ? 'Todo mundo já entrou no app'
+        : filtro === 'pararam' ? 'Ninguém parou de treinar'
+        : 'Nenhum aluno ainda'
+      }
+      description={busca ? 'Confira o nome, o CPF ou o e-mail.' : filtro === 'todos' ? 'Cadastre o primeiro aluno.' : ''}
+    />
+  );
+
   return (
     <View style={s.root}>
       <StatusBar barStyle="dark-content" />
@@ -287,7 +343,10 @@ export default function AdminAlunos() {
         <View style={s.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={s.title}>Alunos</Text>
-            <Text style={s.subtitle}>{alunos.data?.length ?? 0} cadastrados</Text>
+            <Text style={s.subtitle}>
+              {todos.length} {todos.length === 1 ? 'cadastrado' : 'cadastrados'}
+              {todos.length ? ` · ${treinando} treinando` : ''}
+            </Text>
           </View>
           {/* Professor não aparece nesta lista (ela é só de alunos); a gestão
               deles fica a um toque daqui, que é onde se procura por pessoas. */}
@@ -313,228 +372,196 @@ export default function AdminAlunos() {
         />
       </View>
 
+      {/* Os recortes, com a conta de cada um. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={s.filtrosScroll}
+        contentContainerStyle={s.filtros}
+      >
+        {FILTROS.map((f) => {
+          const ativo = filtro === f.chave;
+          const n = contagem(f.chave);
+          const alerta = f.chave === 'semAcesso' && n > 0;
+          return (
+            <Pressable
+              key={f.chave}
+              style={[s.filtro, ativo && s.filtroAtivo, !ativo && alerta && s.filtroAlerta]}
+              onPress={() => setFiltro(f.chave)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: ativo }}
+            >
+              <Text style={[s.filtroTexto, ativo && s.filtroTextoAtivo, !ativo && alerta && { color: LC.warningFg }]}>
+                {f.rotulo}
+              </Text>
+              <View style={[s.filtroConta, ativo && s.filtroContaAtiva, !ativo && alerta && s.filtroContaAlerta]}>
+                <Text style={[s.filtroContaTexto, ativo && { color: LC.primary }, !ativo && alerta && { color: '#fff' }]}>
+                  {n}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       {alunos.isLoading ? (
         <Loading />
       ) : alunos.isError ? (
         <ErrorState onRetry={() => alunos.refetch()} />
       ) : isDesktop ? (
-        // ── Desktop: tabela ──────────────────────────────────────────
+        /*
+          Computador: uma linha por aluno, com o que se procura de olho — a
+          modalidade, o contato e a situação. As ações moram no painel, que
+          abre na linha inteira: antes eram cinco botões espremidos em cada
+          linha, quebrando em três andares.
+        */
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {alunos.data && alunos.data.length > 0 ? (
+          {visiveis.length > 0 ? (
             <Card style={s.tabela} padding={0}>
               <View style={[s.tRow, s.tHead]}>
                 <Text style={[s.tCol, s.tColNome, s.tHeadText]}>Aluno</Text>
-                <Text style={[s.tCol, s.tColEmail, s.tHeadText]}>E-mail</Text>
-                <Text style={[s.tCol, s.tColPlano, s.tHeadText]}>Plano</Text>
-                <Text style={[s.tCol, s.tColStatus, s.tHeadText]}>Status</Text>
-                <Text style={[s.tCol, s.tColAcoes, s.tHeadText]}>Ações</Text>
+                <Text style={[s.tCol, s.tColPlano, s.tHeadText]}>Modalidade e plano</Text>
+                <Text style={[s.tCol, s.tColContato, s.tHeadText]}>Contato</Text>
+                <Text style={[s.tCol, s.tColStatus, s.tHeadText]}>Situação</Text>
+                <View style={s.tColSeta} />
               </View>
-              {alunos.data.map((aluno) => {
-                const plano = aluno.usuarioPlanos?.[0];
-                const status = statusDoAluno(aluno);
+              {porLetra(visiveis).flatMap((g) => g.alunos).map((aluno) => {
+                const plano = resumoDoPlano(aluno);
                 return (
-                  <View key={aluno.id} style={s.tRow}>
+                  <Pressable
+                    key={aluno.id}
+                    style={({ pressed, hovered }: any) => [s.tRow, (hovered || pressed) && s.tRowHover]}
+                    onPress={() => setAbertoId(aluno.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Abrir ${aluno.nome}`}
+                  >
                     <View style={[s.tCol, s.tColNome, s.tNomeWrap]}>
-                      <Avatar nome={aluno.nome} size={34} />
+                      <View>
+                        <Avatar nome={aluno.nome} size={36} />
+                        <View style={[s.ponto, { backgroundColor: aluno.ativo ? LC.success : LC.textMuted }]} />
+                      </View>
                       <View style={{ flex: 1 }}>
                         <Text style={s.tNome} numberOfLines={1}>{nomeCurto(aluno.nome)}</Text>
-                        <Text style={s.tCpf}>CPF {aluno.cpf}</Text>
+                        <Text style={s.tCpf}>CPF {mascaraCpf(aluno.cpf)}</Text>
                       </View>
                     </View>
-                    <Text style={[s.tCol, s.tColEmail, s.tTexto]} numberOfLines={1}>
-                      {aluno.email ?? 'Aguardando ativação'}
+                    <Text style={[s.tCol, s.tColPlano, s.tTexto, !plano && { color: LC.warningFg }]} numberOfLines={1}>
+                      {plano ?? 'Sem plano'}
                     </Text>
-                    <Text style={[s.tCol, s.tColPlano, s.tTexto]} numberOfLines={1}>
-                      {plano?.plano?.nome ?? '—'}
+                    <Text style={[s.tCol, s.tColContato, s.tTexto]} numberOfLines={1}>
+                      {aluno.telefone ? mascaraTelefone(aluno.telefone) : aluno.email ?? '—'}
                     </Text>
-                    <View style={[s.tCol, s.tColStatus, s.tStatusWrap]}>
-{/*
-                        Fica na coluna Status, que é exatamente o que ele diz —
-                        e clicável, porque é a operação que a dona mais faz.
-                        Um toque, sem abrir cadastro nenhum. No nome ele
-                        espremia o texto e quebrava o CPF em duas linhas.
-                      */}
-                      <Pressable
-                        style={({ pressed }) => [
-                          s.chaveMatricula,
-                          aluno.ativo ? s.chaveTreina : s.chaveParou,
-                          pressed && { opacity: 0.6 },
-                        ]}
-                        onPress={() => alternarMatricula(aluno)}
-                        disabled={mudandoMatricula === aluno.id}
-                        accessibilityLabel={
-                          aluno.ativo
-                            ? `Marcar que ${aluno.nome} não treina mais`
-                            : `Marcar que ${aluno.nome} voltou a treinar`
-                        }
-                      >
-                        <Icon
-                          name={aluno.ativo ? 'checkmark-circle' : 'pause-circle'}
-                          size={14}
-                          color={aluno.ativo ? LC.successFg : LC.dangerFg}
-                        />
-                        <Text style={[s.chaveTexto, { color: aluno.ativo ? LC.successFg : LC.dangerFg }]}>
-                          {mudandoMatricula === aluno.id ? '…' : aluno.ativo ? 'Treina' : 'Não treina'}
-                        </Text>
-                      </Pressable>
-                      {status ? <Badge label={status.label} variant={status.variant} /> : null}
+                    <View style={[s.tCol, s.tColStatus, s.tSelos]}>
+                      {aluno.ativo && aluno.ativado ? (
+                        <Text style={[s.tTexto, { color: LC.successFg, fontWeight: '700' }]}>Treina</Text>
+                      ) : (
+                        <Selos aluno={aluno} />
+                      )}
                     </View>
-                    <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
-                      <Pressable style={s.tAcao} onPress={() => abrirEdicao(aluno)} accessibilityLabel="Editar dados do aluno">
-                        <Icon name="create-outline" size={15} color={LC.primary} />
-                        <Text style={s.tAcaoText}>Editar</Text>
-                      </Pressable>
-                      <Pressable style={s.tAcao} onPress={() => setPlanoHorarioAluno(aluno)} accessibilityLabel="Plano e horário fixo">
-                        <Icon name="calendar-outline" size={15} color={LC.primary} />
-                        <Text style={s.tAcaoText}>Plano</Text>
-                      </Pressable>
-                      <Pressable style={s.tAcao} onPress={() => setCreditosAluno(aluno)} accessibilityLabel="Créditos de reposição">
-                        <Icon name="ticket-outline" size={15} color={LC.primary} />
-                        <Text style={s.tAcaoText}>Créditos</Text>
-                      </Pressable>
-                      <Pressable style={s.tAcao} onPress={() => gerar(aluno)} accessibilityLabel="Gerar link de acesso">
-                        <Icon name="link-outline" size={15} color={LC.primary} />
-                        <Text style={s.tAcaoText}>Link</Text>
-                      </Pressable>
-                      <Pressable
-                        style={s.tAcao}
-                        onPress={() => setExcluindo(aluno)}
-                        accessibilityLabel={`Excluir ${aluno.nome} definitivamente`}
-                      >
-                        <Icon name="trash-outline" size={15} color={LC.danger} />
-                        <Text style={[s.tAcaoText, { color: LC.danger }]}>Excluir</Text>
-                      </Pressable>
+                    <View style={s.tColSeta}>
+                      <Icon name="chevron-forward" size={18} color={LC.textMuted} />
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })}
             </Card>
-          ) : (
-            <EmptyState icon="people-outline" title="Nenhum aluno encontrado" description={busca ? 'Tente outra busca.' : 'Cadastre o primeiro aluno.'} />
-          )}
+          ) : vazio}
           <View style={{ height: 24 }} />
         </ScrollView>
       ) : (
+        /*
+          Celular: a lista serve para ACHAR a pessoa. Uma linha por aluno,
+          separada por letra; tocar abre o painel com tudo que dá para fazer.
+          Antes um aluno ocupava a tela inteira — 28 alunos eram quase
+          dezesseis telas de rolagem.
+        */
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          {alunos.data && alunos.data.length > 0 ? (
-            alunos.data.map((aluno) => {
-              const plano = aluno.usuarioPlanos?.[0];
-              const status = statusDoAluno(aluno);
-              return (
-                <Card key={aluno.id} style={s.card} padding={14}>
-                  <View style={s.cardTop}>
-                    <Avatar nome={aluno.nome} size={46} />
-                    <View style={s.cardInfo}>
-                      <Text style={s.nome}>{nomeCurto(aluno.nome)}</Text>
-                      <Text style={s.email} numberOfLines={1}>{aluno.email ?? 'Sem e-mail — aguardando ativação'}</Text>
-                      <View style={s.chaveLinha}>
-                      {/*
-                            O botão fica colado no nome porque é a operação que a
-                            dona mais faz. Um toque, sem abrir cadastro nenhum.
-                        */}
-                        <Pressable
-                            style={({ pressed }) => [
-                              s.chaveMatricula,
-                              aluno.ativo ? s.chaveTreina : s.chaveParou,
-                              pressed && { opacity: 0.6 },
-                            ]}
-                            onPress={() => alternarMatricula(aluno)}
-                            disabled={mudandoMatricula === aluno.id}
-                            accessibilityLabel={
-                              aluno.ativo
-                                ? `Marcar que ${aluno.nome} não treina mais`
-                                : `Marcar que ${aluno.nome} voltou a treinar`
-                            }
-                        >
-                            <Icon
-                              name={aluno.ativo ? 'checkmark-circle' : 'pause-circle'}
-                              size={14}
-                              color={aluno.ativo ? LC.successFg : LC.dangerFg}
-                            />
-                            <Text style={[s.chaveTexto, { color: aluno.ativo ? LC.successFg : LC.dangerFg }]}>
-                              {mudandoMatricula === aluno.id ? '…' : aluno.ativo ? 'Treina' : 'Não treina'}
-                            </Text>
-                        </Pressable>
-                      </View>
-                      {plano?.plano ? <Text style={s.plano}>{plano.plano.nome}</Text> : null}
-                    </View>
-                    {status ? <Badge label={status.label} variant={status.variant} /> : null}
-                  </View>
-
-                  <FichaCadastral aluno={aluno} />
-
-                  <View style={s.actions}>
-                    <Button
-                      title="Editar"
-                      variant="outline"
-                      size="sm"
-                      onPress={() => abrirEdicao(aluno)}
-                      leftIcon={<Icon name="create-outline" size={16} color={LC.primary} />}
-                      style={s.actionBtn}
-                    />
-                    <Button
-                      title="Gerar link"
-                      size="sm"
-                      onPress={() => gerar(aluno)}
-                      loading={gerarLink.isPending && gerarLink.variables === aluno.id}
-                      leftIcon={<Icon name="link-outline" size={16} color="#fff" />}
-                      style={s.actionBtn}
-                    />
-                  </View>
-                  <Pressable style={s.credLink} onPress={() => setCreditosAluno(aluno)}>
-                    <Icon name="ticket-outline" size={16} color={LC.primary} />
-                    <Text style={s.credLinkText}>Gerenciar créditos de reposição</Text>
-                  </Pressable>
-                  <Pressable style={s.credLink} onPress={() => setPlanoHorarioAluno(aluno)}>
-                    <Icon name="calendar-outline" size={16} color={LC.primary} />
-                    <Text style={s.credLinkText}>Editar plano e horário fixo</Text>
-                  </Pressable>
-                  {/*
-                    A porta da dona para os treinos. Até aqui ela não tinha
-                    nenhuma: a tela existia só na área do professor, e a regra
-                    de rotas a devolvia ao painel.
-                  */}
-                  <Pressable
-                    style={s.credLink}
-                    onPress={() =>
-                      router.push({ pathname: '/admin/treinos-aluno' as any, params: { id: aluno.id, nome: aluno.nome } })
-                    }
-                  >
-                    <Icon name="barbell-outline" size={16} color={LC.primary} />
-                    <Text style={s.credLinkText}>Treinos e ficha de saúde</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[s.credLink, s.credLinkPerigo]}
-                    onPress={() => setExcluindo(aluno)}
-                    accessibilityLabel={`Excluir ${aluno.nome} definitivamente`}
-                  >
-                    <Icon name="trash-outline" size={16} color={LC.danger} />
-                    <Text style={[s.credLinkText, { color: LC.danger }]}>Excluir aluno definitivamente</Text>
-                  </Pressable>
+          {visiveis.length > 0 ? (
+            porLetra(visiveis).map((g) => (
+              <View key={g.letra}>
+                <Text style={s.letra}>{g.letra}</Text>
+                <Card style={s.grupo} padding={0}>
+                  {g.alunos.map((aluno, i) => {
+                    const plano = resumoDoPlano(aluno);
+                    return (
+                      <Pressable
+                        key={aluno.id}
+                        style={({ pressed }) => [s.linha, i > 0 && s.linhaDivisa, pressed && s.linhaApertada]}
+                        onPress={() => setAbertoId(aluno.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Abrir ${aluno.nome}`}
+                      >
+                        <View>
+                          <Avatar nome={aluno.nome} size={42} />
+                          <View style={[s.ponto, { backgroundColor: aluno.ativo ? LC.success : LC.textMuted }]} />
+                        </View>
+                        <View style={s.linhaInfo}>
+                          <Text style={[s.linhaNome, !aluno.ativo && { color: LC.textSecondary }]} numberOfLines={1}>
+                            {nomeCurto(aluno.nome)}
+                          </Text>
+                          <Text style={[s.linhaPlano, !plano && { color: LC.warningFg }]} numberOfLines={1}>
+                            {plano ?? 'Sem plano'}
+                          </Text>
+                        </View>
+                        <View style={s.linhaSelos}>
+                          <Selos aluno={aluno} />
+                        </View>
+                        <Icon name="chevron-forward" size={18} color={LC.textMuted} />
+                      </Pressable>
+                    );
+                  })}
                 </Card>
-              );
-            })
-          ) : (
-            <EmptyState icon="people-outline" title="Nenhum aluno encontrado" description={busca ? 'Tente outra busca.' : 'Cadastre o primeiro aluno.'} />
-          )}
-          <View style={{ height: 80 }} />
+              </View>
+            ))
+          ) : vazio}
+          <View style={{ height: 96 }} />
         </ScrollView>
       )}
 
       {!isDesktop ? (
-        <Pressable style={s.fab} onPress={() => router.push('/admin/novo-aluno')}>
+        <Pressable
+          style={s.fab}
+          onPress={() => router.push('/admin/novo-aluno')}
+          accessibilityRole="button"
+          accessibilityLabel="Cadastrar aluno novo"
+        >
           <Icon name="add" size={28} color="#fff" />
         </Pressable>
       ) : null}
+
+      <AlunoPainel
+        aluno={aberto}
+        onClose={() => {
+          setAbertoId(null);
+          setAviso(null); // o recado já foi lido lá dentro; não reaparece por cima da lista
+        }}
+        recado={aviso}
+        onFecharRecado={() => setAviso(null)}
+        mudandoMatricula={!!aberto && mudandoMatricula === aberto.id}
+        gerandoLink={!!aberto && gerarLink.isPending && gerarLink.variables === aberto.id}
+        onAlternarMatricula={alternarMatricula}
+        onEditar={agir(abrirEdicao)}
+        onPlano={agir(setPlanoHorarioAluno)}
+        onTreinos={agir(abrirTreinos)}
+        onCreditos={agir(setCreditosAluno)}
+        onLink={agir(gerar)}
+        onWhatsapp={chamarNoWhatsapp}
+        onExcluir={agir(setExcluindo)}
+      />
+
       <TabBar isAdmin />
 
       {/* Modal: link de primeiro acesso */}
       <AppModal
         visible={!!link}
         onClose={() => { setLink(null); setAlunoDoLink(null); }}
-        title="Link de primeiro acesso"
+        title={linkDeTroca ? 'Link para nova senha' : 'Link de primeiro acesso'}
       >
-        <Text style={s.modalHint}>Envie este link ao aluno para ele criar a senha:</Text>
+        <Text style={s.modalHint}>
+          {linkDeTroca
+            ? 'Já tem conta no app. Com este link cria uma senha nova, e a antiga para de valer:'
+            : 'Ainda não entrou no app. Com este link cria a senha e completa o cadastro:'}
+        </Text>
         <View style={s.linkBox}>
           <Text style={s.linkText} selectable>{link}</Text>
         </View>
@@ -685,8 +712,9 @@ export default function AdminAlunos() {
         onCancel={() => setExcluindo(null)}
       />
 
+      {/* Com o painel aberto o recado aparece DENTRO dele — por cima, ficaria atrás. */}
       <InfoModal
-        visible={!!aviso}
+        visible={!!aviso && !aberto}
         title={aviso?.titulo ?? ''}
         message={aviso?.texto ?? ''}
         onClose={() => setAviso(null)}
@@ -710,31 +738,51 @@ const s = StyleSheet.create({
   professoresTexto: { fontSize: 12.5, fontWeight: '700', color: LC.primary },
   searchWrap: { paddingHorizontal: 16, paddingVertical: 10 },
   scroll: { paddingHorizontal: 16, paddingBottom: 16 },
-  card: { marginBottom: 10 },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  cardInfo: { flex: 1 },
-  nome: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
-  email: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
-  plano: { fontSize: 11, color: LC.textMuted, marginTop: 2 },
-  actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  actionBtn: { flex: 1 },
-  ficha: { gap: 5, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: LC.border },
-  fichaLinha: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
-  fichaTexto: { flex: 1, fontSize: 12, color: LC.textSecondary, lineHeight: 17 },
-  chaveMatricula: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    alignSelf: 'flex-start', marginTop: 5,
-    paddingVertical: 4, paddingHorizontal: 9,
-    borderRadius: 999, borderWidth: 1,
+  // ── Recortes ────────────────────────────────────────────────
+  /* O ScrollView cresce e ENCOLHE por padrão; sem travar os dois, a lista de
+     baixo espremia esta faixa e os filtros apareciam cortados ao meio. */
+  filtrosScroll: { flexGrow: 0, flexShrink: 0 },
+  filtros: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  filtro: {
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingLeft: 13, paddingRight: 6, paddingVertical: 6, borderRadius: LC.radius.full,
+    backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border,
   },
-  chaveTreina: { backgroundColor: LC.successBg, borderColor: LC.success },
-  chaveParou: { backgroundColor: LC.dangerBg, borderColor: LC.danger },
-  chaveTexto: { fontSize: 12, fontWeight: '700' },
-  chaveLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  credLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 6 },
-  /** Separado do resto por uma linha: o que não tem volta não fica colado no que tem. */
-  credLinkPerigo: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: LC.border },
-  credLinkText: { fontSize: 13, fontWeight: '600', color: LC.primary },
+  filtroAtivo: { backgroundColor: LC.primary, borderColor: LC.primary },
+  /* "Sem acesso" com gente dentro chama atenção mesmo sem estar escolhido. */
+  filtroAlerta: { borderColor: '#FCD34D', backgroundColor: LC.warningBg },
+  filtroTexto: { fontSize: 13, fontWeight: '700', color: LC.textSecondary },
+  filtroTextoAtivo: { color: '#fff' },
+  filtroConta: {
+    minWidth: 24, height: 22, paddingHorizontal: 7, borderRadius: 11,
+    backgroundColor: LC.neutralBg, alignItems: 'center', justifyContent: 'center',
+  },
+  filtroContaAtiva: { backgroundColor: '#fff' },
+  filtroContaAlerta: { backgroundColor: LC.warning },
+  filtroContaTexto: { fontSize: 12, fontWeight: '800', color: LC.textSecondary },
+
+  // ── Lista do celular ────────────────────────────────────────────
+  letra: {
+    fontSize: 12, fontWeight: '800', color: LC.primary, letterSpacing: 0.8,
+    marginTop: 10, marginBottom: 6, marginLeft: 6,
+  },
+  grupo: { overflow: 'hidden' },
+  linha: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, paddingHorizontal: 14 },
+  linhaDivisa: { borderTopWidth: 1, borderTopColor: LC.border },
+  linhaApertada: { backgroundColor: LC.neutralBg },
+  linhaInfo: { flex: 1, minWidth: 0 },
+  linhaNome: { fontSize: 15, fontWeight: '700', color: LC.textPrimary },
+  linhaPlano: { fontSize: 12.5, color: LC.textSecondary, marginTop: 2 },
+  linhaSelos: { flexDirection: 'row', gap: 5, flexShrink: 0 },
+  /* O ponto no avatar: verde treina, cinza parou. Lê-se sem ler nada. */
+  ponto: {
+    position: 'absolute', right: -1, bottom: -1, width: 13, height: 13, borderRadius: 7,
+    borderWidth: 2.5, borderColor: LC.bgCard,
+  },
+  selo: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: LC.radius.full },
+  seloParou: { backgroundColor: LC.neutralBg },
+  seloAcesso: { backgroundColor: LC.warningBg },
+  seloTexto: { fontSize: 11, fontWeight: '800' },
   fab: {
     position: 'absolute', right: 20, bottom: 92, width: 56, height: 56, borderRadius: 28,
     backgroundColor: LC.primary, alignItems: 'center', justifyContent: 'center', ...LC.shadowStrong,
@@ -778,24 +826,22 @@ const s = StyleSheet.create({
 
   // ── Tabela desktop ──────────────────────────────────────────────
   tabela: { overflow: 'hidden' },
-  tRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: LC.border },
-  tHead: { backgroundColor: LC.bg, paddingVertical: 12 },
-  tHeadText: { fontSize: 12, fontWeight: '800', color: LC.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
-  tCol: { paddingHorizontal: 4 },
-  tColNome: { flex: 3 },
-  tColEmail: { flex: 3 },
-  tColPlano: { flex: 2 },
-  tColStatus: { flex: 1.5 },
-  tStatusWrap: { alignItems: 'flex-start', gap: 4 },
-  tColAcoes: { flex: 2.8 },
-  tNomeWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
-  tCpf: { fontSize: 11, color: LC.textMuted, marginTop: 1 },
-  tTexto: { fontSize: 13, color: LC.textSecondary },
-  tAcoes: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'flex-end' },
-  tAcao: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: LC.radius.full, backgroundColor: LC.primaryLight,
+  tRow: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 11,
+    borderBottomWidth: 1, borderBottomColor: LC.border, cursor: 'pointer' as any,
   },
-  tAcaoText: { fontSize: 12, fontWeight: '700', color: LC.primary },
+  tRowHover: { backgroundColor: LC.primaryLight },
+  tHead: { backgroundColor: LC.bg, paddingVertical: 12, cursor: 'auto' as any },
+  tHeadText: { fontSize: 12, fontWeight: '800', color: LC.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  tCol: { paddingHorizontal: 6 },
+  tColNome: { flex: 3 },
+  tColPlano: { flex: 2.4 },
+  tColContato: { flex: 2.2 },
+  tColStatus: { flex: 1.8 },
+  tColSeta: { width: 28, alignItems: 'flex-end' },
+  tSelos: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
+  tNomeWrap: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  tNome: { fontSize: 14, fontWeight: '700', color: LC.textPrimary },
+  tCpf: { fontSize: 11.5, color: LC.textMuted, marginTop: 1 },
+  tTexto: { fontSize: 13, color: LC.textSecondary },
 });
