@@ -12,6 +12,16 @@ import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { formatDate } from '../../services/date';
 import { nomeCurto } from '../../services/nome';
 
+/** Aquecimento (antes) ou o complemento (depois) escrito livre na ficha. */
+function TextoLivre({ titulo, texto }: { titulo: string; texto: string }) {
+  return (
+    <View style={s.livre}>
+      <Text style={s.livreTitulo}>{titulo}</Text>
+      <Text style={s.livreTexto}>{texto}</Text>
+    </View>
+  );
+}
+
 /** "Treino A — Inferiores" → ["Treino A", "Inferiores"]. */
 function partesDoTitulo(titulo: string): [string, string | null] {
   const m = titulo.split(/\s+[—–-]\s+/);
@@ -200,6 +210,7 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
               </View>
             ) : null}
 
+            {aberta.textoAntes ? <TextoLivre titulo="Antes dos exercícios" texto={aberta.textoAntes} /> : null}
             <FichaExercicios exercicios={aberta.exercicios} evolucaoDe={evolucaoDe} onAbrirCarga={onAbrirCarga} />
             {aberta.conteudo ? <Text style={s.conteudo}>{aberta.conteudo}</Text> : null}
             <View style={{ height: 12 }} />
@@ -267,4 +278,7 @@ const s = StyleSheet.create({
   vazioTexto: { fontSize: 13, color: LC.textSecondary, textAlign: 'center', marginTop: 4, lineHeight: 19 },
 
   conteudo: { fontSize: 14, color: LC.textPrimary, lineHeight: 22, marginTop: 8 },
+  livre: { marginTop: 10, padding: 12, borderRadius: 12, backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border },
+  livreTitulo: { fontSize: 11.5, fontWeight: '800', color: LC.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4 },
+  livreTexto: { fontSize: 14, color: LC.textPrimary, lineHeight: 21 },
 });

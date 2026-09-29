@@ -263,6 +263,7 @@ export class TreinosService {
         professorId,
         modalidadeId,
         titulo: dto.titulo,
+        textoAntes: dto.textoAntes?.trim() || null,
         conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
         ...this.metaDados(dto),
@@ -312,6 +313,9 @@ export class TreinosService {
         titulo: dto.titulo,
         professorId,
         modalidadeId,
+        // Só mexe no texto de antes quando ele vem: o app que ainda não tem o
+        // campo não pode apagar o aquecimento que outro professor escreveu.
+        textoAntes: dto.textoAntes !== undefined ? dto.textoAntes.trim() || null : undefined,
         conteudo: dto.conteudo?.trim() || null,
         observacoes: dto.observacoes,
         ...this.metaDados(dto),
@@ -336,6 +340,25 @@ export class TreinosService {
   async definirStatus(id: string, concluido: boolean, solicitante: Solicitante) {
     await this.buscarComPermissao(id, solicitante);
     return this.prisma.treino.update({ where: { id }, data: { concluido }, include: this.incluir });
+  }
+
+  /**
+   * A ordem das fichas do aluno, como o professor arrumou (Treino 1 antes do
+   * Treino 2). Recebe os ids na ordem nova; cada um passa pela mesma
+   * permissão da edição. Ficha de outro aluno é recusada — a ordem é de um
+   * aluno só.
+   */
+  async ordenar(alunoId: string, ids: string[], solicitante: Solicitante) {
+    const unicos = [...new Set(ids)];
+    for (const id of unicos) {
+      const t = await this.buscarComPermissao(id, solicitante);
+      if (t.alunoId !== alunoId) throw new BadRequestException('Essa ficha é de outro aluno');
+    }
+    await this.prisma.$transaction(
+      // Sem tocar em updatedAt: reordenar não é editar a ficha.
+      unicos.map((id, i) => this.prisma.$executeRaw`UPDATE treinos SET ordem = ${i} WHERE id = ${id}`),
+    );
+    return { mensagem: 'Ordem salva' };
   }
 
   async remover(id: string, solicitante: Solicitante) {

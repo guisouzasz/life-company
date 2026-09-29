@@ -17,6 +17,10 @@ export interface Treino {
   titulo: string;
   /** Treino em texto livre (Funcional/Pilates); Musculação usa exercicios[]. */
   conteudo?: string | null;
+  /** Antes dos exercícios (aquecimento). O `conteudo` fica depois deles. */
+  textoAntes?: string | null;
+  /** Posição definida pelo professor; null = pela ordem do nome. */
+  ordem?: number | null;
   observacoes?: string | null;
   // Metadados da ficha (opcionais)
   vencimento?: string | null;
@@ -96,5 +100,7 @@ export interface SalvarTreinoPayload {
   professorId?: string;
   /** Modalidade da ficha, para o professor que dá aula em mais de uma. */
   modalidadeId?: string;
+  /** Texto antes dos exercícios (aquecimento). Vazio apaga. */
+  textoAntes?: string;
   exercicios?: ExercicioPayload[];
 }

@@ -57,6 +57,12 @@ export const treinosService = {
     return data;
   },
 
+  /** A ordem das fichas do aluno (ids na ordem nova). */
+  async ordenar(alunoId: string, ids: string[]): Promise<{ mensagem: string }> {
+    const { data } = await http.put<{ mensagem: string }>('/treinos/ordem', { alunoId, ids });
+    return data;
+  },
+
   /** Concluir (arquivar) ou reativar a ficha. */
   async definirStatus(id: string, concluido: boolean): Promise<Treino> {
     const { data } = await http.patch<Treino>(`/treinos/${id}/status`, { concluido });

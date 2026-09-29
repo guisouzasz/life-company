@@ -70,9 +70,18 @@ export function situacaoDoAluno(r?: ResumoAluno | null, hoje = hojeIso()): Situa
   };
 }
 
-/** Treino A, B, C… na ordem do nome — é a ordem em que o aluno faz. */
-export function ordenarFichas(fichas: Treino[]): Treino[] {
-  return [...fichas].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR', { numeric: true, sensitivity: 'base' }));
+/**
+ * A ordem das fichas: a que o professor arrumou à mão, e depois o nome —
+ * Treino 1 antes do Treino 2, A antes de B. Antes vinha a última editada
+ * primeiro, e mexer no Treino 1 jogava o Treino 2 para o topo.
+ */
+export function ordenarFichas<T extends Pick<Treino, 'titulo'> & { ordem?: number | null }>(fichas: T[]): T[] {
+  return [...fichas].sort((a, b) => {
+    const oa = a.ordem ?? Number.MAX_SAFE_INTEGER;
+    const ob = b.ordem ?? Number.MAX_SAFE_INTEGER;
+    if (oa !== ob) return oa - ob;
+    return a.titulo.localeCompare(b.titulo, 'pt-BR', { numeric: true, sensitivity: 'base' });
+  });
 }
 
 /** Última data (YYYY-MM-DD) com carga registrada em algum exercício da ficha. */

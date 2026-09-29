@@ -17,7 +17,8 @@ import { SeletorExercicio } from '../../components/professor/seletor-exercicio';
 import { EXERCICIOS_POR_GRUPO } from '../../constants/exercicios';
 import { Badge } from '../../components/ui/badge';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
-import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino } from '../../services/treinos/treinos.mutations';
+import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino, useOrdenarTreinos } from '../../services/treinos/treinos.mutations';
+import { ordenarFichas } from '../../components/professor/situacao';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { FichaSaude, alertasDaFicha } from '../../components/professor/ficha-saude';
@@ -48,6 +49,17 @@ const GRUPOS = Object.keys(EXERCICIOS_POR_GRUPO);
 
 const exercicioVazio = (): ExercicioForm => ({ nome: '', seriesTexto: '3', repeticoes: '12', carga: '', observacao: '' });
 const secaoVazia = (grupo = ''): Secao => ({ grupo, itens: [exercicioVazio()] });
+
+/** Esteira e alongamento se contam em minutos, não em 3 × 12. */
+const GRUPOS_EM_MINUTOS = ['Aquecimento', 'Alongamento'];
+const exercicioDoGrupo = (grupo: string): ExercicioForm =>
+  GRUPOS_EM_MINUTOS.includes(grupo) ? { ...exercicioVazio(), seriesTexto: '1', repeticoes: '10 min' } : exercicioVazio();
+/** Só troca o que ainda está no padrão: o que o professor digitou fica. */
+const ajustarAoGrupo = (e: ExercicioForm, grupo: string): ExercicioForm => {
+  const padrao = exercicioVazio();
+  const intacto = e.seriesTexto === padrao.seriesTexto && e.repeticoes === padrao.repeticoes;
+  return intacto && GRUPOS_EM_MINUTOS.includes(grupo) ? { ...e, seriesTexto: '1', repeticoes: '10 min' } : e;
+};
 
 /** Monta as seções a partir dos exercícios salvos, na ordem em que cada grupo aparece. */
 function agrupar(exercicios: Treino['exercicios']): Secao[] {
@@ -144,6 +156,8 @@ export default function TreinosAluno() {
   const [formAberto, setFormAberto] = useState(false);
   const [titulo, setTitulo] = useState('');
   const [conteudo, setConteudo] = useState('');
+  /** Aquecimento: texto que sai ANTES dos exercícios. */
+  const [textoAntes, setTextoAntes] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [secoes, setSecoes] = useState<Secao[]>([secaoVazia()]);
   const [excluindo, setExcluindo] = useState<Treino | null>(null);
@@ -210,6 +224,7 @@ export default function TreinosAluno() {
     setEditando(null);
     setTitulo('');
     setConteudo('');
+    setTextoAntes('');
     setObservacoes('');
     setSecoes([secaoVazia()]);
     setFrequencia('');
@@ -223,6 +238,7 @@ export default function TreinosAluno() {
     setEditando(t);
     setTitulo(t.titulo);
     setConteudo(t.conteudo ?? '');
+    setTextoAntes(t.textoAntes ?? '');
     setObservacoes(t.observacoes ?? '');
     setFrequencia(t.frequencia ?? '');
     setVencimentoTexto(isoParaData(t.vencimento));
@@ -241,13 +257,13 @@ export default function TreinosAluno() {
     );
 
   const addItem = (si: number) =>
-    setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, itens: [...s.itens, exercicioVazio()] } : s)));
+    setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, itens: [...s.itens, exercicioDoGrupo(s.grupo)] } : s)));
 
   const removeItem = (si: number, ii: number) =>
     setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, itens: s.itens.filter((_, j) => j !== ii) } : s)));
 
   const setGrupo = (si: number, grupo: string) =>
-    setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, grupo } : s)));
+    setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, grupo, itens: s.itens.map((e) => ajustarAoGrupo(e, grupo)) } : s)));
 
   const addSecao = () => setSecoes((atual) => [...atual, secaoVazia()]);
   const removeSecao = (si: number) => setSecoes((atual) => atual.filter((_, i) => i !== si));
@@ -323,6 +339,8 @@ export default function TreinosAluno() {
          * professor não tinha onde escrever.
          */
         conteudo: conteudo.trim() || undefined,
+        // Vazio vai como '' para apagar um aquecimento que foi tirado.
+        textoAntes: textoAntes.trim(),
         ...meta,
         exercicios: validos,
       };
@@ -362,7 +380,22 @@ export default function TreinosAluno() {
     );
   };
 
-  const ativos = (treinos.data ?? []).filter((t) => !t.concluido);
+  // Na ordem do professor (Treino 1, Treino 2…), não na da última edição.
+  const ativos = ordenarFichas((treinos.data ?? []).filter((t) => !t.concluido));
+  const ordenar = useOrdenarTreinos();
+  /** Sobe ou desce a ficha entre as em uso e grava a ordem nova. */
+  const moverFicha = (t: Treino, passo: -1 | 1) => {
+    if (!alunoId) return;
+    const i = ativos.findIndex((x) => x.id === t.id);
+    const j = i + passo;
+    if (i < 0 || j < 0 || j >= ativos.length) return;
+    const ids = ativos.map((x) => x.id);
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+    ordenar.mutate(
+      { alunoId, ids },
+      { onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não foi possível mudar a ordem.') },
+    );
+  };
   const arquivados = (treinos.data ?? []).filter((t) => t.concluido);
   const naPrateleira = prateleira === 'ativos' ? ativos : arquivados;
 
@@ -579,7 +612,27 @@ export default function TreinosAluno() {
 
           {formatoCarga ? (
             <>
+          {/*
+            O aquecimento vem ANTES dos exercícios, na ficha e aqui. Pedido do
+            professor: escrito no texto livre, ele ia parar no fim da ficha,
+            depois do último exercício — e é por ele que o aluno começa.
+          */}
+          <Text style={s.sectionTitle}>Antes dos exercícios (opcional)</Text>
+          <Input
+            placeholder={'Aquecimento: 10 min de esteira\nMobilidade de quadril e ombro'}
+            value={textoAntes}
+            onChangeText={setTextoAntes}
+            multiline
+            style={s.textoAntesInput}
+          />
+          <Text style={s.conteudoHint}>
+            Sai no topo da ficha. Aquecimento e alongamento também existem como grupo, logo abaixo.
+          </Text>
+
           <Text style={s.sectionTitle}>Exercícios por grupo muscular</Text>
+          <Text style={s.conteudoHint}>
+            Use as setas ao lado do grupo para mudar a ordem — o de cima é o primeiro da ficha.
+          </Text>
 
           {secoes.map((secao, si) => (
             <View key={si} style={s.secao}>
@@ -600,6 +653,7 @@ export default function TreinosAluno() {
                   <View style={s.mover}>
                     <Pressable
                       hitSlop={6}
+                      style={s.moverBtn}
                       disabled={si === 0}
                       onPress={() => moverSecao(si, -1)}
                       accessibilityLabel={`Subir o grupo ${secao.grupo || si + 1}`}
@@ -608,6 +662,7 @@ export default function TreinosAluno() {
                     </Pressable>
                     <Pressable
                       hitSlop={6}
+                      style={s.moverBtn}
                       disabled={si === secoes.length - 1}
                       onPress={() => moverSecao(si, 1)}
                       accessibilityLabel={`Descer o grupo ${secao.grupo || si + 1}`}
@@ -618,7 +673,7 @@ export default function TreinosAluno() {
                         color={si === secoes.length - 1 ? LC.textMuted : LC.textSecondary}
                       />
                     </Pressable>
-                    <Pressable hitSlop={6} onPress={() => removeSecao(si)}>
+                    <Pressable hitSlop={6} style={[s.moverBtn, s.moverBtnApagar]} onPress={() => removeSecao(si)} accessibilityLabel={`Apagar o grupo ${secao.grupo || si + 1}`}>
                       <Icon name="trash-outline" size={16} color={LC.danger} />
                     </Pressable>
                   </View>
@@ -644,6 +699,7 @@ export default function TreinosAluno() {
                       <View style={s.mover}>
                         <Pressable
                           hitSlop={6}
+                      style={s.moverBtn}
                           disabled={ii === 0}
                           onPress={() => moverItem(si, ii, -1)}
                           accessibilityLabel={`Subir ${e.nome || `o ${ii + 1}º exercício`}`}
@@ -652,6 +708,7 @@ export default function TreinosAluno() {
                         </Pressable>
                         <Pressable
                           hitSlop={6}
+                      style={s.moverBtn}
                           disabled={ii === secao.itens.length - 1}
                           onPress={() => moverItem(si, ii, 1)}
                           accessibilityLabel={`Descer ${e.nome || `o ${ii + 1}º exercício`}`}
@@ -662,7 +719,7 @@ export default function TreinosAluno() {
                             color={ii === secao.itens.length - 1 ? LC.textMuted : LC.textSecondary}
                           />
                         </Pressable>
-                        <Pressable hitSlop={6} onPress={() => removeItem(si, ii)}>
+                        <Pressable hitSlop={6} style={[s.moverBtn, s.moverBtnApagar]} onPress={() => removeItem(si, ii)} accessibilityLabel={`Apagar ${e.nome || `o ${ii + 1}º exercício`}`}>
                           <Icon name="trash-outline" size={16} color={LC.danger} />
                         </Pressable>
                       </View>
@@ -722,7 +779,7 @@ export default function TreinosAluno() {
             escritas, então iam parar na observação do aluno, misturadas com
             "dor no ombro".
           */}
-          <Text style={s.sectionTitle}>Mais alguma coisa? (opcional)</Text>
+          <Text style={s.sectionTitle}>Depois dos exercícios (opcional)</Text>
           <Input
             placeholder={'Aquecimento: 10min de esteira\nAlongar posterior no fim\nAbdominal: 3x20 livre'}
             value={conteudo}
@@ -731,7 +788,7 @@ export default function TreinosAluno() {
             style={s.conteudoInput}
           />
           <Text style={s.conteudoHint}>
-            Escreva livre. Sai na ficha logo abaixo da tabela de exercícios.
+            Escreva livre. Sai na ficha logo depois dos exercícios (alongamento, abdominal no fim).
           </Text>
             </>
           ) : null}
@@ -897,6 +954,31 @@ export default function TreinosAluno() {
                       </Text>
                     </View>
                   </Pressable>
+                  {/* Mudar a ordem: só entre as fichas em uso, e só havendo mais de uma. */}
+                  {!guardado && ativos.length > 1 ? (
+                    <View style={s.ordemFicha}>
+                      <Pressable
+                        style={[s.ordemBtn, ativos[0]?.id === t.id && s.ordemBtnOff]}
+                        hitSlop={4}
+                        disabled={ativos[0]?.id === t.id || ordenar.isPending}
+                        onPress={() => moverFicha(t, -1)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Subir ${t.titulo}`}
+                      >
+                        <Icon name="chevron-up" size={15} color={LC.textSecondary} />
+                      </Pressable>
+                      <Pressable
+                        style={[s.ordemBtn, ativos[ativos.length - 1]?.id === t.id && s.ordemBtnOff]}
+                        hitSlop={4}
+                        disabled={ativos[ativos.length - 1]?.id === t.id || ordenar.isPending}
+                        onPress={() => moverFicha(t, 1)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Descer ${t.titulo}`}
+                      >
+                        <Icon name="chevron-down" size={15} color={LC.textSecondary} />
+                      </Pressable>
+                    </View>
+                  ) : null}
                   <Pressable
                     style={[s.acao, { backgroundColor: guardado ? LC.primaryLight : LC.neutralBg }]}
                     hitSlop={4}
@@ -952,6 +1034,13 @@ export default function TreinosAluno() {
                   <View style={s.obsAluno}>
                     <Icon name="alert-circle-outline" size={16} color={LC.warningFg} />
                     <Text style={s.obsAlunoTexto}>{t.observacoes}</Text>
+                  </View>
+                ) : null}
+
+                {t.textoAntes ? (
+                  <View style={s.textoAntesCaixa}>
+                    <Text style={s.textoAntesTitulo}>ANTES DOS EXERCÍCIOS</Text>
+                    <Text style={s.conteudoTexto}>{t.textoAntes}</Text>
                   </View>
                 ) : null}
 
@@ -1128,7 +1217,23 @@ const s = StyleSheet.create({
   seletorPlaceholder: { flex: 1, fontSize: 15, color: LC.textMuted },
   exCard: { marginBottom: 12, gap: 10 },
   exHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  mover: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mover: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  // Setas grandes o bastante para o dedo: eram ícones soltos de 18px, e
+  // quem montava a ficha não percebia que dava para reordenar.
+  moverBtn: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: LC.neutralBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  moverBtnApagar: { backgroundColor: LC.dangerBg },
+  ordemFicha: { flexDirection: 'column', gap: 4 },
+  ordemBtn: {
+    width: 28, height: 22, borderRadius: 7, backgroundColor: LC.neutralBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  ordemBtnOff: { opacity: 0.35 },
+  textoAntesInput: { minHeight: 80, textAlignVertical: 'top' },
+  textoAntesCaixa: { marginTop: 10, padding: 12, borderRadius: 12, backgroundColor: LC.bg, borderWidth: 1, borderColor: LC.border },
+  textoAntesTitulo: { fontSize: 11, fontWeight: '800', color: LC.textSecondary, letterSpacing: 0.6, marginBottom: 2 },
   metaErro: { fontSize: 12, color: LC.danger, marginTop: -2, marginBottom: 6 },
   exNum: { fontSize: 12, fontWeight: '800', color: LC.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
   exRow: { flexDirection: 'row', gap: 8 },

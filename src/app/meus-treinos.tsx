@@ -9,6 +9,7 @@ import { Icon } from '../components/ui/icon';
 import { Badge } from '../components/ui/badge';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
 import { useMeusTreinos, useMeuTreinoDia } from '../services/treinos/treinos.queries';
+import { ordenarFichas } from '../components/professor/situacao';
 import { useMinhasCargas } from '../services/cargas/cargas.queries';
 import type { ExercicioTreino, Treino } from '../services/treinos/treinos.types';
 import { formatDate } from '../services/date';
@@ -55,7 +56,8 @@ export default function MeusTreinos() {
   const { ativos, concluidos } = useMemo(() => {
     const lista = treinos.data ?? [];
     return {
-      ativos: lista.filter((t) => !t.concluido),
+      // Na ordem do professor (Treino 1, Treino 2…), não na da última edição.
+      ativos: ordenarFichas(lista.filter((t) => !t.concluido)),
       concluidos: lista.filter((t) => t.concluido),
     };
   }, [treinos.data]);
@@ -101,6 +103,14 @@ export default function MeusTreinos() {
         <View style={s.obsAluno}>
           <Icon name="alert-circle-outline" size={15} color={LC.warningFg} />
           <Text style={s.obsAlunoTexto}>{t.observacoes}</Text>
+        </View>
+      ) : null}
+
+      {/* Aquecimento: vem antes dos exercícios, como na ficha */}
+      {t.textoAntes ? (
+        <View>
+          <Text style={s.grupoHeader}>Antes de começar</Text>
+          <Text style={s.conteudo}>{t.textoAntes}</Text>
         </View>
       ) : null}
 

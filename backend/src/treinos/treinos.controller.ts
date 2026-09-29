@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger'
 import { TreinosService } from './treinos.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
 import { SalvarTreinoDiaDto } from './dto/salvar-treino-dia.dto';
+import { OrdenarTreinosDto } from './dto/ordenar-treinos.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { StaffGuard } from '../auth/guards/staff.guard';
 
@@ -56,6 +57,12 @@ export class TreinosController {
   @Post() @UseGuards(StaffGuard) @ApiOperation({ summary: 'Criar treino para um aluno (professor/admin)' })
   criar(@Request() req, @Body() dto: SalvarTreinoDto) {
     return this.service.criar(req.user, dto);
+  }
+
+  // Rota fixa antes de ':id', senão "ordem" entraria como um id.
+  @Put('ordem') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Reordenar as fichas de um aluno (professor/admin)' })
+  ordenar(@Request() req, @Body() dto: OrdenarTreinosDto) {
+    return this.service.ordenar(dto.alunoId, dto.ids, req.user);
   }
 
   @Put(':id') @UseGuards(StaffGuard) @ApiOperation({ summary: 'Editar treino (substitui exercícios)' })

@@ -179,6 +179,14 @@ const AJUSTES: { descricao: string; sql: string }[] = [
             WHERE "tipo_usuario" = 'PROFESSOR' AND "modalidade_professor_id" IS NOT NULL
           ON CONFLICT DO NOTHING`,
   },
+  {
+    // Aquecimento antes dos exercícios e a ordem das fichas, pedidos pelo
+    // professor da musculação. Colunas anuláveis: nada muda no que existe.
+    descricao: 'treinos: texto antes dos exercícios e ordem da ficha',
+    sql: `ALTER TABLE "treinos"
+            ADD COLUMN IF NOT EXISTS "texto_antes" TEXT,
+            ADD COLUMN IF NOT EXISTS "ordem" INTEGER`,
+  },
 ];
 
 /**

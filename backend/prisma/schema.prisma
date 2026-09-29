@@ -221,6 +221,12 @@ model Treino {
   // Treino em texto livre (Funcional/Pilates): blocos de tempo/intervalo
   // escritos como o professor preferir. Musculação usa exercicios[] + carga.
   conteudo     String?
+  /// Texto que vem ANTES dos exercícios (aquecimento, mobilidade). O
+  /// `conteudo` fica depois deles (alongamento, abdominal no fim).
+  textoAntes   String?   @map("texto_antes")
+  /// Posição da ficha entre as do aluno, quando o professor reordena à mão.
+  /// Null = ordem pelo nome (Treino 1, Treino 2 / A, B, C).
+  ordem        Int?
   observacoes  String?
   // Metadados da ficha (todos opcionais)
   vencimento   DateTime? // até quando a ficha vale (renovar depois)

@@ -10,6 +10,35 @@
  * viram históricos separados e o aluno perde a progressão.
  */
 export const EXERCICIOS_POR_GRUPO: Record<string, string[]> = {
+  /*
+    Aquecimento e alongamento ficam no topo da lista de grupos de propósito:
+    é por eles que a ficha começa. Pedido do professor da musculação — sem
+    grupo próprio, iam para o texto livre, que sai depois dos exercícios.
+  */
+  Aquecimento: [
+    'Esteira',
+    'Bicicleta ergométrica',
+    'Elíptico',
+    'Transport',
+    'Escada',
+    'Remo ergométrico',
+    'Mobilidade articular',
+    'Mobilidade de quadril',
+    'Mobilidade de ombro',
+    'Polichinelo',
+  ],
+  Alongamento: [
+    'Alongamento geral',
+    'Alongamento de posterior de coxa',
+    'Alongamento de quadríceps',
+    'Alongamento de panturrilha',
+    'Alongamento de glúteo',
+    'Alongamento de lombar',
+    'Alongamento de peitoral',
+    'Alongamento de ombro',
+    'Alongamento de tríceps',
+    'Liberação miofascial',
+  ],
   Abdominal: [
     'Canivete',
     'Canoa',

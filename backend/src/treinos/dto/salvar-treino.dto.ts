@@ -10,6 +10,7 @@ import {
   Min,
   MinLength,
   ValidateNested,
+  MaxLength,
 } from 'class-validator';
 
 export class ExercicioDto {
@@ -39,6 +40,10 @@ export class SalvarTreinoDto {
 
   @IsString() @MinLength(2)
   titulo: string;
+
+  /** Texto antes dos exercícios (aquecimento). Vazio apaga. */
+  @IsOptional() @IsString() @MaxLength(4000)
+  textoAntes?: string;
 
   /** Treino em texto livre (Funcional/Pilates). Exige conteudo OU exercicios. */
   @IsOptional() @IsString() @MinLength(3)

@@ -57,3 +57,12 @@ export function useRemoverTreinoDia() {
     onSuccess: invalidar,
   });
 }
+
+/** Muda a ordem das fichas de um aluno (Treino 1 antes do Treino 2). */
+export function useOrdenarTreinos() {
+  const invalidar = useInvalidarTreinos();
+  return useMutation({
+    mutationFn: ({ alunoId, ids }: { alunoId: string; ids: string[] }) => treinosService.ordenar(alunoId, ids),
+    onSuccess: invalidar,
+  });
+}
