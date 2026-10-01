@@ -53,6 +53,9 @@ const REGRAS: Regra[] = [
   // ── Treinos ──────────────────────────────────────────────────────
   { metodo: 'POST', padrao: /^\/treinos\/dia/, resumo: 'Salvou o treino do dia' },
   { metodo: 'POST', padrao: /^\/treinos$/, resumo: 'Montou treino de aluno' },
+  { metodo: 'POST', padrao: /^\/treinos\/ler-pdf$/, resumo: 'Leu ficha de treino em PDF' },
+  { metodo: 'PUT', padrao: /^\/treinos\/ordem$/, resumo: 'Mudou a ordem das fichas' },
+  { metodo: 'PUT', padrao: /^\/treinos\/[^/]+$/, resumo: 'Editou treino de aluno' },
   { metodo: 'PATCH', padrao: /^\/treinos\/[^/]+$/, resumo: 'Editou treino de aluno' },
   { metodo: 'DELETE', padrao: /^\/treinos\/[^/]+$/, resumo: 'Removeu treino de aluno' },
   { metodo: 'POST', padrao: /^\/cargas/, resumo: 'Registrou carga de exercício' },

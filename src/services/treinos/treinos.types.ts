@@ -104,3 +104,18 @@ export interface SalvarTreinoPayload {
   textoAntes?: string;
   exercicios?: ExercicioPayload[];
 }
+
+/** Uma linha de texto de um PDF de ficha, com a posição (0 a 1) de cada pedaço. */
+export interface LinhaPdf {
+  pagina: number;
+  celulas: { x: number; texto: string }[];
+}
+
+/** O arquivo escolhido no celular ou no computador. */
+export interface ArquivoPdf {
+  uri: string;
+  name: string;
+  mimeType?: string;
+  /** No navegador vem o arquivo de verdade; no app, só o caminho (uri). */
+  file?: File;
+}

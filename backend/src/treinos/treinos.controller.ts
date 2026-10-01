@@ -1,4 +1,9 @@
-import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, UseGuards, Request,
+  UseInterceptors, UploadedFile, BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { TreinosService } from './treinos.service';
 import { SalvarTreinoDto } from './dto/salvar-treino.dto';
@@ -6,6 +11,7 @@ import { SalvarTreinoDiaDto } from './dto/salvar-treino-dia.dto';
 import { OrdenarTreinosDto } from './dto/ordenar-treinos.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { StaffGuard } from '../auth/guards/staff.guard';
+import { lerLinhasDoPdf, LIMITE_PDF_BYTES } from './ler-pdf';
 
 @ApiTags('treinos')
 @ApiBearerAuth()
@@ -57,6 +63,21 @@ export class TreinosController {
   @Post() @UseGuards(StaffGuard) @ApiOperation({ summary: 'Criar treino para um aluno (professor/admin)' })
   criar(@Request() req, @Body() dto: SalvarTreinoDto) {
     return this.service.criar(req.user, dto);
+  }
+
+  /**
+   * Lê o texto de uma ficha em PDF (feita no Word ou no Excel). Não grava
+   * nada: devolve as linhas, o app monta a ficha e o professor confere antes
+   * de salvar pelo POST de sempre. O arquivo fica só na memória deste pedido.
+   */
+  @Post('ler-pdf') @UseGuards(StaffGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  // Sem `dest`, o multer guarda em memória: nada vai para o disco.
+  @UseInterceptors(FileInterceptor('arquivo', { limits: { fileSize: LIMITE_PDF_BYTES, files: 1 } }))
+  @ApiOperation({ summary: 'Ler o texto de uma ficha de treino em PDF (professor/admin)' })
+  lerPdf(@UploadedFile() arquivo?: { buffer: Buffer }) {
+    if (!arquivo?.buffer) throw new BadRequestException('Escolha o PDF da ficha.');
+    return lerLinhasDoPdf(arquivo.buffer);
   }
 
   // Rota fixa antes de ':id', senão "ordem" entraria como um id.

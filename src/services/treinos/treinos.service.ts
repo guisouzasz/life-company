@@ -1,5 +1,5 @@
 import { http } from '../http';
-import type { SalvarTreinoDiaPayload, SalvarTreinoPayload, Treino, TreinoDia, ResumoAluno } from './treinos.types';
+import type { ArquivoPdf, LinhaPdf, SalvarTreinoDiaPayload, SalvarTreinoPayload, Treino, TreinoDia, ResumoAluno } from './treinos.types';
 
 export const treinosService = {
   /** Treinos do aluno logado. */
@@ -58,6 +58,21 @@ export const treinosService = {
   },
 
   /** A ordem das fichas do aluno (ids na ordem nova). */
+  /** Texto de uma ficha em PDF, linha por linha. Não grava nada. */
+  async lerPdf(arquivo: ArquivoPdf): Promise<{ paginas: number; linhas: LinhaPdf[] }> {
+    const form = new FormData();
+    if (arquivo.file) form.append('arquivo', arquivo.file, arquivo.name);
+    // No app (iOS/Android) o FormData aceita o arquivo pelo caminho.
+    else form.append('arquivo', { uri: arquivo.uri, name: arquivo.name, type: arquivo.mimeType ?? 'application/pdf' } as unknown as Blob);
+    const { data } = await http.post<{ paginas: number; linhas: LinhaPdf[] }>('/treinos/ler-pdf', form, {
+      // Sem isto o padrão JSON do cliente transformaria o arquivo em texto;
+      // o navegador completa o cabeçalho com a fronteira do multipart.
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    });
+    return data;
+  },
+
   async ordenar(alunoId: string, ids: string[]): Promise<{ mensagem: string }> {
     const { data } = await http.put<{ mensagem: string }>('/treinos/ordem', { alunoId, ids });
     return data;

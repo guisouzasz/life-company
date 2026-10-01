@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
 import { LC } from '../../constants/theme';
 import { juntarNomes, modalidadesDe, nomeModalidade, usaFichaEstruturada } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
@@ -17,7 +18,8 @@ import { SeletorExercicio } from '../../components/professor/seletor-exercicio';
 import { EXERCICIOS_POR_GRUPO } from '../../constants/exercicios';
 import { Badge } from '../../components/ui/badge';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
-import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino, useOrdenarTreinos } from '../../services/treinos/treinos.mutations';
+import { useCriarTreino, useAtualizarTreino, useRemoverTreino, useDefinirStatusTreino, useOrdenarTreinos, useLerPdfDeFicha } from '../../services/treinos/treinos.mutations';
+import { interpretarFicha, type FichaImportada } from '../../components/professor/importar-ficha';
 import { ordenarFichas } from '../../components/professor/situacao';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
@@ -61,8 +63,10 @@ const ajustarAoGrupo = (e: ExercicioForm, grupo: string): ExercicioForm => {
   return intacto && GRUPOS_EM_MINUTOS.includes(grupo) ? { ...e, seriesTexto: '1', repeticoes: '10 min' } : e;
 };
 
+type ExercicioParaAgrupar = Pick<Treino['exercicios'][number], 'grupo' | 'nome' | 'series' | 'repeticoes' | 'carga' | 'observacao'>;
+
 /** Monta as seções a partir dos exercícios salvos, na ordem em que cada grupo aparece. */
-function agrupar(exercicios: Treino['exercicios']): Secao[] {
+function agrupar(exercicios: ExercicioParaAgrupar[]): Secao[] {
   const secoes: Secao[] = [];
   for (const e of exercicios) {
     const grupo = e.grupo ?? '';
@@ -221,6 +225,7 @@ export default function TreinosAluno() {
   const formatoCarga = usaFichaEstruturada(modalidadeDaFicha);
 
   const abrirNovo = () => {
+    setImportando(null);
     setEditando(null);
     setTitulo('');
     setConteudo('');
@@ -235,6 +240,7 @@ export default function TreinosAluno() {
   };
 
   const abrirEdicao = (t: Treino) => {
+    setImportando(null);
     setEditando(t);
     setTitulo(t.titulo);
     setConteudo(t.conteudo ?? '');
@@ -246,6 +252,69 @@ export default function TreinosAluno() {
     setModalidadeId(t.modalidade?.id ?? '');
     setSecoes(agrupar(t.exercicios));
     setFormAberto(true);
+  };
+
+  // ── Importar ficha de PDF ───────────────────────────────────────────
+  /**
+   * O PDF vira um rascunho, nunca uma ficha salva direto: a leitura é por
+   * regras, sem IA, e pode errar um número. Cada ficha encontrada abre no
+   * formulário de sempre, o professor confere e salva — e volta para a lista
+   * do PDF, com a que já salvou marcada.
+   */
+  const lerPdf = useLerPdfDeFicha();
+  const [importacao, setImportacao] = useState<{
+    arquivo: string;
+    fichas: (FichaImportada & { salva?: boolean })[];
+    ignoradas: string[];
+  } | null>(null);
+  const [importando, setImportando] = useState<number | null>(null);
+  const [verIgnoradas, setVerIgnoradas] = useState(false);
+  /** Só musculação tem tabela de exercícios: é a única que dá para importar. */
+  const opcaoDeMusculacao = (lista: { id: string; nome: string }[]) => lista.find((m) => usaFichaEstruturada(m.nome));
+  const podeImportar = ehDona || !!opcaoDeMusculacao(modalidadesDe(me.data));
+
+  const escolherPdf = async () => {
+    const r = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', multiple: false, copyToCacheDirectory: true });
+    if (r.canceled || !r.assets?.[0]) return;
+    const a = r.assets[0];
+    if (a.size && a.size > 5 * 1024 * 1024) {
+      setErro('Esse PDF passa de 5 MB. Ficha de treino costuma ter bem menos — confira se é o arquivo certo.');
+      return;
+    }
+    lerPdf.mutate(
+      { uri: a.uri, name: a.name, mimeType: a.mimeType, file: (a as { file?: File }).file },
+      {
+        onSuccess: (dados) => {
+          const lido = interpretarFicha(dados.linhas);
+          if (lido.fichas.length === 0) {
+            setErro(
+              'Não achei exercícios nesse PDF. A leitura entende linhas como "Supino reto 4x12" ' +
+                'ou uma tabela com as colunas Exercício, Séries e Repetições.',
+            );
+            return;
+          }
+          setVerIgnoradas(false);
+          setImportacao({ arquivo: a.name, fichas: lido.fichas, ignoradas: lido.ignoradas });
+          setPrateleira('ativos');
+        },
+        onError: (e) => setErro(e instanceof ApiError ? e.message : 'Não consegui ler esse PDF.'),
+      },
+    );
+  };
+
+  const abrirImportada = (i: number) => {
+    const f = importacao?.fichas[i];
+    if (!f) return;
+    abrirNovo();
+    setImportando(i);
+    setTitulo(f.titulo || `Treino ${ativos.length + 1}`);
+    setTextoAntes(f.textoAntes);
+    setObservacoes(f.observacoes);
+    setConteudo(f.conteudo);
+    setSecoes(agrupar(f.exercicios));
+    // A ficha do PDF é de musculação: com duas modalidades, já vem nela.
+    const musculacao = opcaoDeMusculacao(opcoesDeModalidade);
+    if (musculacao) setModalidadeId(musculacao.id);
   };
 
   // ── Edição das seções (grupo muscular → exercícios) ─────────────────
@@ -358,7 +427,15 @@ export default function TreinosAluno() {
         exercicios: [],
       };
     }
-    const onSuccess = () => setFormAberto(false);
+    const onSuccess = () => {
+      setFormAberto(false);
+      if (importando !== null) {
+        setImportacao((atual) =>
+          atual ? { ...atual, fichas: atual.fichas.map((f, i) => (i === importando ? { ...f, salva: true } : f)) } : atual,
+        );
+        setImportando(null);
+      }
+    };
     const onError = (e: unknown) => setErro(e instanceof ApiError ? e.message : 'Não foi possível salvar.');
     if (editando) atualizar.mutate({ id: editando.id, payload }, { onSuccess, onError });
     else criar.mutate(payload, { onSuccess, onError });
@@ -492,13 +569,21 @@ export default function TreinosAluno() {
               <Icon name="arrow-back" size={20} color={LC.textPrimary} />
             </Pressable>
             <View style={{ flex: 1 }}>
-              <Text style={s.title}>{editando ? 'Editar treino' : 'Novo treino'}</Text>
+              <Text style={s.title}>{editando ? 'Editar treino' : importando !== null ? 'Conferir treino do PDF' : 'Novo treino'}</Text>
               <Text style={s.subtitle}>{alunoNome}</Text>
             </View>
           </View>
         </View>
 
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {importando !== null ? (
+            <View style={s.avisoPdf}>
+              <Icon name="document-text-outline" size={18} color={LC.primary} />
+              <Text style={s.avisoPdfTexto}>
+                Veio do PDF {importacao?.arquivo}. Confira nomes, séries e cargas — a ficha só é criada quando você salvar.
+              </Text>
+            </View>
+          ) : null}
           {/*
             Para a dona o professor vem PRIMEIRO: é obrigatório para ela, e é
             ele que decide se a ficha é de exercícios ou de texto. No rodapé,
@@ -874,6 +959,108 @@ export default function TreinosAluno() {
         <ErrorState onRetry={() => treinos.refetch()} />
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          {importacao ? (
+            <Card style={s.importacao} padding={16}>
+              <View style={s.importacaoHead}>
+                <View style={s.importacaoIcone}>
+                  <Icon name="document-text-outline" size={20} color={LC.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.importacaoTitulo} numberOfLines={1}>{importacao.arquivo}</Text>
+                  <Text style={s.importacaoSub}>
+                    {importacao.fichas.every((f) => f.salva)
+                      ? 'Pronto: todos os treinos do PDF foram salvos.'
+                      : importacao.fichas.length === 1
+                        ? 'Encontrei 1 treino. Confira antes de salvar.'
+                        : `Encontrei ${importacao.fichas.length} treinos. Confira cada um antes de salvar.`}
+                  </Text>
+                </View>
+                <Pressable
+                  style={s.importacaoFechar}
+                  hitSlop={6}
+                  onPress={() => setImportacao(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Fechar a importação do PDF"
+                >
+                  <Icon name="close" size={18} color={LC.textSecondary} />
+                </Pressable>
+              </View>
+
+              {importacao.fichas.map((f, i) => {
+                const grupos = [...new Set(f.exercicios.map((e) => e.grupo).filter(Boolean))];
+                return (
+                  <View key={i} style={s.importadaLinha}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.importadaTitulo} numberOfLines={1}>
+                        {(f.titulo || `Treino ${i + 1}`).toUpperCase()}
+                      </Text>
+                      <Text style={s.importadaMeta} numberOfLines={2}>
+                        {f.exercicios.length} {f.exercicios.length === 1 ? 'exercício' : 'exercícios'}
+                        {grupos.length ? ` · ${grupos.join(', ')}` : ''}
+                      </Text>
+                    </View>
+                    {f.salva ? (
+                      <Badge label="Salvo" variant="success" />
+                    ) : (
+                      <Pressable
+                        style={({ pressed }) => [s.importadaBtn, pressed && { opacity: 0.8 }]}
+                        onPress={() => abrirImportada(i)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Conferir ${f.titulo || `Treino ${i + 1}`}`}
+                      >
+                        <Text style={s.importadaBtnTexto}>Conferir</Text>
+                        <Icon name="chevron-forward" size={15} color="#fff" />
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+
+              {/* O que não deu para entender aparece — nada some calado. */}
+              {importacao.ignoradas.length > 0 ? (
+                <View style={s.ignoradas}>
+                  <Pressable
+                    style={s.ignoradasHead}
+                    onPress={() => setVerIgnoradas((v) => !v)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: verIgnoradas }}
+                  >
+                    <Icon name="alert-circle-outline" size={15} color={LC.warningFg} />
+                    <Text style={s.ignoradasTitulo}>
+                      {importacao.ignoradas.length === 1
+                        ? '1 linha que não entendi'
+                        : `${importacao.ignoradas.length} linhas que não entendi`}
+                    </Text>
+                    <Icon name={verIgnoradas ? 'chevron-up' : 'chevron-down'} size={15} color={LC.warningFg} />
+                  </Pressable>
+                  {verIgnoradas ? (
+                    <>
+                      {importacao.ignoradas.map((l, i) => (
+                        <Text key={i} style={s.ignoradaTexto}>• {l}</Text>
+                      ))}
+                      <Text style={s.ignoradasDica}>Se for exercício, acrescente no treino quando for conferir.</Text>
+                    </>
+                  ) : null}
+                </View>
+              ) : null}
+            </Card>
+          ) : podeImportar ? (
+            <Pressable
+              style={({ pressed }) => [s.importarBtn, pressed && { opacity: 0.85 }]}
+              onPress={escolherPdf}
+              disabled={lerPdf.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Importar treino de um PDF"
+            >
+              <Icon name="document-attach-outline" size={18} color={LC.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.importarTitulo}>{lerPdf.isPending ? 'Lendo o PDF…' : 'Importar treino de PDF'}</Text>
+                <Text style={s.importarSub}>Ficha feita no Word ou no Excel</Text>
+              </View>
+              <Icon name="chevron-forward" size={16} color={LC.textMuted} />
+            </Pressable>
+          ) : null}
+
           {/*
             As duas prateleiras. Só aparecem quando há algo arquivado — num
             aluno novo seriam duas abas para uma lista só, e a vazia ainda
@@ -1242,6 +1429,48 @@ const s = StyleSheet.create({
     paddingVertical: 13, borderRadius: LC.radius.md, borderWidth: 1.5, borderColor: LC.primary, borderStyle: 'dashed',
   },
   addExText: { fontSize: 14, fontWeight: '700', color: LC.primary },
+
+  // Importar de PDF
+  importarBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14,
+    paddingVertical: 12, paddingHorizontal: 14, borderRadius: LC.radius.md,
+    backgroundColor: LC.bgCard, borderWidth: 1.5, borderColor: LC.border, borderStyle: 'dashed',
+  },
+  importarTitulo: { fontSize: 14, fontWeight: '800', color: LC.primary },
+  importarSub: { fontSize: 12, color: LC.textSecondary, marginTop: 1 },
+  importacao: { marginBottom: 14, borderWidth: 1.5, borderColor: LC.primary },
+  importacaoHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  importacaoIcone: {
+    width: 38, height: 38, borderRadius: 12, backgroundColor: LC.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  importacaoTitulo: { fontSize: 14, fontWeight: '800', color: LC.textPrimary },
+  importacaoSub: { fontSize: 12, color: LC.textSecondary, marginTop: 1 },
+  importacaoFechar: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: LC.neutralBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  importadaLinha: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 11, borderTopWidth: 1, borderTopColor: LC.border,
+  },
+  importadaTitulo: { fontSize: 14, fontWeight: '800', color: LC.primary, letterSpacing: 0.3 },
+  importadaMeta: { fontSize: 12, color: LC.textSecondary, marginTop: 2 },
+  importadaBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 8, paddingHorizontal: 12, borderRadius: LC.radius.full, backgroundColor: LC.primary,
+  },
+  importadaBtnTexto: { fontSize: 13, fontWeight: '800', color: '#fff' },
+  ignoradas: { marginTop: 6, padding: 10, borderRadius: 10, backgroundColor: LC.warningBg },
+  ignoradasHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ignoradasTitulo: { flex: 1, fontSize: 12.5, fontWeight: '700', color: LC.warningFg },
+  ignoradaTexto: { fontSize: 12.5, color: LC.textPrimary, marginTop: 6, lineHeight: 18 },
+  ignoradasDica: { fontSize: 11.5, color: LC.textSecondary, marginTop: 8 },
+  avisoPdf: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12,
+    padding: 12, borderRadius: 12, backgroundColor: LC.primaryLight,
+  },
+  avisoPdfTexto: { flex: 1, fontSize: 13, color: LC.textPrimary, lineHeight: 19 },
 
   fab: {
     position: 'absolute', right: 20, bottom: 96, width: 56, height: 56, borderRadius: 28,

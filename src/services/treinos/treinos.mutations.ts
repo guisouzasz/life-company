@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { treinosService } from './treinos.service';
-import type { SalvarTreinoDiaPayload, SalvarTreinoPayload } from './treinos.types';
+import type { ArquivoPdf, SalvarTreinoDiaPayload, SalvarTreinoPayload } from './treinos.types';
 
 function useInvalidarTreinos() {
   const qc = useQueryClient();
@@ -65,4 +65,9 @@ export function useOrdenarTreinos() {
     mutationFn: ({ alunoId, ids }: { alunoId: string; ids: string[] }) => treinosService.ordenar(alunoId, ids),
     onSuccess: invalidar,
   });
+}
+
+/** Lê o PDF de uma ficha. Não mexe em nada salvo, então não invalida nada. */
+export function useLerPdfDeFicha() {
+  return useMutation({ mutationFn: (arquivo: ArquivoPdf) => treinosService.lerPdf(arquivo) });
 }
