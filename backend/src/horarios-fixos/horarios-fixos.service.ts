@@ -242,6 +242,17 @@ export class HorariosFixosService {
     const { count } = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${hf.horarioId} FOR UPDATE`;
       await tx.horarioFixo.update({ where: { id }, data: { ativo: false } });
+      // A aula que este fixo tinha num dia fechado deixa de ser dele: sem o
+      // fixo, ela não conta mais na semana do aluno nem volta se o dia reabrir.
+      await tx.agendamento.updateMany({
+        where: {
+          usuarioId: hf.usuarioId,
+          horarioId: hf.horarioId,
+          diaFechadoId: { not: null },
+          dataAula: { gte: dayjs().startOf('day').toDate() },
+        },
+        data: { diaFechadoId: null },
+      });
       return tx.agendamento.updateMany({
         where: {
           usuarioId: hf.usuarioId,

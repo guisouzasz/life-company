@@ -23,6 +23,7 @@ import { TermosModule } from './termos/termos.module';
 import { EmailModule } from './email/email.module';
 import { LogsModule } from './logs/logs.module';
 import { DiagnosticoModule } from './diagnostico/diagnostico.module';
+import { DiasFechadosModule } from './dias-fechados/dias-fechados.module';
 import { LogsInterceptor } from './logs/logs.interceptor';
 
 @Module({
@@ -43,6 +44,7 @@ import { LogsInterceptor } from './logs/logs.interceptor';
     RelatoriosModule,
     CreditosModule,
     HorariosFixosModule,
+    DiasFechadosModule,
     AutoAgendamentoModule,
     FinanceiroModule,
     TreinosModule,

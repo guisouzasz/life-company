@@ -302,7 +302,7 @@ export default function AdminFinanceiro() {
                       <View style={[s.tCol, s.tColStatus]}>
                         <Badge label={st.label} variant={st.variant} />
                         {a.pagamento ? (
-                          <Text style={s.tPagoEm}>em {formatDate(a.pagamento.pagoEm, 'DD/MM')}</Text>
+                          <Text style={s.tPagoEm}>em {formatDate(new Date(a.pagamento.pagoEm), 'DD/MM')}</Text>
                         ) : null}
                       </View>
                       <View style={[s.tCol, s.tColAcoes, s.tAcoes]}>
@@ -406,7 +406,7 @@ export default function AdminFinanceiro() {
                   <View style={s.cardActions}>
                     {a.pagamento ? (
                       <Button
-                        title={`Pago em ${formatDate(a.pagamento.pagoEm, 'DD/MM')} — desfazer`}
+                        title={`Pago em ${formatDate(new Date(a.pagamento.pagoEm), 'DD/MM')} — desfazer`}
                         variant="outline"
                         size="sm"
                         onPress={() => setDesfazendo(a)}

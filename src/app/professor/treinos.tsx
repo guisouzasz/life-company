@@ -107,7 +107,7 @@ function TreinoDoDia({ compacto = false }: { compacto?: boolean }) {
             <View style={s.diaInfoRow}>
               <Icon name="calendar-outline" size={15} color={LC.primary} />
               <Text style={s.diaInfo}>
-                {diaSel.diaNome}, {diaSel.diaNum} — {treinoDia.data ? `salvo por ${nomeCurto(treinoDia.data.professor.nome)} (${formatDate(treinoDia.data.updatedAt, 'DD/MM HH:mm')})` : 'ainda sem treino'}
+                {diaSel.diaNome}, {diaSel.diaNum} — {treinoDia.data ? `salvo por ${nomeCurto(treinoDia.data.professor.nome)} (${formatDate(new Date(treinoDia.data.updatedAt), 'DD/MM HH:mm')})` : 'ainda sem treino'}
               </Text>
             </View>
 

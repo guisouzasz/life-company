@@ -55,7 +55,7 @@ export class HorariosService {
       sexta.endOf('day').toDate(),
     );
 
-    const [horarios, agendamentos] = await Promise.all([
+    const [horarios, agendamentos, fechados] = await Promise.all([
       this.prisma.horario.findMany({
         where: { ativo: true },
         include: { modalidade: true },
@@ -68,7 +68,11 @@ export class HorariosService {
         },
         include: { usuario: { select: { id: true, nome: true } } },
       }),
+      this.prisma.diaFechado.findMany({
+        where: { data: { gte: segunda.toDate(), lte: sexta.endOf('day').toDate() } },
+      }),
     ]);
+    const fechadoNoDia = new Map(fechados.map((f) => [dayjs(f.data).format('YYYY-MM-DD'), { id: f.id, motivo: f.motivo }]));
 
     // Chave (turma + dia) → quem está marcado. Evita varrer a lista de
     // agendamentos uma vez por célula da grade.
@@ -112,7 +116,7 @@ export class HorariosService {
           };
         });
 
-      return { data, diaSemana: nomeDoDia, aulas };
+      return { data, diaSemana: nomeDoDia, fechado: fechadoNoDia.get(data) ?? null, aulas };
     });
 
     return { inicio: segunda.format('YYYY-MM-DD'), fim: sexta.format('YYYY-MM-DD'), dias };

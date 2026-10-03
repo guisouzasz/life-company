@@ -170,17 +170,28 @@ export class AutoAgendamentoService {
       ),
     );
 
+    const fechados = await this.diasFechados(inicioPeriodo, fimPeriodo);
     for (const fixo of fixos) {
       const r = await this.gerarParaFixo(
         fixo,
         inicioPeriodo,
         fimPeriodo,
         jaResolvidos,
+        fechados,
       );
       somarResultado(total, r);
     }
 
     return total;
+  }
+
+  /** Dias fechados do período: "YYYY-MM-DD" → id. */
+  private async diasFechados(inicio: dayjs.Dayjs, fim: dayjs.Dayjs) {
+    const dias = await this.prisma.diaFechado.findMany({
+      where: { data: { gte: inicio.startOf('day').toDate(), lte: fim.endOf('day').toDate() } },
+      select: { id: true, data: true },
+    });
+    return new Map(dias.map((d) => [dayjs(d.data).format('YYYY-MM-DD'), d.id]));
   }
 
   /** Gera imediatamente os agendamentos de UM horário fixo (usado ao criar/reativar). */
@@ -208,7 +219,9 @@ export class AutoAgendamentoService {
     fimPeriodo = inicioPeriodo.add(JANELA_DIAS, 'day'),
     /** Datas já resolvidas: têm aula marcada, ou desmarcada de propósito. */
     jaResolvidos = new Set<string>(),
+    fechados?: Map<string, string>,
   ) {
+    const diasFechados = fechados ?? (await this.diasFechados(inicioPeriodo, fimPeriodo));
     let criados = 0;
     let ignorados = 0;
     let erros = 0;
@@ -242,6 +255,30 @@ export class AutoAgendamentoService {
       const dataAula = dia.format('YYYY-MM-DD');
       const chave = chaveAgendamento(fixo.usuarioId, fixo.horarioId, dataAula);
       if (jaResolvidos.has(chave)) {
+        ignorados++;
+        continue;
+      }
+
+      /**
+       * Dia fechado (feriado, recesso): a aula do fixo nasce já fora da
+       * agenda, marcada pelo fechamento. Assim ela conta na semana do aluno
+       * do mesmo jeito que conta para quem já tinha a aula quando a dona
+       * fechou o dia — sem isso, quem fecha o Natal hoje deixaria os fixos
+       * de dezembro livres para remarcar, e os de outubro não.
+       */
+      const fechadoId = diasFechados.get(dataAula);
+      if (fechadoId) {
+        await this.prisma.agendamento.createMany({
+          data: [{
+            usuarioId: fixo.usuarioId,
+            horarioId: fixo.horarioId,
+            dataAula: dia.toDate(),
+            status: 'CANCELADO',
+            diaFechadoId: fechadoId,
+          }],
+          skipDuplicates: true,
+        });
+        jaResolvidos.add(chave);
         ignorados++;
         continue;
       }

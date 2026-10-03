@@ -8,6 +8,9 @@ import { Card } from '../../components/ui/card';
 import { Icon } from '../../components/ui/icon';
 import { Button } from '../../components/ui/button';
 import { Loading, ErrorState } from '../../components/ui/states';
+import { Input } from '../../components/ui/input';
+import { useFecharDia, useReabrirDia } from '../../services/dias-fechados/dias-fechados.queries';
+import { ApiError } from '../../services/http';
 import { AlunosHorarioModal, type HorarioDoModal } from '../../components/admin/alunos-horario-modal';
 import { useGradeDaSemana } from '../../services/horarios/horarios.queries';
 import type { AulaNaGrade, DiaDaSemana } from '../../services/horarios/horarios.types';
@@ -45,6 +48,112 @@ export default function AdminAgenda() {
   const [aberto, setAberto] = useState<{ horario: HorarioDoModal; data: string } | null>(null);
 
   const hoje = hojeISO();
+
+  // ── Fechar o dia (feriado, recesso) ────────────────────────────────
+  /**
+   * Inline, e não num modal: a confirmação precisa explicar o que acontece
+   * com as aulas marcadas, e um modal por cima da tela de turmas já deu
+   * problema de aparecer por trás no navegador.
+   */
+  const fecharDia = useFecharDia();
+  const reabrirDia = useReabrirDia();
+  const [fechando, setFechando] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('Feriado');
+  const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
+  /** "Seg 12/10" a partir da data — sem depender da grade, que vem mais abaixo. */
+  const dataCurta = (data: string) =>
+    `${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][new Date(`${data}T12:00:00`).getDay()]} ${formatDate(data, 'DD/MM')}`;
+
+  const confirmarFechamento = () => {
+    if (!fechando) return;
+    fecharDia.mutate(
+      { data: fechando, motivo: motivo.trim() || 'Feriado' },
+      {
+        onSuccess: (r) => {
+          setFechando(null);
+          setAviso({ texto: r.mensagem });
+        },
+        onError: (e) => setAviso({ texto: e instanceof ApiError ? e.message : 'Não foi possível fechar o dia.', erro: true }),
+      },
+    );
+  };
+
+  const reabrir = (dia: DiaDaSemana) => {
+    if (!dia.fechado) return;
+    reabrirDia.mutate(dia.fechado.id, {
+      onSuccess: (r) => setAviso({ texto: r.mensagem }),
+      onError: (e) => setAviso({ texto: e instanceof ApiError ? e.message : 'Não foi possível reabrir o dia.', erro: true }),
+    });
+  };
+
+  const BannerFechado = ({ dia }: { dia: DiaDaSemana }) =>
+    dia.fechado ? (
+      <View style={s.fechadoBanner}>
+        <Icon name="lock-closed" size={16} color={LC.warningFg} />
+        <View style={{ flex: 1 }}>
+          <Text style={s.fechadoTitulo}>Academia fechada</Text>
+          <Text style={s.fechadoMotivo}>{dia.fechado.motivo}</Text>
+        </View>
+        {dia.data >= hoje ? (
+          <Pressable
+            style={s.reabrirBtn}
+            onPress={() => reabrir(dia)}
+            disabled={reabrirDia.isPending}
+            accessibilityRole="button"
+            accessibilityLabel={`Reabrir ${dataCurta(dia.data)}`}
+          >
+            <Text style={s.reabrirTexto}>{reabrirDia.isPending ? 'Reabrindo…' : 'Reabrir'}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    ) : null;
+
+  const BotaoFechar = ({ dia }: { dia: DiaDaSemana }) =>
+    !dia.fechado && dia.data >= hoje && fechando !== dia.data ? (
+      <Pressable
+        style={s.fecharLink}
+        onPress={() => {
+          setAviso(null);
+          setMotivo('Feriado');
+          setFechando(dia.data);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`Fechar ${dataCurta(dia.data)}`}
+      >
+        <Icon name="lock-closed-outline" size={14} color={LC.textSecondary} />
+        <Text style={s.fecharLinkTexto}>Fechar este dia (feriado, recesso)</Text>
+      </Pressable>
+    ) : null;
+
+  const formularioFechar = fechando ? (
+    <Card style={s.fecharCard} padding={16}>
+      <Text style={s.fecharTitulo}>Fechar {dataCurta(fechando)}</Text>
+      <Text style={s.fecharTexto}>
+        Ninguém consegue marcar aula nesse dia. As aulas já marcadas saem da agenda e contam como dadas na
+        semana de cada aluno, sem crédito de reposição. Quem marcou reposição nesse dia recebe o crédito de volta.
+      </Text>
+      <View style={s.motivos}>
+        {['Feriado', 'Recesso', 'Manutenção'].map((m) => (
+          <Pressable key={m} style={[s.chip, motivo === m && s.chipSel]} onPress={() => setMotivo(m)}>
+            <Text style={[s.chipTexto, motivo === m && s.chipTextoSel]}>{m}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <Input label="Motivo (aparece para os alunos)" value={motivo} onChangeText={setMotivo} maxLength={60} placeholder="Feriado de N. Sra. Aparecida" />
+      <View style={s.fecharBotoes}>
+        <Button title="Voltar" variant="outline" size="sm" fullWidth={false} onPress={() => setFechando(null)} />
+        <Button title="Fechar o dia" variant="danger" size="sm" fullWidth={false} loading={fecharDia.isPending} onPress={confirmarFechamento} />
+      </View>
+    </Card>
+  ) : null;
+
+  const avisoNaTela = aviso ? (
+    <Pressable style={[s.avisoDia, aviso.erro && s.avisoDiaErro]} onPress={() => setAviso(null)} accessibilityRole="button" accessibilityLabel="Fechar aviso">
+      <Icon name={aviso.erro ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={16} color={aviso.erro ? LC.danger : LC.success} />
+      <Text style={s.avisoDiaTexto}>{aviso.texto}</Text>
+      <Icon name="close" size={14} color={LC.textMuted} />
+    </Pressable>
+  ) : null;
 
   const modalidades = useMemo(() => {
     const vistas = new Map<string, string>();
@@ -160,11 +269,14 @@ export default function AdminAgenda() {
           <Text style={[s.colunaDia, ehHoje && s.colunaDiaHoje]}>{DIAS_CURTO[dia.diaSemana]}</Text>
           <Text style={[s.colunaData, ehHoje && s.colunaDataHoje]}>{formatDate(dia.data, 'DD/MM')}</Text>
         </View>
-        {dia.aulas.length === 0 ? (
+        {dia.fechado ? (
+          <BannerFechado dia={dia} />
+        ) : dia.aulas.length === 0 ? (
           <Text style={s.colunaVazia}>Sem aulas</Text>
         ) : (
           dia.aulas.map((a) => <CardDaAula key={a.horarioId} dia={dia} aula={a} />)
         )}
+        <BotaoFechar dia={dia} />
       </View>
     );
   };
@@ -280,6 +392,8 @@ export default function AdminAgenda() {
       ) : isDesktop ? (
         // ── Desktop: a semana inteira lado a lado ────────────────────
         <ScrollView contentContainerStyle={s.deskScroll} showsVerticalScrollIndicator={false}>
+          {avisoNaTela}
+          {formularioFechar}
           <View style={s.grade}>
             {dias.map((d) => (
               <ColunaDoDia key={d.data} dia={d} />
@@ -307,18 +421,29 @@ export default function AdminAgenda() {
                     {DIAS_CURTO[d.diaSemana]}
                   </Text>
                   <Text style={[s.diaChipData, sel && s.diaChipDataSel]}>{formatDate(d.data, 'DD')}</Text>
-                  {total > 0 ? <View style={[s.diaChipPonto, sel && s.diaChipPontoSel]} /> : <View style={s.diaChipPontoVazio} />}
+                  {d.fechado ? (
+                    <Icon name="lock-closed" size={9} color={sel ? '#fff' : LC.warningFg} />
+                  ) : total > 0 ? (
+                    <View style={[s.diaChipPonto, sel && s.diaChipPontoSel]} />
+                  ) : (
+                    <View style={s.diaChipPontoVazio} />
+                  )}
                 </Pressable>
               );
             })}
           </View>
 
           <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-            {!diaAberto || diaAberto.aulas.length === 0 ? (
+            {avisoNaTela}
+            {diaAberto && fechando === diaAberto.data ? formularioFechar : null}
+            {diaAberto?.fechado ? (
+              <BannerFechado dia={diaAberto} />
+            ) : !diaAberto || diaAberto.aulas.length === 0 ? (
               <Text style={s.colunaVazia}>Sem aulas neste dia.</Text>
             ) : (
               diaAberto.aulas.map((a) => <CardDaAula key={a.horarioId} dia={diaAberto} aula={a} />)
             )}
+            {diaAberto ? <BotaoFechar dia={diaAberto} /> : null}
             <View style={{ height: 90 }} />
           </ScrollView>
         </>
@@ -337,6 +462,28 @@ export default function AdminAgenda() {
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
+  // Dia fechado
+  fechadoBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderRadius: 12,
+    backgroundColor: LC.warningBg, marginBottom: 10,
+  },
+  fechadoTitulo: { fontSize: 13.5, fontWeight: '800', color: LC.warningFg },
+  fechadoMotivo: { fontSize: 12.5, color: LC.textPrimary, marginTop: 1 },
+  reabrirBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: LC.radius.full, backgroundColor: LC.bgCard, borderWidth: 1, borderColor: LC.border },
+  reabrirTexto: { fontSize: 12.5, fontWeight: '800', color: LC.primary },
+  fecharLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 4 },
+  fecharLinkTexto: { fontSize: 12.5, fontWeight: '700', color: LC.textSecondary, textDecorationLine: 'underline' },
+  fecharCard: { marginBottom: 12, borderWidth: 1.5, borderColor: LC.warning, gap: 10 },
+  fecharTitulo: { fontSize: 16, fontWeight: '800', color: LC.textPrimary },
+  fecharTexto: { fontSize: 13, lineHeight: 19, color: LC.textSecondary },
+  motivos: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  fecharBotoes: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },
+  avisoDia: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 12,
+    backgroundColor: LC.successBg, marginBottom: 12,
+  },
+  avisoDiaErro: { backgroundColor: LC.dangerBg },
+  avisoDiaTexto: { flex: 1, fontSize: 13, lineHeight: 18, color: LC.textPrimary, fontWeight: '600' },
   header: { paddingHorizontal: 16, paddingTop: 56, paddingBottom: 8 },
   deskHeader: { paddingTop: 24, paddingBottom: 12 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

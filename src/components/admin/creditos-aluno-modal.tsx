@@ -54,7 +54,7 @@ export function CreditosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin | nul
                   <Text style={styles.rowMain}>
                     {c.concedidoAdmin ? 'Concedido pelo admin' : 'Cancelamento de aula'}
                   </Text>
-                  <Text style={styles.rowSub}>Válido até {formatDate(c.expiraEm, 'DD/MM/YYYY')}</Text>
+                  <Text style={styles.rowSub}>Válido até {formatDate(new Date(c.expiraEm), 'DD/MM/YYYY')}</Text>
                 </View>
                 <Badge label={st.label} variant={st.variant} />
                 {c.status === 'VALIDO' ? (

@@ -12,6 +12,12 @@ export const agendamentosService = {
     return data;
   },
 
+  /** Minhas aulas que caíram em dia fechado (feriado/recesso), daqui em diante. */
+  async meusEmDiaFechado(): Promise<Agendamento[]> {
+    const { data } = await http.get<Agendamento[]>('/agendamentos/meus/dias-fechados');
+    return data;
+  },
+
   async historico(page = 1): Promise<Agendamento[]> {
     const { data } = await http.get<Agendamento[]>('/agendamentos/historico', { params: { page } });
     return data;

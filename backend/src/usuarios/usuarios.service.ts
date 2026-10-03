@@ -8,6 +8,7 @@ import * as dayjs from "dayjs";
 import * as isoWeek from "dayjs/plugin/isoWeek";
 import { AuthService } from "../auth/auth.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { cotaDaSemana } from "../agendamentos/cota-semanal";
 import { CriarUsuarioDto } from "./dto/criar-usuario.dto";
 import { juntarModalidades } from "./modalidades-do-professor";
 
@@ -618,14 +619,10 @@ export class UsuariosService {
     // Conta as aulas REAIS da semana corrente, do mesmo jeito que a validação
     // de limite em agendamentos.service. O contador aulasUsadasSemana não é
     // usado aqui: ele desanda quando se geram aulas de semanas futuras.
-    const usadas = await this.prisma.agendamento.count({
-      where: {
-        usuarioId,
-        dataAula: { gte: inicioSemana, lte: fimSemana },
-        status: { in: ["CONFIRMADO", "REALIZADO"] },
-        reposicao: false, // reposição usa crédito, não a cota da semana
-      },
-    });
+    // Inclui a aula cancelada que já voltou como reposição — é a mesma conta
+    // que decide se a próxima aula entra (agendamentos/cota-semanal.ts).
+    const cota = await this.prisma.$transaction((tx) => cotaDaSemana(tx, usuarioId, inicioSemana, fimSemana));
+    const usadas = cota.usadas + cota.repostas.length;
 
     // Mantém o contador em dia para os relatórios que ainda o leem.
     if (

@@ -237,7 +237,7 @@ export function FichaSaude({ ficha, alunoNome, completa = false }: Props) {
         </>
       ) : null}
 
-      <Text style={s.rodape}>Preenchida em {formatDate(ficha.updatedAt, 'DD/MM/YYYY')}</Text>
+      <Text style={s.rodape}>Preenchida em {formatDate(new Date(ficha.updatedAt), 'DD/MM/YYYY')}</Text>
     </View>
   );
 }

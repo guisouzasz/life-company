@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { nomeCurto } from '../comum/nome';
 import { CriarAgendamentoDto } from './dto/criar-agendamento.dto';
@@ -12,6 +13,7 @@ import {
   MAX_REPOSICOES_POR_PERIODO,
 } from '../creditos/creditos.constantes';
 import { capacidadeEfetiva } from '../horarios/capacidade';
+import { cotaDaSemana } from './cota-semanal';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -154,6 +156,19 @@ export class AgendamentosService {
       await tx.$queryRaw`SELECT id FROM usuario_planos WHERE id = ${usuarioPlano.id} FOR UPDATE`;
       const turmaAtual = await tx.horario.findUnique({ where: { id: dto.horarioId }, include: { modalidade: true } });
       if (!turmaAtual?.ativo) throw new BadRequestException('Turma desligada. Escolha uma turma ativa.');
+      /**
+       * Dia fechado (feriado, recesso) não recebe aula — nem do aluno, nem da
+       * dona: para pôr alguém nele, ela reabre o dia antes. A conferência é
+       * aqui dentro, com a turma travada, porque fechar o dia trava as turmas
+       * também: ou a aula entra antes e o fechamento a tira, ou o fechamento
+       * vem antes e a aula é recusada. Nunca fica aula num dia fechado.
+       */
+      const fechado = await tx.diaFechado.findUnique({ where: { data: dataAula } });
+      if (fechado) {
+        throw new BadRequestException(
+          `A academia não abre em ${dayjs(dataAula).format('DD/MM')} (${fechado.motivo}). Escolha outro dia.`,
+        );
+      }
       if (turmaAtual.diaSemana !== diaSemana) throw new BadRequestException('O dia da turma mudou. Atualize a agenda.');
       const planoAtual = await tx.usuarioPlano.findUnique({ where: { id: usuarioPlano.id } });
       if (!planoAtual || planoAtual.vigenciaFim) {
@@ -228,18 +243,46 @@ export class AgendamentosService {
       const gravar = (extra: { reposicao: boolean; creditoId: string | null }) => {
         const include = { horario: { include: { modalidade: true } } };
         const dados = { status: 'CONFIRMADO' as const, ...extra };
+        /**
+         * Reviver é marcar de novo, então a data de marcação é agora. Sem isto
+         * a linha guardava a data da PRIMEIRA marcação — às vezes semanas
+         * antes, quando a aula veio do horário fixo — e uma reposição marcada
+         * hoje ficava fora da janela de 30 dias do limite de reposições.
+         */
         return anterior
-          ? tx.agendamento.update({ where: { id: anterior.id }, data: dados, include })
+          ? tx.agendamento.update({ where: { id: anterior.id }, data: { ...dados, createdAt: new Date() }, include })
           : tx.agendamento.create({ data: { usuarioId, horarioId: dto.horarioId, dataAula, ...dados }, include });
       };
 
       // ── Fluxo por CRÉDITO de reposição (não consome vaga semanal) ──────
       if (dto.usarCredito === true) {
+        /**
+         * O crédito tem que valer NO DIA DA AULA, não só hoje.
+         *
+         * O termo diz que o crédito "expira em 30 dias corridos a contar da
+         * data da aula cancelada". Olhando só a validade de hoje, um crédito
+         * que vencia dia 14 servia para uma aula do dia 19 — e, como a aula
+         * pode ser marcada com até 60 dias de antecedência, o prazo de 30
+         * dias virava quase 90. `expiraEm` é o fim do último dia, e a aula é
+         * gravada à meia-noite: aula no próprio dia do vencimento ainda vale.
+         */
         const credito = await tx.creditoReposicao.findFirst({
-          where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
+          where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date(), gte: dataAula } },
           orderBy: { expiraEm: 'asc' },
         });
-        if (!credito) throw new ForbiddenException('Você não possui crédito de reposição válido');
+        if (!credito) {
+          const vencemAntes = await tx.creditoReposicao.findFirst({
+            where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
+            orderBy: { expiraEm: 'desc' },
+          });
+          if (vencemAntes) {
+            throw new ForbiddenException(
+              `Seu crédito de reposição vale até ${dayjs(vencemAntes.expiraEm).format('DD/MM')}. ` +
+                'Escolha uma aula até essa data.',
+            );
+          }
+          throw new ForbiddenException('Você não possui crédito de reposição válido');
+        }
 
         /**
          * Teto de reposições da janela (Termo de Normas, seção 3).
@@ -284,15 +327,35 @@ export class AgendamentosService {
       // ── Fluxo normal: limite semanal do plano ──────────────────────────
       // O limite vale para a SEMANA DA AULA sendo agendada (não a semana atual):
       // cada semana tem sua própria cota, permitindo agendar semanas futuras.
-      const usadasNaSemana = await tx.agendamento.count({
-        where: {
-          usuarioId,
-          dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
-          status: { in: ['CONFIRMADO', 'REALIZADO'] },
-          reposicao: false, // aulas por crédito não consomem a cota semanal
-        },
-      });
-      if (usadasNaSemana >= usuarioPlano.plano.aulasSemanais) {
+      /**
+       * O crédito é para a aula que o aluno PERDEU — não para a que ele
+       * remarcou.
+       *
+       * Cancelar libera a vaga da semana E gera um crédito. Quem cancelasse
+       * e marcasse de novo na mesma semana ficava com a aula e com o crédito,
+       * e podia repetir o ciclo à vontade: cancela, remarca, cancela,
+       * remarca — um crédito por volta. Como reposição não consome cota, cada
+       * volta virava uma aula extra depois. Um plano 1x rendia 2 aulas por
+       * semana, indefinidamente.
+       *
+       * Régua: cada aula que o aluno remarca na semana derruba um crédito que
+       * ELE gerou naquela mesma semana. Quem cancela e não remarca fica com o
+       * crédito — que é o caso legítimo, o da aula realmente perdida. Se o
+       * crédito já foi gasto, não há o que derrubar: a aula cancelada já
+       * voltou como reposição e continua contando na semana (cota-semanal.ts).
+       *
+       * Só vale para o aluno se agendando. Quando é a dona quem coloca (troca
+       * de turma, arrumação de agenda), o crédito fica de pé: ela está
+       * remanejando, não devolvendo aula ao aluno. Crédito concedido pelo
+       * estúdio também nunca cai — a compensação é dela e não se desfaz
+       * porque o aluno achou outro horário.
+       */
+      const cota = await cotaDaSemana(tx, usuarioId, inicioSemanaAula, fimSemanaAula);
+      const usadasNaSemana = cota.usadas;
+      const repostasNaSemana = ctx.admin ? [] : cota.repostas;
+      const creditoParaDerrubar = ctx.admin ? null : cota.creditoLivreId;
+
+      if (usadasNaSemana + repostasNaSemana.length >= usuarioPlano.plano.aulasSemanais) {
         /**
          * Para o aluno, "acabou a cota" encerra o assunto. Para o estúdio não:
          * quase sempre a dona está remanejando, e a aula que ocupa a cota é
@@ -305,8 +368,10 @@ export class AgendamentosService {
             where: {
               usuarioId,
               dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
-              status: { in: ['CONFIRMADO', 'REALIZADO'] },
               reposicao: false,
+              // A aula do dia fechado ocupa a semana e aparece na lista — só
+              // não dá para trocá-la, porque ela já saiu da agenda.
+              OR: [{ status: { in: ['CONFIRMADO', 'REALIZADO'] } }, { status: 'CANCELADO', diaFechadoId: { not: null } }],
             },
             include: { horario: { include: { modalidade: true } } },
             orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
@@ -326,7 +391,22 @@ export class AgendamentosService {
             })),
           });
         }
-        throw new ForbiddenException(`Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`);
+        const limite = `Limite semanal atingido (${usuarioPlano.plano.aulasSemanais}x/semana)`;
+        if (cota.emDiaFechado.length > 0) {
+          const f = cota.emDiaFechado[0];
+          throw new ForbiddenException(
+            `${limite}. A aula de ${dayjs(f.dataAula).format('DD/MM')} conta nesta semana: ` +
+              `a academia não abriu nesse dia (${f.motivo}).`,
+          );
+        }
+        if (repostasNaSemana.length > 0) {
+          const dias = repostasNaSemana.map((d) => dayjs(d).format('DD/MM')).join(' e ');
+          throw new ForbiddenException(
+            `${limite}. A aula de ${dias} que você cancelou já foi reposta com o crédito, ` +
+              'então ela continua contando nesta semana.',
+          );
+        }
+        throw new ForbiddenException(limite);
       }
 
       // aulasUsadasSemana/semanaReferencia seguem existindo só para relatórios:
@@ -336,55 +416,11 @@ export class AgendamentosService {
         usuarioPlano.aulasUsadasSemana = 0;
       }
 
-      /**
-       * O crédito é para a aula que o aluno PERDEU — não para a que ele
-       * remarcou.
-       *
-       * Cancelar libera a vaga da semana E gerava um crédito. Quem cancelasse
-       * e marcasse de novo na mesma semana ficava com a aula e com o crédito,
-       * e podia repetir o ciclo à vontade: cancela, remarca, cancela,
-       * remarca — um crédito por volta. Como reposição não consome cota, cada
-       * volta virava uma aula extra depois. Um plano 1x rendia 2 aulas por
-       * semana, indefinidamente.
-       *
-       * Régua: cada aula que o aluno remarca na semana derruba um crédito que
-       * ELE gerou naquela mesma semana. Quem cancela e não remarca fica com o
-       * crédito — que é o caso legítimo, o da aula realmente perdida.
-       *
-       * Só vale para o aluno se agendando. Quando é a dona quem coloca (troca
-       * de turma, arrumação de agenda), o crédito fica de pé: ela está
-       * remanejando, não devolvendo aula ao aluno. Crédito concedido pelo
-       * estúdio também nunca cai — a compensação é dela e não se desfaz
-       * porque o aluno achou outro horário.
-       */
-      if (!ctx.admin) {
-        const canceladasNaSemana = await tx.agendamento.findMany({
-          where: {
-            usuarioId,
-            dataAula: { gte: inicioSemanaAula, lte: fimSemanaAula },
-            status: 'CANCELADO',
-          },
-          select: { id: true },
+      if (creditoParaDerrubar) {
+        await tx.creditoReposicao.update({
+          where: { id: creditoParaDerrubar },
+          data: { revogado: true },
         });
-        if (canceladasNaSemana.length > 0) {
-          const credito = await tx.creditoReposicao.findFirst({
-            where: {
-              usuarioId,
-              usado: false,
-              revogado: false,
-              concedidoAdmin: false,
-              origemAgendamentoId: { in: canceladasNaSemana.map((c) => c.id) },
-            },
-            orderBy: { criadoEm: 'asc' },
-            select: { id: true },
-          });
-          if (credito) {
-            await tx.creditoReposicao.update({
-              where: { id: credito.id },
-              data: { revogado: true },
-            });
-          }
-        }
       }
 
       const agendamento = await gravar({ reposicao: false, creditoId: null });
@@ -393,6 +429,23 @@ export class AgendamentosService {
       }
       return agendamento;
     });
+  }
+
+  /**
+   * Tira a aula do CONFIRMADO, e só uma vez.
+   *
+   * A leitura de status lá em cima não basta: dois toques em "Cancelar" (ou o
+   * app reenviando numa conexão ruim) liam os dois "CONFIRMADO" e cada um
+   * gerava o seu crédito — uma aula cancelada rendia dois, três créditos. O
+   * update condicional resolve na linha do banco: o segundo pedido espera o
+   * primeiro, encontra a aula já cancelada e não muda nada.
+   */
+  private async passarParaCancelado(tx: Prisma.TransactionClient, agendamentoId: string) {
+    const { count } = await tx.agendamento.updateMany({
+      where: { id: agendamentoId, status: 'CONFIRMADO' },
+      data: { status: 'CANCELADO' },
+    });
+    if (count === 0) throw new BadRequestException('Esta aula já foi cancelada.');
   }
 
   async cancelar(agendamentoId: string, usuarioId: string) {
@@ -440,10 +493,10 @@ export class AgendamentosService {
     // Aula normal cancelada no prazo → convertida em 1 crédito de reposição
     // (a de reposição já saiu lá em cima: ela não é cancelável pelo aluno).
     const expiraEm = dayjs(ag.dataAula).add(DIAS_VALIDADE_CREDITO, 'day').endOf('day').toDate();
-    await this.prisma.$transaction([
-      this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),
-      this.prisma.creditoReposicao.create({ data: { usuarioId, origemAgendamentoId: ag.id, expiraEm } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await this.passarParaCancelado(tx, agendamentoId);
+      await tx.creditoReposicao.create({ data: { usuarioId, origemAgendamentoId: ag.id, expiraEm } });
+    });
     return {
       mensagem: `Aula cancelada. Você recebeu 1 crédito de reposição (válido por ${DIAS_VALIDADE_CREDITO} dias).`,
     };
@@ -455,6 +508,28 @@ export class AgendamentosService {
     return this.prisma.agendamento.findMany({
       where: { usuarioId, status: 'CONFIRMADO', dataAula: { gte: dayjs().startOf('day').toDate() } },
       include: { horario: { include: { modalidade: true } } },
+      orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
+    });
+  }
+
+  /**
+   * Aulas do aluno que caíram em dia fechado, daqui para a frente.
+   *
+   * Elas saem de "minhas aulas" (não vão acontecer), mas sumir em silêncio
+   * deixaria o aluno achando que perdeu a aula por erro do sistema — e
+   * tentando marcar outra na semana, que a cota não deixa. A tela mostra cada
+   * uma com o motivo.
+   */
+  async listarFechadasDoAluno(usuarioId: string) {
+    return this.prisma.agendamento.findMany({
+      where: {
+        usuarioId,
+        status: 'CANCELADO',
+        reposicao: false,
+        diaFechadoId: { not: null },
+        dataAula: { gte: dayjs().startOf('day').toDate() },
+      },
+      include: { horario: { include: { modalidade: true } }, diaFechado: { select: { motivo: true } } },
       orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
     });
   }
@@ -536,11 +611,30 @@ export class AgendamentosService {
     if (ag.status !== 'CONFIRMADO') {
       throw new BadRequestException('Esta aula já não está marcada');
     }
-    await this.prisma.agendamento.update({
-      where: { id: agendamentoId },
-      data: { status: 'CANCELADO' },
+    /**
+     * Reposição tirada pela dona devolve o crédito que o aluno gastou nela.
+     *
+     * Sem crédito novo é o certo para aula do plano (a cota da semana volta
+     * sozinha), mas a reposição foi paga com um crédito — desmarcar sem
+     * devolvê-lo fazia o aluno perder a aula que ele tinha direito de repor,
+     * por uma arrumação de agenda que não foi escolha dele. Volta o MESMO
+     * crédito, com a validade de antes: não ganha prazo, só não perde.
+     */
+    const devolveCredito = ag.reposicao && !!ag.creditoId;
+    await this.prisma.$transaction(async (tx) => {
+      await this.passarParaCancelado(tx, agendamentoId);
+      if (devolveCredito) {
+        await tx.creditoReposicao.updateMany({
+          where: { id: ag.creditoId!, usado: true },
+          data: { usado: false, usadoEm: null, usadoAgendamentoId: null },
+        });
+      }
     });
-    return { mensagem: 'Aula desmarcada. A vaga voltou para a turma.' };
+    return {
+      mensagem: devolveCredito
+        ? 'Aula desmarcada. A vaga voltou para a turma e o crédito de reposição voltou para o aluno.'
+        : 'Aula desmarcada. A vaga voltou para a turma.',
+    };
   }
 
   async adminCancelar(agendamentoId: string) {
@@ -552,10 +646,10 @@ export class AgendamentosService {
     // 1 crédito de reposição (mesma validade do cancelamento no prazo) —
     // inclusive se a aula tinha sido marcada com crédito (devolve um novo).
     const expiraEm = dayjs(ag.dataAula).add(DIAS_VALIDADE_CREDITO, 'day').endOf('day').toDate();
-    await this.prisma.$transaction([
-      this.prisma.agendamento.update({ where: { id: agendamentoId }, data: { status: 'CANCELADO' } }),
-      this.prisma.creditoReposicao.create({ data: { usuarioId: ag.usuarioId, origemAgendamentoId: ag.id, expiraEm, concedidoAdmin: true } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await this.passarParaCancelado(tx, agendamentoId);
+      await tx.creditoReposicao.create({ data: { usuarioId: ag.usuarioId, origemAgendamentoId: ag.id, expiraEm, concedidoAdmin: true } });
+    });
     return {
       mensagem: `Agendamento cancelado. O aluno recebeu 1 crédito de reposição (válido por ${DIAS_VALIDADE_CREDITO} dias).`,
     };

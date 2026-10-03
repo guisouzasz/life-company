@@ -6,6 +6,7 @@
   },
   "scripts": {
     "test:horarios": "npm run build && node --test tests/horarios-fixos.test.cjs",
+    "test:agendamento": "npm run build && node --test tests/agendamento-regras.test.cjs",
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch",

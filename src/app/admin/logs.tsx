@@ -65,7 +65,7 @@ function LinhaDoLog({ log }: { log: LogAcao }) {
   return (
     <Toque style={s.linha} onPress={() => setAberto((a) => !a)} escala={0.985}>
         <View style={s.linhaTopo}>
-          <Text style={s.hora}>{formatDate(log.criadoEm, 'DD/MM HH:mm')}</Text>
+          <Text style={s.hora}>{formatDate(new Date(log.criadoEm), 'DD/MM HH:mm')}</Text>
           <View style={{ flex: 1 }}>
             <Text style={s.resumo}>{log.resumo}</Text>
             <Text style={s.quem}>

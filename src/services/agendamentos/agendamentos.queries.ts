@@ -2,6 +2,14 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { agendamentosService } from './agendamentos.service';
 import { queryKeys } from '../../lib/query-keys';
 
+/** Aulas do aluno que caíram em dia fechado — elas contam na semana. */
+export function useMinhasAulasEmDiaFechado() {
+  return useQuery({
+    queryKey: ['agendamentos', 'meus', 'dias-fechados'],
+    queryFn: agendamentosService.meusEmDiaFechado,
+  });
+}
+
 export function useMeusAgendamentos() {
   return useQuery({
     queryKey: queryKeys.meusAgendamentos,

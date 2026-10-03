@@ -18,11 +18,13 @@ import { useModalidades } from '../services/modalidades/modalidades.queries';
 import { useVagas } from '../services/horarios/horarios.queries';
 import { useCriarAgendamento } from '../services/agendamentos/agendamentos.mutations';
 import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
-import { useSaldoCreditos } from '../services/creditos/creditos.queries';
+import { useMeusCreditos } from '../services/creditos/creditos.queries';
+import { useDiasFechados } from '../services/dias-fechados/dias-fechados.queries';
 import type { Modalidade } from '../services/agendamentos/agendamentos.types';
 import type { HorarioVaga } from '../services/horarios/horarios.types';
 import { getProximosDiasUteis, formatDate } from '../services/date';
 import { ApiError } from '../services/http';
+import { limiteCancelamento, podeCancelar } from '../services/cancelamento';
 
 type Dia = ReturnType<typeof getProximosDiasUteis>[number];
 
@@ -37,12 +39,38 @@ export default function Agendamento() {
   >(null);
   const [erroAg, setErroAg] = useState<string | null>(null);
   const criar = useCriarAgendamento();
-  const saldoCreditos = useSaldoCreditos();
-  const creditosDisponiveis = saldoCreditos.data?.disponiveis ?? 0;
+  /**
+   * Crédito que vale NO DIA DA AULA escolhida, não só hoje — o servidor
+   * recusa reposição numa data depois do vencimento do crédito (o termo dá
+   * 30 dias a partir da aula cancelada). Contar todos os créditos válidos
+   * oferecia o botão numa terça em que nenhum deles servia mais.
+   */
+  const creditos = useMeusCreditos();
+  const validos = (creditos.data ?? []).filter((c) => c.status === 'VALIDO');
+  const inicioDoDia = (data: string) => new Date(`${data}T00:00:00`).getTime();
+  const creditosParaODia = (data: string) => validos.filter((c) => new Date(c.expiraEm).getTime() >= inicioDoDia(data)).length;
+  /**
+   * Último dia em que algum crédito ainda vale — para dizer "vale até 14/10".
+   * Vira `Date` antes de formatar: o crédito vence às 23:59 daqui, que em UTC
+   * já é o dia seguinte, e formatar o texto ISO mostraria um dia a mais.
+   */
+  const ultimoDiaDeCredito = validos.reduce<Date | null>((maior, c) => {
+    const d = new Date(c.expiraEm);
+    return !maior || d.getTime() > maior.getTime() ? d : maior;
+  }, null);
 
   useEffect(() => {
     if (!modalSel && modalidades.data?.length) setModalSel(modalidades.data[0]);
   }, [modalidades.data, modalSel]);
+
+  /**
+   * Feriado e recesso: o dia aparece, mas fechado — com o motivo. Esconder o
+   * dia da régua faria o aluno achar que a agenda quebrou; mostrar as turmas
+   * levaria a um "não foi possível agendar" a cada toque.
+   */
+  const fechados = useDiasFechados(dias[0]?.data, dias[dias.length - 1]?.data);
+  const motivoFechado = (data?: string) => (fechados.data ?? []).find((f) => f.data === data)?.motivo ?? null;
+  const fechadoHoje = motivoFechado(diaSel?.data);
 
   const vagas = useVagas(modalSel?.id, diaSel?.data);
   const horariosDoDia = (vagas.data ?? []).filter((h) => h.diaSemana === diaSel?.diaSemana);
@@ -80,7 +108,16 @@ export default function Agendamento() {
             reposicao: usarCredito,
           });
         },
-        onError: (e) => setErroAg(e instanceof ApiError ? e.message : 'Não foi possível agendar.'),
+        onError: (e) => {
+          const msg = e instanceof ApiError ? e.message : 'Não foi possível agendar.';
+          // Cota da semana cheia, mas com crédito que serve neste dia: a saída
+          // está no botão de baixo, e a mensagem aponta para ela.
+          const dica =
+            !usarCredito && /^Limite semanal/.test(msg) && creditosParaODia(diaSel.data) > 0
+              ? '\n\nVocê tem crédito de reposição que vale para este dia: use o botão "Usar crédito de reposição".'
+              : '';
+          setErroAg(msg + dica);
+        },
       },
     );
   };
@@ -108,6 +145,15 @@ export default function Agendamento() {
     const lotado = detalhe.vagas <= 0;
     const minha = jaAgendado(detalhe.id);
     const passou = jaComecou(detalhe) && !minha;
+    const creditosDoDia = creditosParaODia(diaSel.data);
+    /**
+     * Marcar depois do prazo de cancelamento vale, mas a aula não pode mais ser
+     * desmarcada e conta como feita (termo, seção 2). Quem marca às 21h a aula
+     * das 7h do dia seguinte precisa saber disso ANTES de confirmar.
+     */
+    const semCancelamento = !minha && !passou && !lotado && !podeCancelar(diaSel.data, detalhe.horaInicio);
+    const limite = limiteCancelamento(diaSel.data, detalhe.horaInicio);
+    const limiteTexto = `${formatDate(`${limite.getFullYear()}-${String(limite.getMonth() + 1).padStart(2, '0')}-${String(limite.getDate()).padStart(2, '0')}`, 'DD/MM')} às ${String(limite.getHours()).padStart(2, '0')}:00`;
     return (
       <View style={s.root}>
         <StatusBar barStyle="light-content" />
@@ -139,6 +185,15 @@ export default function Agendamento() {
           </ScrollView>
 
           <View style={s.detBtns}>
+            {semCancelamento ? (
+              <View style={s.aviso}>
+                <Icon name="alert-circle-outline" size={16} color={LC.warningFg} />
+                <Text style={s.avisoTexto}>
+                  O prazo para cancelar esta aula terminou ({limiteTexto}). Se marcar, ela não poderá ser
+                  cancelada e conta como aula feita.
+                </Text>
+              </View>
+            ) : null}
             <Button
               title={
                 minha ? 'Você já está nesta aula'
@@ -151,15 +206,19 @@ export default function Agendamento() {
               loading={criar.isPending && criar.variables?.usarCredito !== true}
               onPress={() => agendar(detalhe)}
             />
-            {!lotado && !minha && !passou && creditosDisponiveis > 0 ? (
+            {!lotado && !minha && !passou && creditosDoDia > 0 ? (
               <Button
-                title={`Usar crédito de reposição (${creditosDisponiveis})`}
+                title={`Usar crédito de reposição (${creditosDoDia})`}
                 variant="outline"
                 size="lg"
                 loading={criar.isPending && criar.variables?.usarCredito === true}
                 onPress={() => agendar(detalhe, true)}
                 leftIcon={<Icon name="ticket-outline" size={18} color={LC.primary} />}
               />
+            ) : !lotado && !minha && !passou && validos.length > 0 && ultimoDiaDeCredito ? (
+              <Text style={s.creditoNota}>
+                Seu crédito de reposição vale para aulas até {formatDate(ultimoDiaDeCredito, 'DD/MM')}.
+              </Text>
             ) : null}
           </View>
         </View>
@@ -189,12 +248,18 @@ export default function Agendamento() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.daysScroll} contentContainerStyle={s.daysRow}>
           {dias.map((d, i) => {
             const sel = diaSel?.data === d.data;
+            const fechado = !!motivoFechado(d.data);
             return (
               <EntraSubindo key={d.data} indice={i} distancia={8}>
-                <Toque escala={0.93} style={[s.dayBtn, sel && s.dayBtnSel]} onPress={() => setDiaSel(d)}>
+                <Toque
+                  escala={0.93}
+                  style={[s.dayBtn, fechado && s.dayBtnFechado, sel && s.dayBtnSel]}
+                  onPress={() => setDiaSel(d)}
+                  accessibilityLabel={fechado ? `${d.diaNome} ${d.diaNum}, academia fechada` : undefined}
+                >
                   <Text style={[s.dayNome, sel && s.daySelText]}>{d.diaNome}</Text>
-                  <Text style={[s.dayNum, sel && s.daySelText]}>{d.diaNum}</Text>
-                  {sel && <View style={s.dayPonto} />}
+                  <Text style={[s.dayNum, sel && s.daySelText, fechado && !sel && s.dayNumFechado]}>{d.diaNum}</Text>
+                  {fechado ? <Text style={[s.dayFechado, sel && s.dayFechadoSel]}>fechado</Text> : sel && <View style={s.dayPonto} />}
                 </Toque>
               </EntraSubindo>
             );
@@ -219,7 +284,13 @@ export default function Agendamento() {
 
       {/* Horários */}
       <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
-        {vagas.isLoading || modalidades.isLoading ? (
+        {fechadoHoje ? (
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Academia fechada neste dia"
+            description={`${fechadoHoje}. Não há aulas — escolha outro dia.`}
+          />
+        ) : vagas.isLoading || modalidades.isLoading ? (
           <EsqueletoLista quantos={4} />
         ) : horariosDoDia.length === 0 ? (
           <EmptyState icon="time-outline" title="Sem horários neste dia" description="Tente outro dia ou modalidade." />
@@ -328,6 +399,10 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)',
   },
   dayBtnSel: { backgroundColor: '#fff', borderColor: '#fff' },
+  dayBtnFechado: { backgroundColor: 'rgba(255,255,255,0.04)', borderStyle: 'dashed' },
+  dayNumFechado: { color: 'rgba(255,255,255,0.45)', textDecorationLine: 'line-through' },
+  dayFechado: { fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.6)', marginTop: 3, textTransform: 'uppercase' },
+  dayFechadoSel: { color: LC.textMuted },
   dayNome: {
     fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase',
     color: 'rgba(255,255,255,0.68)', marginBottom: 5,
@@ -393,6 +468,12 @@ const s = StyleSheet.create({
   detKey: { fontSize: 14, color: LC.textSecondary },
   detVal: { fontSize: 14, fontWeight: '700', color: LC.textPrimary, flexShrink: 1, textAlign: 'right' },
   detBtns: { marginVertical: 16, gap: 10 },
+  aviso: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: LC.warningBg, borderRadius: 12, padding: 12,
+  },
+  avisoTexto: { flex: 1, fontSize: 13, lineHeight: 19, color: LC.warningFg, fontWeight: '600' },
+  creditoNota: { fontSize: 12.5, color: LC.textSecondary, textAlign: 'center' },
   modalMsg: { fontSize: 15, color: LC.textPrimary, marginBottom: 18, lineHeight: 22 },
   modalActions: { flexDirection: 'row', gap: 10 },
 });

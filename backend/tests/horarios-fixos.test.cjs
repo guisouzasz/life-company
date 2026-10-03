@@ -36,7 +36,8 @@ function ambiente() {
     plano: { findUnique: async () => plano },
     horario: { findUnique: async () => turma, update: write('turma'), delete: write('excluir-turma') },
     horarioFixo: { findUnique: async () => fixo, count: async () => 1, create: write('fixo'), update: write('fixo'), updateMany: write('fixos') },
-    agendamento: { findFirst: async () => null, count: async () => 0, create: write('aula'), update: write('aula'), updateMany: write('cancelar-aulas') },
+    agendamento: { findFirst: async () => null, findMany: async () => [], count: async () => 0, create: write('aula'), update: write('aula'), updateMany: write('cancelar-aulas') },
+    diaFechado: { findUnique: async () => null, findMany: async () => [] },
     $queryRaw: async (parts) => { locks.push(parts.join('?')); return []; },
   };
   db.$transaction = async (fn) => fn(db);
@@ -302,13 +303,16 @@ test('quem ja terminou nao ocupa vaga na contagem', async () => {
 test('marcar data final cancela as aulas futuras alem dela', async () => {
   const a = ambiente();
   const auto = { gerarParaHorarioFixoId: async () => ({ criados: 2, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
-  await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma', dataFim: '2026-09-30' });
+  // Data relativa: com uma data fixa, o teste vencia sozinho quando o
+  // calendário passava dela ("data final anterior à inicial").
+  const saida = dayjs().add(30, 'day').format('YYYY-MM-DD');
+  await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma', dataFim: saida });
 
   const corte = a.writes.find((w) => w.kind === 'cancelar-aulas');
   assert.ok(corte, 'as aulas depois da saída precisam sair da agenda');
   assert.equal(corte.args.data.status, 'CANCELADO');
   assert.equal(corte.args.where.reposicao, false, 'reposição é crédito do aluno, não se mexe');
-  assert.equal(dayjs(corte.args.where.dataAula.gt).format('YYYY-MM-DD'), '2026-09-30');
+  assert.equal(dayjs(corte.args.where.dataAula.gt).format('YYYY-MM-DD'), saida);
 });
 
 test('fixo sem data final nao mexe em aula nenhuma', async () => {
@@ -325,9 +329,12 @@ test('remover fixo desliga e cancela aulas na mesma transacao, preservando repos
   const write = a.db.agendamento.updateMany;
   a.db.agendamento.updateMany = async args => { assert.ok(dentro); return write(args); };
   await new HorariosFixosService(a.db, {}).remover('fixo');
-  assert.deepEqual(a.writes.map(w => w.kind), ['fixo', 'cancelar-aulas']);
-  assert.equal(a.writes[1].args.where.reposicao, false);
-  assert.ok(a.writes[1].args.where.dataAula.gte);
+  assert.equal(a.writes[0].kind, 'fixo');
+  // Além de cancelar, solta a aula de dia fechado que era deste fixo.
+  const corte = a.writes.find(w => w.args.data?.status === 'CANCELADO');
+  assert.ok(corte, 'cancela as aulas futuras');
+  assert.equal(corte.args.where.reposicao, false);
+  assert.ok(corte.args.where.dataAula.gte);
 });
 
 function proximaSegunda() {

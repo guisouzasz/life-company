@@ -11,7 +11,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
-import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
+import { useMeusAgendamentos, useMinhasAulasEmDiaFechado } from '../services/agendamentos/agendamentos.queries';
 import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mutations';
 import type { Agendamento } from '../services/agendamentos/agendamentos.types';
 import { podeCancelar, prazoLabel } from '../services/cancelamento';
@@ -20,6 +20,15 @@ import { formatDate } from '../services/date';
 
 export default function MinhasAulas() {
   const meus = useMeusAgendamentos();
+  /**
+   * A aula que caiu em feriado/recesso sai da agenda, mas não some da tela:
+   * ela conta na semana (regra do estúdio), e sem aparecer aqui o aluno
+   * tentaria marcar outra e não entenderia a recusa.
+   */
+  const emDiaFechado = useMinhasAulasEmDiaFechado();
+  const todas = [...(meus.data ?? []), ...(emDiaFechado.data ?? [])].sort(
+    (a, b) => a.dataAula.localeCompare(b.dataAula) || a.horario.horaInicio.localeCompare(b.horario.horaInicio),
+  );
   const cancelar = useCancelarAgendamento();
   const [alvo, setAlvo] = useState<Agendamento | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -53,8 +62,28 @@ export default function MinhasAulas() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={false} onRefresh={() => meus.refetch()} colors={[LC.primary]} tintColor={LC.primary} />}
         >
-          {meus.data && meus.data.length > 0 ? (
-            meus.data.map((ag) => {
+          {todas.length > 0 ? (
+            todas.map((ag) => {
+              if (ag.diaFechado) {
+                return (
+                  <Card key={ag.id} style={[s.card, s.cardFechado]} padding={16}>
+                    <View style={[s.dateBubble, s.dateBubbleFechado]}>
+                      <Text style={[s.dateNum, s.dateFechadoTexto]}>{formatDate(ag.dataAula, 'DD')}</Text>
+                      <Text style={[s.dateMes, s.dateFechadoTexto]}>{formatDate(ag.dataAula, 'MMM')}</Text>
+                    </View>
+                    <View style={s.info}>
+                      <View style={s.tituloRow}>
+                        <Text style={[s.modalidade, s.riscado]}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
+                        <Badge label="Academia fechada" variant="warning" />
+                      </View>
+                      <Text style={s.infoText}>
+                        {DIAS_PT[ag.horario.diaSemana]} • {ag.horario.horaInicio} • {ag.diaFechado.motivo}
+                      </Text>
+                      <Text style={s.fechadoNota}>Esta aula conta na semana e não gera reposição.</Text>
+                    </View>
+                  </Card>
+                );
+              }
               // Reposição não se cancela (Termo de Normas, seção 3) — mostrar
               // o botão só levaria o aluno a um erro vindo da API.
               const liberado = !ag.reposicao && podeCancelar(ag.dataAula, ag.horario.horaInicio);
@@ -151,6 +180,11 @@ const s = StyleSheet.create({
   infoText: { fontSize: 12, color: LC.textSecondary },
   infoStudio: { fontSize: 12, color: LC.textMuted },
   cancelBtn: { paddingHorizontal: 14 },
+  cardFechado: { opacity: 0.85 },
+  dateBubbleFechado: { backgroundColor: LC.warningBg },
+  dateFechadoTexto: { color: LC.warningFg },
+  riscado: { textDecorationLine: 'line-through', color: LC.textSecondary },
+  fechadoNota: { fontSize: 11.5, color: LC.textMuted, marginTop: 2 },
   prazoTag: { backgroundColor: LC.bg, borderRadius: LC.radius.full, paddingHorizontal: 10, paddingVertical: 5 },
   prazoText: { fontSize: 11, fontWeight: '600', color: LC.textMuted },
 });

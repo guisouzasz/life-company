@@ -945,11 +945,11 @@ export default function TreinosAluno() {
                       */}
                       <Text style={s.treinoMeta} numberOfLines={guardado ? 1 : 2}>
                         {guardado
-                          ? `${formatDate(t.updatedAt, 'DD/MM/YYYY')}${t.conteudo ? '' : ` • ${t.exercicios.length} ex.`}`
+                          ? `${formatDate(new Date(t.updatedAt), 'DD/MM/YYYY')}${t.conteudo ? '' : ` • ${t.exercicios.length} ex.`}`
                           : `${t.modalidade ? `${nomeModalidade(t.modalidade.nome)} • ` : ''}${
                               t.conteudo
-                                ? `atualizado ${formatDate(t.updatedAt, 'DD/MM')}`
-                                : `${t.exercicios.length} ${t.exercicios.length === 1 ? 'exercício' : 'exercícios'} • atualizado ${formatDate(t.updatedAt, 'DD/MM')}`
+                                ? `atualizado ${formatDate(new Date(t.updatedAt), 'DD/MM')}`
+                                : `${t.exercicios.length} ${t.exercicios.length === 1 ? 'exercício' : 'exercícios'} • atualizado ${formatDate(new Date(t.updatedAt), 'DD/MM')}`
                             }`}
                       </Text>
                     </View>

@@ -187,6 +187,35 @@ const AJUSTES: { descricao: string; sql: string }[] = [
             ADD COLUMN IF NOT EXISTS "texto_antes" TEXT,
             ADD COLUMN IF NOT EXISTS "ordem" INTEGER`,
   },
+  {
+    // Feriado e recesso: o dia que a dona fecha na agenda. Sem esta tabela a
+    // marcação de aula quebraria — é ela que diz se o dia está aberto.
+    descricao: 'dias_fechados: dias em que a academia não abre',
+    sql: `CREATE TABLE IF NOT EXISTS "dias_fechados" (
+            "id" TEXT NOT NULL,
+            "data" TIMESTAMP(3) NOT NULL,
+            "motivo" TEXT NOT NULL,
+            "criado_em" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "dias_fechados_pkey" PRIMARY KEY ("id")
+          )`,
+  },
+  {
+    descricao: 'dias_fechados: um registro por dia',
+    sql: `CREATE UNIQUE INDEX IF NOT EXISTS "dias_fechados_data_key" ON "dias_fechados"("data")`,
+  },
+  {
+    descricao: 'agendamentos: dia fechado que tirou a aula da agenda',
+    sql: `ALTER TABLE "agendamentos" ADD COLUMN IF NOT EXISTS "dia_fechado_id" TEXT`,
+  },
+  {
+    descricao: 'agendamentos: chave estrangeira para dias_fechados',
+    sql: `DO $$ BEGIN
+            ALTER TABLE "agendamentos"
+              ADD CONSTRAINT "agendamentos_dia_fechado_id_fkey"
+              FOREIGN KEY ("dia_fechado_id") REFERENCES "dias_fechados"("id")
+              ON DELETE SET NULL ON UPDATE CASCADE;
+          EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+  },
 ];
 
 /**

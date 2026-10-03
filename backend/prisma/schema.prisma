@@ -425,12 +425,31 @@ model Agendamento {
   creditoId String?           @map("credito_id") // crédito consumido, se reposição
   createdAt DateTime          @default(now()) @map("created_at")
 
-  usuario  Usuario   @relation(fields: [usuarioId], references: [id])
-  horario  Horario   @relation(fields: [horarioId], references: [id])
-  presenca Presenca?
+  /// Dia fechado (feriado/recesso) que tirou esta aula da agenda. A aula do
+  /// plano continua contando na semana do aluno — o termo não dá reposição.
+  diaFechadoId String?         @map("dia_fechado_id")
+
+  usuario    Usuario     @relation(fields: [usuarioId], references: [id])
+  horario    Horario     @relation(fields: [horarioId], references: [id])
+  presenca   Presenca?
+  diaFechado DiaFechado? @relation(fields: [diaFechadoId], references: [id], onDelete: SetNull)
 
   @@unique([usuarioId, horarioId, dataAula])
   @@map("agendamentos")
+}
+
+/// Dia em que a academia não abre: feriado, recesso, manutenção. Ninguém
+/// marca aula nele, e as aulas que já estavam marcadas saem da agenda.
+model DiaFechado {
+  id       String   @id @default(uuid())
+  /// Meia-noite (no fuso do estúdio) do dia fechado — igual a `dataAula`.
+  data     DateTime @unique
+  motivo   String
+  criadoEm DateTime @default(now()) @map("criado_em")
+
+  agendamentos Agendamento[]
+
+  @@map("dias_fechados")
 }
 
 model CreditoReposicao {

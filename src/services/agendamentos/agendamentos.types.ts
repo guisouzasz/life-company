@@ -34,6 +34,8 @@ export interface Agendamento {
   createdAt: string;
   horario: Horario;
   presenca?: Presenca | null;
+  /** Aula que caiu em dia fechado (feriado/recesso). */
+  diaFechado?: { motivo: string } | null;
 }
 
 export interface CriarAgendamentoPayload {

@@ -57,6 +57,10 @@ const REGRAS: Regra[] = [
   { metodo: 'DELETE', padrao: /^\/treinos\/[^/]+$/, resumo: 'Removeu treino de aluno' },
   { metodo: 'POST', padrao: /^\/cargas/, resumo: 'Registrou carga de exercício' },
 
+  // ── Dias fechados ────────────────────────────────────────────────
+  { metodo: 'POST', padrao: /^\/dias-fechados$/, resumo: 'Fechou um dia (feriado/recesso)' },
+  { metodo: 'DELETE', padrao: /^\/dias-fechados\/[^/]+$/, resumo: 'Reabriu um dia fechado' },
+
   // ── Presença ─────────────────────────────────────────────────────
   { metodo: 'POST', padrao: /^\/presencas/, resumo: 'Marcou presença/falta' },
 
