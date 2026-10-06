@@ -203,7 +203,41 @@ export class AutoAgendamentoService {
     if (!fixo || !fixo.ativo || !fixo.horario.ativo) {
       return resultadoVazio();
     }
-    return this.gerarParaFixo(fixo);
+    /**
+     * Refazer o fixo devolve as aulas que o fixo antigo tinha — mas não as que
+     * o ALUNO cancelou e que viraram crédito.
+     *
+     * Aqui a geração remarca de propósito o que está cancelado (é a dona
+     * montando a combinação de novo). Só que, no meio dessas datas, pode haver
+     * a terça que a aluna desmarcou no prazo: aquela aula voltava, e o crédito
+     * dela continuava valendo — uma aula a mais. O sinal de "cancelada de
+     * verdade" é ter gerado crédito (usado, válido ou já excluído).
+     */
+    const inicio = dayjs().startOf('day');
+    const fim = inicio.add(JANELA_DIAS, 'day');
+    const canceladas = await this.prisma.agendamento.findMany({
+      where: {
+        usuarioId: fixo.usuarioId,
+        horarioId: fixo.horarioId,
+        status: 'CANCELADO',
+        dataAula: { gte: inicio.toDate(), lte: fim.toDate() },
+      },
+      select: { id: true, dataAula: true },
+    });
+    const viraramCredito = new Set(
+      (
+        await this.prisma.creditoReposicao.findMany({
+          where: { origemAgendamentoId: { in: canceladas.map((a) => a.id) } },
+          select: { origemAgendamentoId: true },
+        })
+      ).map((c) => c.origemAgendamentoId),
+    );
+    const jaResolvidos = new Set(
+      canceladas
+        .filter((a) => viraramCredito.has(a.id))
+        .map((a) => chaveAgendamento(fixo.usuarioId, fixo.horarioId, a.dataAula)),
+    );
+    return this.gerarParaFixo(fixo, inicio, fim, jaResolvidos);
   }
 
   private async gerarParaFixo(
@@ -213,7 +247,7 @@ export class AutoAgendamentoService {
       horarioId: string;
       dataInicio: Date;
       dataFim: Date | null;
-      horario: { diaSemana: string };
+      horario: { diaSemana: string; horaFim: string };
     },
     inicioPeriodo = dayjs().startOf('day'),
     fimPeriodo = inicioPeriodo.add(JANELA_DIAS, 'day'),
@@ -251,6 +285,19 @@ export class AutoAgendamentoService {
       if (fixo.dataFim && dia.isAfter(dayjs(fixo.dataFim), 'day')) continue;
       if (dia.isoWeekday() > 5) continue;
       if (DIA_MAP[dia.isoWeekday()] !== fixo.horario.diaSemana) continue;
+      /**
+       * A aula de HOJE que já terminou não é gerada.
+       *
+       * A dona fixando às 10h a aluna na sexta das 8h ganhava, junto, a sexta
+       * daquele mesmo dia — uma aula que acabou antes de o fixo existir. Ela
+       * entrava no histórico como feita e gastava a semana do plano. A que
+       * ainda está acontecendo continua entrando: é o aluno novo que chegou
+       * para a aula das 17h e a dona fixa às 17h10.
+       */
+      if (dia.isSame(dayjs(), 'day')) {
+        const [h, m] = fixo.horario.horaFim.split(':').map(Number);
+        if (!dia.hour(h).minute(m).isAfter(dayjs())) continue;
+      }
 
       const dataAula = dia.format('YYYY-MM-DD');
       const chave = chaveAgendamento(fixo.usuarioId, fixo.horarioId, dataAula);

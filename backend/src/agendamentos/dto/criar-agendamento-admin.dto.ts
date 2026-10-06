@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { CriarAgendamentoDto } from './criar-agendamento.dto';
 
@@ -24,4 +24,17 @@ export class CriarAgendamentoAdminDto extends CriarAgendamentoDto {
   @IsOptional()
   @IsString()
   substituirAgendamentoId?: string;
+
+  /**
+   * Reposição dada pelo estúdio na hora: com `usarCredito`, cria o crédito
+   * quando o aluno não tem um que valha no dia, e já o usa nesta aula.
+   *
+   * Antes a dona precisava sair da agenda, ir em Alunos → Créditos, dar o
+   * crédito e voltar — e, sem saber disso, a tela só oferecia trocar uma
+   * aula do plano, que não era o que ela queria.
+   */
+  @ApiProperty({ required: false, description: 'Com usarCredito: dá o crédito se faltar e já usa nesta aula' })
+  @IsOptional()
+  @IsBoolean()
+  concederCredito?: boolean;
 }

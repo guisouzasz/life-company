@@ -47,8 +47,8 @@ export const agendamentosService = {
    * semana do aluno — reenviar com `substituirAgendamentoId` troca uma pela
    * outra numa transação só.
    */
-  async criarComoAdmin(payload: CriarAgendamentoAdminPayload): Promise<Agendamento> {
-    const { data } = await http.post<Agendamento>('/agendamentos/admin', payload);
+  async criarComoAdmin(payload: CriarAgendamentoAdminPayload): Promise<Agendamento & { creditoDevolvido?: boolean }> {
+    const { data } = await http.post<Agendamento & { creditoDevolvido?: boolean }>('/agendamentos/admin', payload);
     return data;
   },
 

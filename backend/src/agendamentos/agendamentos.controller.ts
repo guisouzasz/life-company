@@ -28,7 +28,11 @@ export class AgendamentosController {
   @Post('admin')
   @UseGuards(AdminGuard)
   @ApiOperation({ summary: 'Colocar um aluno numa aula (admin)' })
-  criarComoAdmin(@Body() dto: CriarAgendamentoAdminDto) { return this.service.criarComoAdmin(dto); }
+  criarComoAdmin(@Body() dto: CriarAgendamentoAdminDto) {
+    // Sem dizer se é reposição ou aula do plano, e com crédito na mão, a
+    // tela pergunta antes (ver ESCOLHER_TIPO no serviço).
+    return this.service.criarComoAdmin(dto, undefined, { perguntarReposicao: dto.usarCredito === undefined });
+  }
 
   @Get('meus') @ApiOperation({ summary: 'Meus agendamentos futuros' })
   meus(@Request() req) { return this.service.listarMeus(req.user.id); }

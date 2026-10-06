@@ -54,7 +54,7 @@ export class HorariosFixosService {
     if (!aluno) throw new NotFoundException('Aluno não encontrado');
     if (!aluno.ativo) {
       throw new BadRequestException(
-        `${nomeCurto(aluno.nome)} está marcado como "não treina mais". ` +
+        `O cadastro de ${nomeCurto(aluno.nome)} está como "não treina mais". ` +
           'Marque como treinando antes de colocar num horário fixo.',
       );
     }
@@ -100,6 +100,35 @@ export class HorariosFixosService {
       const planoAtual = await tx.usuarioPlano.findUnique({ where: { id: usuarioPlano.id } });
       if (!planoAtual || planoAtual.vigenciaFim) {
         throw new BadRequestException('O plano mudou durante a operação. Confira o plano e tente novamente.');
+      }
+
+      /**
+       * Dois fixos no mesmo horário não existem: ninguém está em duas turmas
+       * ao mesmo tempo. Sem esta conferência a dona fixava a aluna no Pilates
+       * das 8h de terça tendo já Musculação às 8h de terça, as duas turmas
+       * reservavam a vaga toda semana, e a aula de uma delas falhava na
+       * geração sem que ela soubesse por quê.
+       */
+      const outrosNoDia = await tx.horarioFixo.findMany({
+        where: {
+          usuarioId,
+          ativo: true,
+          horarioId: { not: dto.horarioId },
+          horario: { diaSemana: turmaAtual.diaSemana },
+          OR: [{ dataFim: null }, { dataFim: { gte: dataInicio } }],
+          ...(dataFim ? { dataInicio: { lte: dataFim } } : {}),
+        },
+        include: { horario: { include: { modalidade: true } } },
+      });
+      const choque = outrosNoDia.find(
+        (f) => f.horario.horaInicio < turmaAtual.horaFim && turmaAtual.horaInicio < f.horario.horaFim,
+      );
+      if (choque) {
+        const mod = (choque.horario.modalidade?.nome ?? '').toLowerCase() === 'academia' ? 'Musculação' : choque.horario.modalidade?.nome;
+        throw new BadRequestException(
+          `${nomeCurto(aluno.nome)} já tem horário fixo na ${apelidoDaTurma(choque.horario.diaSemana, choque.horario.horaInicio)} ` +
+            `(${mod}). Uma pessoa não fica em duas turmas ao mesmo tempo: tire aquele horário antes, ou escolha outro.`,
+        );
       }
 
       const existente = await tx.horarioFixo.findUnique({

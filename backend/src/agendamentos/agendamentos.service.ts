@@ -26,8 +26,18 @@ const DIA_MAP: Record<number, string> = { 1: 'SEGUNDA', 2: 'TERCA', 3: 'QUARTA',
  * data futura: dava para marcar meses à frente e sentar em cima da vaga de
  * turmas que nem foram montadas ainda. O estúdio não tem esse limite — a dona
  * remaneja para onde precisar.
+ *
+ * Fica DENTRO da janela em que as aulas dos horários fixos já estão criadas
+ * (56 dias, auto-agendamento). Eram 60: entre o 57º e o 60º dia a turma
+ * parecia vazia, porque os fixos ainda não tinham sido gerados, e uma
+ * marcação avulsa ali tirava a vaga de quem tem horário fixo — que perdia a
+ * aula daquela semana sem ninguém avisar.
  */
-const DIAS_MAXIMOS_ANTECEDENCIA = 60;
+const DIAS_MAXIMOS_ANTECEDENCIA = 45;
+
+/** "Academia" é como a modalidade se chama no banco; para as pessoas é Musculação. */
+const nomeDaModalidade = (nome?: string | null) =>
+  (nome ?? '').trim().toLowerCase() === 'academia' ? 'Musculação' : (nome ?? '').trim() || 'outra modalidade';
 
 @Injectable()
 export class AgendamentosService {
@@ -46,7 +56,11 @@ export class AgendamentosService {
    * saída: o fixo aparecia salvo e o aluno não estava na turma, e não havia
    * nenhuma tela onde ela pudesse simplesmente colocá-lo lá.
    */
-  async criarComoAdmin(dto: CriarAgendamentoAdminDto, horarioFixoId?: string) {
+  async criarComoAdmin(
+    dto: CriarAgendamentoAdminDto,
+    horarioFixoId?: string,
+    opcoes: { perguntarReposicao?: boolean } = {},
+  ) {
     const aluno = await this.prisma.usuario.findUnique({
       where: { id: dto.usuarioId },
       select: { id: true, nome: true, ativo: true, senhaHash: true, tipoUsuario: true },
@@ -61,7 +75,7 @@ export class AgendamentosService {
      */
     if (!aluno.ativo) {
       throw new BadRequestException(
-        `${nomeCurto(aluno.nome)} está marcado como "não treina mais". ` +
+        `O cadastro de ${nomeCurto(aluno.nome)} está como "não treina mais". ` +
           'Marque como treinando antes de marcar aula.',
       );
     }
@@ -71,6 +85,8 @@ export class AgendamentosService {
       nome: nomeCurto(aluno.nome),
       substituirAgendamentoId: dto.substituirAgendamentoId,
       horarioFixoId,
+      perguntarReposicao: opcoes.perguntarReposicao && !dto.substituirAgendamentoId,
+      concederCredito: dto.concederCredito === true,
     });
   }
 
@@ -82,7 +98,16 @@ export class AgendamentosService {
   private async agendar(
     usuarioId: string,
     dto: CriarAgendamentoDto,
-    ctx: { admin: boolean; nome?: string; substituirAgendamentoId?: string; horarioFixoId?: string },
+    ctx: {
+      admin: boolean;
+      nome?: string;
+      substituirAgendamentoId?: string;
+      horarioFixoId?: string;
+      /** Dona colocando sem dizer se é reposição: com crédito na mão, perguntar. */
+      perguntarReposicao?: boolean;
+      /** Reposição dada na hora pelo estúdio: cria o crédito se faltar. */
+      concederCredito?: boolean;
+    },
   ) {
     const quem = ctx.admin ? (ctx.nome ?? 'O aluno') : 'Você';
     const dataAula = dayjs(dto.dataAula).startOf('day').toDate();
@@ -219,6 +244,31 @@ export class AgendamentosService {
       }
 
       /**
+       * Ninguém está em duas aulas ao mesmo tempo.
+       *
+       * Nada impedia: a dona colocava a aluna no Pilates das 8h de um dia em
+       * que ela já tinha Musculação às 8h, e as duas turmas contavam com ela
+       * — uma vaga presa à toa, e a professora esperando quem não ia chegar.
+       * Vem depois do remanejamento de propósito: trocar uma aula por outra
+       * no mesmo horário é justamente o que a troca resolve.
+       */
+      const noMesmoDia = await tx.agendamento.findMany({
+        where: { usuarioId, dataAula, status: 'CONFIRMADO', NOT: { horarioId: dto.horarioId } },
+        include: { horario: { include: { modalidade: true } } },
+      });
+      const choque = noMesmoDia.find(
+        (a) => a.horario.horaInicio < turmaAtual.horaFim && turmaAtual.horaInicio < a.horario.horaFim,
+      );
+      if (choque) {
+        const qual = `${nomeDaModalidade(choque.horario.modalidade?.nome)} das ${choque.horario.horaInicio}`;
+        throw new BadRequestException(
+          ctx.admin
+            ? `${quem} já está na aula de ${qual} neste dia, no mesmo horário. Tire de lá antes, ou use "Trocar".`
+            : `Você já tem aula neste horário (${qual}).`,
+        );
+      }
+
+      /**
        * Quantos cabem: o menor entre a capacidade gravada no horário e o teto
        * da modalidade. Sem o teto aqui, as turmas criadas antes desta regra —
        * Pilates salvo com 4, por exemplo — continuariam aceitando gente a
@@ -266,10 +316,26 @@ export class AgendamentosService {
          * dias virava quase 90. `expiraEm` é o fim do último dia, e a aula é
          * gravada à meia-noite: aula no próprio dia do vencimento ainda vale.
          */
-        const credito = await tx.creditoReposicao.findFirst({
+        let credito = await tx.creditoReposicao.findFirst({
           where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date(), gte: dataAula } },
           orderBy: { expiraEm: 'asc' },
         });
+        /**
+         * A dona dando a reposição na hora: sem crédito que valha no dia, ela
+         * cria um e já usa aqui, numa coisa só. Se a aula não entrar (turma
+         * cheia, dia fechado), a transação desfaz o crédito junto — não sobra
+         * crédito solto que ela não pediu.
+         */
+        if (!credito && ctx.admin && ctx.concederCredito) {
+          const base = dayjs(dataAula).isAfter(dayjs()) ? dayjs(dataAula) : dayjs();
+          credito = await tx.creditoReposicao.create({
+            data: {
+              usuarioId,
+              concedidoAdmin: true,
+              expiraEm: base.add(DIAS_VALIDADE_CREDITO, 'day').endOf('day').toDate(),
+            },
+          });
+        }
         if (!credito) {
           const vencemAntes = await tx.creditoReposicao.findFirst({
             where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
@@ -294,28 +360,34 @@ export class AgendamentosService {
          * marcar que ocupa a vaga de outra pessoa. Reposição cancelada não
          * conta — o crédito já se perdeu ali, cobrar de novo na cota seria
          * punir duas vezes pelo mesmo cancelamento.
+         *
+         * O teto é regra do termo para o ALUNO se agendando. A dona é quem
+         * aplica o termo: quando ela mesma marca a reposição, a exceção é
+         * dela — travar ali só a mandaria procurar um jeito de contornar.
          */
-        const desde = dayjs().subtract(DIAS_PERIODO_REPOSICOES, 'day').toDate();
-        const marcadasNaJanela = await tx.agendamento.findMany({
-          where: {
-            usuarioId,
-            reposicao: true,
-            status: { not: 'CANCELADO' },
-            createdAt: { gte: desde },
-          },
-          orderBy: { createdAt: 'asc' },
-          select: { createdAt: true },
-        });
-        if (marcadasNaJanela.length >= MAX_REPOSICOES_POR_PERIODO) {
-          // Quando a mais antiga sair da janela, abre uma vaga de novo — dizer
-          // a data evita o aluno ficar tentando todo dia sem saber o porquê.
-          const liberaEm = dayjs(marcadasNaJanela[0].createdAt)
-            .add(DIAS_PERIODO_REPOSICOES, 'day')
-            .format('DD/MM');
-          throw new ForbiddenException(
-            `${ctx.admin ? `${quem} já agendou` : 'Você já agendou'} ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
-              `que é o limite. A próxima vaga abre em ${liberaEm}.`,
-          );
+        if (!ctx.admin) {
+          const desde = dayjs().subtract(DIAS_PERIODO_REPOSICOES, 'day').toDate();
+          const marcadasNaJanela = await tx.agendamento.findMany({
+            where: {
+              usuarioId,
+              reposicao: true,
+              status: { not: 'CANCELADO' },
+              createdAt: { gte: desde },
+            },
+            orderBy: { createdAt: 'asc' },
+            select: { createdAt: true },
+          });
+          if (marcadasNaJanela.length >= MAX_REPOSICOES_POR_PERIODO) {
+            // Quando a mais antiga sair da janela, abre uma vaga de novo — dizer
+            // a data evita o aluno ficar tentando todo dia sem saber o porquê.
+            const liberaEm = dayjs(marcadasNaJanela[0].createdAt)
+              .add(DIAS_PERIODO_REPOSICOES, 'day')
+              .format('DD/MM');
+            throw new ForbiddenException(
+              `Você já agendou ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
+                `que é o limite. A próxima vaga abre em ${liberaEm}.`,
+            );
+          }
         }
 
         const agendamento = await gravar({ reposicao: true, creditoId: credito.id });
@@ -394,8 +466,7 @@ export class AgendamentosService {
             codigo: 'LIMITE_SEMANAL',
             creditosParaODia,
             message:
-              `${quem} já tem ${usadasNaSemana} aula${usadasNaSemana > 1 ? 's' : ''} nesta semana e o plano é ${usuarioPlano.plano.aulasSemanais}x/semana. ` +
-              'Escolha qual sai para esta entrar.',
+              `${quem} já tem ${usadasNaSemana} aula${usadasNaSemana > 1 ? 's' : ''} nesta semana e o plano é ${usuarioPlano.plano.aulasSemanais}x/semana.`,
             aulasDaSemana: daSemana.map((a) => ({
               id: a.id,
               dataAula: a.dataAula,
@@ -423,6 +494,34 @@ export class AgendamentosService {
         throw new ForbiddenException(limite);
       }
 
+      /**
+       * A semana tem vaga e o aluno tem crédito: a dona diz o que esta aula é.
+       *
+       * Sem perguntar, a aula entrava pelo plano e o crédito ficava intacto —
+       * a dona achava que tinha marcado a reposição da aluna, e o crédito
+       * continuava lá para ser usado de novo. Isso aparece no caso mais comum
+       * de todos: a aluna cancelou a terça (ganhou o crédito, e a semana abriu
+       * uma vaga) e a dona a encaixa na segunda. Quem decide é ela; a tela
+       * reenvia com `usarCredito` true (reposição) ou false (plano).
+       */
+      if (ctx.perguntarReposicao) {
+        const creditosParaODia = await tx.creditoReposicao.count({
+          where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date(), gte: dataAula } },
+        });
+        if (creditosParaODia > 0) {
+          throw new ConflictException({
+            statusCode: 409,
+            codigo: 'ESCOLHER_TIPO',
+            creditosParaODia,
+            usadasNaSemana,
+            aulasSemanais: usuarioPlano.plano.aulasSemanais,
+            message:
+              `${quem} tem ${creditosParaODia} crédito${creditosParaODia > 1 ? 's' : ''} de reposição. ` +
+              'Esta aula é reposição ou é do plano da semana?',
+          });
+        }
+      }
+
       // aulasUsadasSemana/semanaReferencia seguem existindo só para relatórios:
       // incrementa apenas quando a aula pertence à semana corrente.
       if (dayjs(usuarioPlano.semanaReferencia).isBefore(inicioSemanaAtual)) {
@@ -430,9 +529,28 @@ export class AgendamentosService {
         usuarioPlano.aulasUsadasSemana = 0;
       }
 
-      if (creditoParaDerrubar) {
+      /**
+       * A aula que volta leva de volta o crédito que a saída dela gerou.
+       *
+       * Reviver a MESMA aula que foi cancelada (a aluna desmarcou a terça e
+       * depois avisou que vem) devolve exatamente o que ela tinha perdido:
+       * aquele crédito deixa de ter motivo. Vale também quando é a dona quem
+       * a coloca de volta — antes ficavam a aula e o crédito, e o crédito
+       * virava uma aula a mais lá na frente. Crédito já gasto não volta: a
+       * reposição aconteceu, e a semana já conta com ela.
+       */
+      let creditoDaVolta: string | null = null;
+      if (anterior?.status === 'CANCELADO') {
+        const origem = await tx.creditoReposicao.findFirst({
+          where: { origemAgendamentoId: anterior.id, usado: false, revogado: false },
+          select: { id: true },
+        });
+        creditoDaVolta = origem?.id ?? null;
+      }
+      const derrubar = creditoDaVolta ?? creditoParaDerrubar;
+      if (derrubar) {
         await tx.creditoReposicao.update({
-          where: { id: creditoParaDerrubar },
+          where: { id: derrubar },
           data: { revogado: true },
         });
       }
@@ -441,7 +559,7 @@ export class AgendamentosService {
       if (aulaNaSemanaAtual) {
         await tx.usuarioPlano.update({ where: { id: usuarioPlano.id }, data: { aulasUsadasSemana: { increment: 1 } } });
       }
-      return agendamento;
+      return creditoDaVolta ? { ...agendamento, creditoDevolvido: true } : agendamento;
     });
   }
 

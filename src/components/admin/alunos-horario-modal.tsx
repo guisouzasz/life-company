@@ -21,6 +21,7 @@ import { useAlunos } from '../../services/usuarios/usuarios.queries';
 import type { AlunoAdmin } from '../../services/usuarios/usuarios.admin.types';
 import type { HorarioAdmin } from '../../services/horarios/horarios.types';
 import {
+  ehEscolherTipo,
   ehLimiteSemanal,
   type AgendamentoDoHorario,
   type AulaDaSemana,
@@ -122,6 +123,12 @@ export function AlunosHorarioModal({
   const [feedback, setFeedback] = useState<string | null>(null);
   /** Aluno esbarrou no plano: quais aulas da semana dele podem sair no lugar. */
   const [conflito, setConflito] = useState<{ aluno: AlunoAdmin; texto: string; aulas: AulaDaSemana[]; creditos: number } | null>(null);
+  /**
+   * A semana do aluno tem vaga E ele tem crédito: a aula pode ser reposição ou
+   * do plano, e só a dona sabe. Antes entrava pelo plano sem perguntar, e o
+   * crédito que ela achava ter usado continuava lá.
+   */
+  const [escolha, setEscolha] = useState<{ aluno: AlunoAdmin; creditos: number; usadas: number; total: number } | null>(null);
 
   // Lista inteira uma vez só e filtra aqui: o estúdio tem dezenas de alunos,
   // e assim a busca responde a cada tecla sem ida ao servidor.
@@ -167,6 +174,7 @@ export function AlunosHorarioModal({
     setTirando(null);
     setAlcance(null);
     setConflito(null);
+    setEscolha(null);
     setFeedback(null);
     onClose();
   };
@@ -175,6 +183,7 @@ export function AlunosHorarioModal({
     setModo('lista');
     setBusca('');
     setConflito(null);
+    setEscolha(null);
   };
 
   /**
@@ -231,28 +240,57 @@ export function AlunosHorarioModal({
     });
   };
 
-  const adicionarAluno = (aluno: AlunoAdmin, substituirAgendamentoId?: string, usarCredito = false) => {
+  /**
+   * Colocar o aluno nesta aula.
+   *
+   * - sem opções: a API decide (plano), e pergunta se o aluno tiver crédito;
+   * - `usarCredito: true`: reposição (com `concederCredito`, o estúdio dá o
+   *   crédito na hora); `usarCredito: false`: aula do plano, já decidido;
+   * - `trocar`: a aula da semana que sai para esta entrar.
+   */
+  const adicionarAluno = (
+    aluno: AlunoAdmin,
+    opcoes: { trocar?: AulaDaSemana; usarCredito?: boolean; concederCredito?: boolean } = {},
+  ) => {
     if (!horario || !data) return;
     if (lotado) {
       setFeedback(mensagemLotado);
       return;
     }
     setConflito(null);
+    setEscolha(null);
     setFeedback(null);
+    const nome = primeiroNome(aluno.nome);
     adicionar.mutate(
-      { usuarioId: aluno.id, horarioId: horario.id, dataAula: data, substituirAgendamentoId, ...(usarCredito ? { usarCredito: true } : {}) },
       {
-        onSuccess: () => {
+        usuarioId: aluno.id,
+        horarioId: horario.id,
+        dataAula: data,
+        substituirAgendamentoId: opcoes.trocar?.id,
+        ...(opcoes.usarCredito !== undefined ? { usarCredito: opcoes.usarCredito } : {}),
+        ...(opcoes.concederCredito ? { concederCredito: true } : {}),
+      },
+      {
+        onSuccess: (r) => {
           voltarParaLista();
+          // Sem "o"/"a" na frase: o sistema não sabe o gênero de ninguém.
           setFeedback(
-            usarCredito
-              ? `${primeiroNome(aluno.nome)} entrou nesta aula como reposição (usou 1 crédito).`
-              : substituirAgendamentoId
-                ? `${primeiroNome(aluno.nome)} foi remanejado para esta aula.`
-                : `${primeiroNome(aluno.nome)} entrou nesta aula.`,
+            opcoes.concederCredito
+              ? `${nome} entrou nesta aula como reposição, com o crédito dado agora pelo estúdio.`
+              : opcoes.usarCredito
+                ? `${nome} entrou nesta aula como reposição (usou 1 crédito).`
+                : opcoes.trocar
+                  ? `Aula trocada: ${nome} está nesta aula, e a de ${rotuloDaAula(opcoes.trocar)} foi desmarcada (sem crédito).`
+                  : r?.creditoDevolvido
+                    ? `${nome} voltou para esta aula. Ela tinha sido cancelada e gerado crédito; como a aula voltou, esse crédito foi cancelado.`
+                    : `${nome} entrou nesta aula.`,
           );
         },
         onError: (e) => {
+          if (e instanceof ApiError && ehEscolherTipo(e.data)) {
+            setEscolha({ aluno, creditos: e.data.creditosParaODia, usadas: e.data.usadasNaSemana, total: e.data.aulasSemanais });
+            return;
+          }
           /**
            * O plano cheio não é o fim da conversa aqui: a API devolve quais
            * aulas da semana ocupam a cota, e a dona escolhe qual sai. Sem
@@ -299,6 +337,35 @@ export function AlunosHorarioModal({
           leftIcon={<Icon name="search-outline" size={16} color={LC.textMuted} />}
         />
 
+        {escolha ? (
+          <View style={s.escolhaCartao}>
+            <Text style={s.conflitoQuem}>{escolha.aluno.nome}</Text>
+            <Text style={s.escolhaPergunta}>
+              {primeiroNome(escolha.aluno.nome)} tem {escolha.creditos}{' '}
+              {escolha.creditos === 1 ? 'crédito' : 'créditos'} de reposição. Como entra nesta aula?
+            </Text>
+            <Button
+              title="Como reposição (usa 1 crédito)"
+              size="sm"
+              loading={adicionar.isPending}
+              onPress={() => adicionarAluno(escolha.aluno, { usarCredito: true })}
+              leftIcon={<Icon name="ticket-outline" size={15} color="#fff" />}
+            />
+            <Text style={s.escolhaExplica}>Não conta na semana do plano.</Text>
+            <Button
+              title="Como aula do plano"
+              size="sm"
+              variant="outline"
+              loading={adicionar.isPending}
+              onPress={() => adicionarAluno(escolha.aluno, { usarCredito: false })}
+              style={{ marginTop: 8 }}
+            />
+            <Text style={s.escolhaExplica}>
+              Conta na semana ({escolha.usadas} de {escolha.total} usadas até agora). O crédito continua guardado.
+            </Text>
+          </View>
+        ) : null}
+
         {conflito ? (
           <View style={s.conflito}>
             {/*
@@ -325,21 +392,43 @@ export function AlunosHorarioModal({
                   title="Marcar como reposição (usa 1 crédito)"
                   size="sm"
                   loading={adicionar.isPending}
-                  onPress={() => adicionarAluno(conflito.aluno, undefined, true)}
+                  onPress={() => adicionarAluno(conflito.aluno, { usarCredito: true })}
                   leftIcon={<Icon name="ticket-outline" size={15} color="#fff" />}
                 />
               </View>
-            ) : null}
-            <Text style={s.conflitoNota}>
-              As aulas abaixo são dele. Se não deveriam estar aí, use "Trocar" ou tire pelo cadastro
-              (Alunos → Plano → Próximas aulas marcadas).
-            </Text>
+            ) : (
+              /*
+                Sem crédito, a reposição continua sendo decisão da dona: ela dá
+                o crédito e marca num toque só. Antes a tela só oferecia trocar
+                uma aula do plano — era o "erro" que ela via ao tentar encaixar
+                uma aluna que tinha reposição para fazer.
+              */
+              <View style={s.reposicaoCaixa}>
+                <Text style={s.reposicaoTexto}>
+                  Esta aula é uma reposição? {primeiroNome(conflito.aluno.nome)} não tem crédito para esta data,
+                  mas você pode dar agora.
+                </Text>
+                <Button
+                  title="Dar 1 crédito e marcar como reposição"
+                  size="sm"
+                  loading={adicionar.isPending}
+                  onPress={() => adicionarAluno(conflito.aluno, { usarCredito: true, concederCredito: true })}
+                  leftIcon={<Icon name="ticket-outline" size={15} color="#fff" />}
+                />
+              </View>
+            )}
             {conflito.aulas.length === 0 ? (
               <Text style={s.conflitoVazio}>
-                As aulas desta semana já aconteceram — não dá para trocar. Aumente o plano de{' '}
-                {primeiroNome(conflito.aluno.nome)} ou marque na semana que vem.
+                As aulas do plano desta semana já aconteceram, então não dá para trocar. Para entrar aqui, marque
+                como reposição acima ou aumente o plano de {primeiroNome(conflito.aluno.nome)}.
               </Text>
             ) : (
+              <Text style={s.conflitoNota}>
+                Ou troque por uma das aulas do plano de {primeiroNome(conflito.aluno.nome)} nesta semana. Se alguma
+                não deveria estar aí, dá para tirar também pelo cadastro (Alunos → Plano → Próximas aulas marcadas).
+              </Text>
+            )}
+            {conflito.aulas.length === 0 ? null : (
               conflito.aulas.map((a) => (
                 <View key={a.id} style={s.conflitoLinha}>
                   <Text style={s.conflitoAula}>{rotuloDaAula(a)}</Text>
@@ -349,14 +438,16 @@ export function AlunosHorarioModal({
                     variant="outline"
                     fullWidth={false}
                     loading={adicionar.isPending}
-                    onPress={() => adicionarAluno(conflito.aluno, a.id)}
+                    onPress={() => adicionarAluno(conflito.aluno, { trocar: a })}
                   />
                 </View>
               ))
             )}
-            <Text style={s.conflitoNota}>
-              Trocar tira a aula antiga e coloca esta. Não gera crédito de reposição — é remanejamento.
-            </Text>
+            {conflito.aulas.length > 0 ? (
+              <Text style={s.conflitoNota}>
+                Trocar tira a aula antiga e coloca esta. Não gera crédito de reposição — é remanejamento.
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -686,6 +777,12 @@ const s = StyleSheet.create({
   conflitoAula: { flex: 1, fontSize: 13, fontWeight: '600', color: LC.textPrimary },
   conflitoVazio: { fontSize: 12.5, color: LC.textSecondary, lineHeight: 18 },
   conflitoNota: { fontSize: 11.5, color: LC.textMuted, marginTop: 8, lineHeight: 16 },
+  escolhaCartao: {
+    backgroundColor: LC.primaryLight, borderRadius: LC.radius.md, borderWidth: 1, borderColor: LC.primarySoft,
+    paddingVertical: 12, paddingHorizontal: 12, marginBottom: 12, marginTop: 4,
+  },
+  escolhaPergunta: { fontSize: 13, fontWeight: '700', color: LC.textPrimary, lineHeight: 18, marginBottom: 10 },
+  escolhaExplica: { fontSize: 11.5, color: LC.textSecondary, marginTop: 4, lineHeight: 16 },
   hintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: LC.border },
   hint: { flex: 1, fontSize: 12, color: LC.textMuted },
 });

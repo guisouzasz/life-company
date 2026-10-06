@@ -63,6 +63,16 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
   const removerFixo = useRemoverHorarioFixo();
   const aulas = useAgendamentosDoAluno(aluno?.id, !!aluno);
   const cancelarAula = useDesmarcarAgendamento();
+  /**
+   * O que a dona tocou para tirar — falta confirmar.
+   *
+   * Os dois botões apagavam no primeiro toque: um dedo errado no celular
+   * tirava a aluna do horário fixo (e desmarcava oito semanas de aula) ou
+   * desmarcava uma aula, e a vaga podia ser ocupada por outra pessoa antes de
+   * ela perceber.
+   */
+  const [removendoFixo, setRemovendoFixo] = useState<string | null>(null);
+  const [desmarcando, setDesmarcando] = useState<string | null>(null);
 
   const planoSelecionado = planoSel ?? planoAtual?.plano?.id;
   const aulasSemanais = planos.data?.find((p) => p.id === planoSelecionado)?.aulasSemanais ?? planoAtual?.plano?.aulasSemanais ?? 0;
@@ -110,6 +120,8 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
 
   const fechar = () => {
     setModo('ver');
+    setRemovendoFixo(null);
+    setDesmarcando(null);
     onClose();
   };
 
@@ -155,7 +167,7 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
              */
             setAviso({
               titulo: 'Horário salvo',
-              texto: `${nome} já estava marcado nas próximas aulas desse horário. Nada mudou.`,
+              texto: `As próximas aulas desse horário já estavam marcadas para ${nome}. Nada mudou.`,
             });
           } else if (g.erros > 0) {
             setAviso({
@@ -172,11 +184,12 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
              * cai fora dessa janela, a dona olhava a semana atual na agenda,
              * não via o aluno, e concluía que não tinha funcionado.
              */
+            // Sem "marcado/marcada": o sistema não sabe o gênero de ninguém.
             setAviso({
               titulo: 'Horário fixo criado',
               texto: quando
-                ? `${nome} está marcado em: ${quando}. As próximas semanas entram sozinhas.`
-                : `${nome} foi fixado neste horário.`,
+                ? `Aulas marcadas para ${nome}: ${quando}. As próximas semanas entram sozinhas.`
+                : `Horário fixo de ${nome} salvo.`,
             });
           }
         },
@@ -377,7 +390,43 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
         ) : !fixos.data || fixos.data.length === 0 ? (
           <Text style={s.empty}>Nenhum horário fixo cadastrado.</Text>
         ) : (
-          fixos.data.map((f) => (
+          fixos.data.map((f) => removendoFixo === f.id ? (
+            <View key={f.id} style={s.confirmar}>
+              <Text style={s.confirmarTexto}>
+                Tirar {primeiroNome} do horário fixo de {DIAS_PT[f.horario.diaSemana].toLowerCase()} às {f.horario.horaInicio}?
+                As aulas que já estavam marcadas nessa turma, daqui para frente, serão desmarcadas (sem crédito) e a
+                vaga abre para outra pessoa.
+              </Text>
+              <View style={s.confirmarBotoes}>
+                <Button title="Voltar" variant="outline" size="sm" fullWidth={false} onPress={() => setRemovendoFixo(null)} />
+                <Button
+                  title="Tirar do horário fixo"
+                  variant="danger"
+                  size="sm"
+                  fullWidth={false}
+                  loading={removerFixo.isPending}
+                  onPress={() =>
+                    removerFixo.mutate(f.id, {
+                      onSuccess: (r) => {
+                        setRemovendoFixo(null);
+                        // Tirar o horário fixo também desmarca as aulas que
+                        // ele já tinha criado — a dona precisa ver isso, senão
+                        // fica sem saber se o aluno saiu da turma de verdade.
+                        setAviso({ titulo: 'Horário removido', texto: r?.mensagem ?? 'Horário fixo removido.' });
+                      },
+                      onError: (e) => {
+                        setRemovendoFixo(null);
+                        setAviso({
+                          titulo: 'Não deu para remover',
+                          texto: e instanceof ApiError && e.message ? e.message : 'Não foi possível remover o horário fixo.',
+                        });
+                      },
+                    })
+                  }
+                />
+              </View>
+            </View>
+          ) : (
             <Card key={f.id} style={s.fixoCard} padding={14} bordered>
               <View style={s.fixoCardRow}>
                 <View style={[s.iconBubble, { backgroundColor: corPorModalidade(f.horario.modalidade.nome) + '1A' }]}>
@@ -397,18 +446,10 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
                   hitSlop={6}
                   accessibilityRole="button"
                   accessibilityLabel={`Remover ${DIAS_PT[f.horario.diaSemana]} ${f.horario.horaInicio} deste aluno`}
-                  onPress={() =>
-                    removerFixo.mutate(f.id, {
-                      onSuccess: (r) => {
-                        // Tirar o horário fixo também desmarca as aulas que
-                        // ele já tinha criado — a dona precisa ver isso, senão
-                        // fica sem saber se o aluno saiu da turma de verdade.
-                        if (r?.aulasCanceladas) {
-                          setAviso({ titulo: 'Horário removido', texto: r.mensagem });
-                        }
-                      },
-                    })
-                  }
+                  onPress={() => {
+                    setDesmarcando(null);
+                    setRemovendoFixo(f.id);
+                  }}
                 >
                   <Icon name="trash-outline" size={15} color={LC.danger} />
                 </Pressable>
@@ -441,7 +482,7 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
           fazendo o horário novo falhar com "Limite semanal atingido" sem que
           desse para ver a causa em lugar nenhum.
         */}
-        <Text style={s.sectionLabel}>Próximas aulas marcadas</Text>
+        <Text style={[s.sectionLabel, { marginTop: 18 }]}>Próximas aulas marcadas</Text>
         {soltas > 0 && (
           <View style={s.soltasAviso}>
             <Icon name="alert-circle-outline" size={14} color={LC.warningFg} />
@@ -457,7 +498,46 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
         ) : !aulas.data || aulas.data.length === 0 ? (
           <Text style={s.empty}>Nenhuma aula marcada daqui para frente.</Text>
         ) : (
-          aulas.data.map((ag) => (
+          aulas.data.map((ag) => desmarcando === ag.id ? (
+            <View key={ag.id} style={s.confirmar}>
+              <Text style={s.confirmarTexto}>
+                Desmarcar {formatDate(ag.dataAula, 'ddd, DD/MM')} às {ag.horario.horaInicio}? Não gera crédito de
+                reposição: é arrumação de agenda. Se foi a academia que cancelou a aula, tire pela Agenda, que lá
+                dá para dar o crédito.
+              </Text>
+              <View style={s.confirmarBotoes}>
+                <Button title="Voltar" variant="outline" size="sm" fullWidth={false} onPress={() => setDesmarcando(null)} />
+                <Button
+                  title="Desmarcar"
+                  variant="danger"
+                  size="sm"
+                  fullWidth={false}
+                  loading={cancelarAula.isPending}
+                  onPress={() =>
+                    cancelarAula.mutate(ag.id, {
+                      onSuccess: () => {
+                        setDesmarcando(null);
+                        setAviso({
+                          titulo: 'Aula desmarcada',
+                          texto:
+                            `${formatDate(ag.dataAula, 'DD/MM')} às ${ag.horario.horaInicio} foi desmarcada. ` +
+                            'A vaga voltou para a turma e a semana do aluno ficou livre. ' +
+                            'Não gerou crédito de reposição — isto é arrumação de agenda.',
+                        });
+                      },
+                      onError: (e) => {
+                        setDesmarcando(null);
+                        setAviso({
+                          titulo: 'Não deu para desmarcar',
+                          texto: e instanceof ApiError && e.message ? e.message : 'Não foi possível desmarcar a aula.',
+                        });
+                      },
+                    })
+                  }
+                />
+              </View>
+            </View>
+          ) : (
             <View key={ag.id} style={s.aulaLinha}>
               <View style={{ flex: 1 }}>
                 <Text style={s.aulaTitulo}>
@@ -479,18 +559,10 @@ export function HorariosFixosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin 
                 accessibilityRole="button"
                 accessibilityLabel={`Desmarcar aula de ${formatDate(ag.dataAula, 'DD/MM')} às ${ag.horario.horaInicio}`}
                 disabled={cancelarAula.isPending}
-                onPress={() =>
-                  cancelarAula.mutate(ag.id, {
-                    onSuccess: () =>
-                      setAviso({
-                        titulo: 'Aula desmarcada',
-                        texto:
-                          `${formatDate(ag.dataAula, 'DD/MM')} às ${ag.horario.horaInicio} foi desmarcada. ` +
-                          'A vaga voltou para a turma e a semana do aluno ficou livre. ' +
-                          'Não gerou crédito de reposição — isto é arrumação de agenda.',
-                      }),
-                  })
-                }
+                onPress={() => {
+                  setRemovendoFixo(null);
+                  setDesmarcando(ag.id);
+                }}
               >
                 <Icon name="close" size={16} color={LC.danger} />
               </Pressable>
@@ -665,6 +737,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // ── Confirmar antes de tirar ──────────────────────────────────────
+  confirmar: {
+    backgroundColor: LC.dangerBg, borderRadius: LC.radius.md,
+    padding: 12, marginBottom: 10,
+  },
+  confirmarTexto: { fontSize: 13, lineHeight: 18, color: LC.textPrimary, fontWeight: '600' },
+  confirmarBotoes: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
 
   // ── Avisos ────────────────────────────────────────────────────────
   avisoRow: {

@@ -35,8 +35,10 @@ function ambiente() {
     usuarioPlano: { findFirst: async () => vinculo, findUnique: async () => vinculo, update: write('encerrar-plano'), create: write('plano') },
     plano: { findUnique: async () => plano },
     horario: { findUnique: async () => turma, update: write('turma'), delete: write('excluir-turma') },
-    horarioFixo: { findUnique: async () => fixo, count: async () => 1, create: write('fixo'), update: write('fixo'), updateMany: write('fixos') },
+    // findMany vazio: nenhum outro fixo do aluno no mesmo horário (choque).
+    horarioFixo: { findUnique: async () => fixo, findMany: async () => [], count: async () => 1, create: write('fixo'), update: write('fixo'), updateMany: write('fixos') },
     agendamento: { findFirst: async () => null, findMany: async () => [], count: async () => 0, create: write('aula'), update: write('aula'), updateMany: write('cancelar-aulas') },
+    creditoReposicao: { findFirst: async () => null, findMany: async () => [], count: async () => 0, create: write('credito'), update: write('credito') },
     diaFechado: { findUnique: async () => null, findMany: async () => [] },
     $queryRaw: async (parts) => { locks.push(parts.join('?')); return []; },
   };
@@ -476,4 +478,40 @@ test('conferencia aponta excesso real e turma desligada sem dados de escrita', a
   assert.ok(r.achados.some(x => x.tipo === 'fixo-em-turma-desligada'));
   assert.equal(consultas, 1);
   assert.equal(a.writes.length, 0);
+});
+
+/*
+  Ninguém está em duas turmas ao mesmo tempo. A dona fixava a aluna no
+  Pilates das 8h de segunda tendo Musculação às 8h de segunda: as duas
+  turmas reservavam a vaga toda semana, e a aula de uma delas falhava na
+  geração sem explicação.
+*/
+test('fixo no mesmo horario de outro fixo do aluno recusa sem gravar', async () => {
+  const a = ambiente();
+  a.db.horarioFixo.findUnique = async () => null;
+  a.db.horarioFixo.count = async () => 0;
+  a.db.horarioFixo.findMany = async () => [
+    { id: 'outro', horario: { diaSemana: 'SEGUNDA', horaInicio: '08:00', horaFim: '08:55', modalidade: { nome: 'Academia' } } },
+  ];
+  let gerou = false;
+  const auto = { gerarParaHorarioFixoId: async () => { gerou = true; return { criados: 0, ignorados: 0, erros: 0, motivos: [], datas: [] }; } };
+  await assert.rejects(
+    new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma' }),
+    /já tem horário fixo na segunda às 08:00 \(Musculação\)/,
+  );
+  assert.equal(a.writes.length, 0);
+  assert.equal(gerou, false);
+});
+
+test('fixo em horario que so encosta no outro (termina 08:55, comeca 09:00) passa', async () => {
+  const a = ambiente();
+  a.db.horarioFixo.findUnique = async () => null;
+  a.db.horarioFixo.count = async () => 0;
+  a.db.horario.findUnique = async () => ({ ...a.turma, horaInicio: '09:00', horaFim: '09:55' });
+  a.db.horarioFixo.findMany = async () => [
+    { id: 'outro', horario: { diaSemana: 'SEGUNDA', horaInicio: '08:00', horaFim: '08:55', modalidade: { nome: 'Pilates' } } },
+  ];
+  const auto = { gerarParaHorarioFixoId: async () => ({ criados: 8, ignorados: 0, erros: 0, motivos: [], datas: [] }) };
+  const r = await new HorariosFixosService(a.db, auto).criar('aluno', { horarioId: 'turma' });
+  assert.equal(r.geracao.criados, 8);
 });

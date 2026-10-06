@@ -51,8 +51,14 @@ export interface CriarAgendamentoAdminPayload {
   dataAula: string; // YYYY-MM-DD
   /** Aula da mesma semana que sai (sem crédito) para esta entrar. */
   substituirAgendamentoId?: string;
-  /** Marca como reposição, gastando um crédito do aluno (não usa a semana do plano). */
+  /**
+   * true: reposição, gastando um crédito do aluno (não usa a semana do plano).
+   * false: aula do plano, sem perguntar. Ausente: a API pergunta quando o
+   * aluno tem crédito e a semana tem vaga (ver `ehEscolherTipo`).
+   */
   usarCredito?: boolean;
+  /** Com `usarCredito`: o estúdio dá o crédito agora, se o aluno não tiver. */
+  concederCredito?: boolean;
 }
 
 /** Aula que está ocupando a semana do aluno, devolvida no 403 de limite. */
@@ -82,6 +88,19 @@ export interface LimiteSemanalErro {
 
 export function ehLimiteSemanal(data: unknown): data is LimiteSemanalErro {
   return !!data && typeof data === 'object' && (data as { codigo?: string }).codigo === 'LIMITE_SEMANAL';
+}
+
+/** A semana tem vaga e o aluno tem crédito: a dona escolhe se é reposição ou plano. */
+export interface EscolherTipoErro {
+  codigo: 'ESCOLHER_TIPO';
+  message: string;
+  creditosParaODia: number;
+  usadasNaSemana: number;
+  aulasSemanais: number;
+}
+
+export function ehEscolherTipo(data: unknown): data is EscolherTipoErro {
+  return !!data && typeof data === 'object' && (data as { codigo?: string }).codigo === 'ESCOLHER_TIPO';
 }
 
 /** Item de GET /agendamentos/horario/:horarioId?data= (admin). */

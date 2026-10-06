@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
@@ -292,6 +292,30 @@ export class HorariosService {
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${id} FOR UPDATE`;
       if (dto.ativo === false) await this.exigirTurmaSemVinculos(tx, id);
+      /**
+       * Turma com aluno não muda de DIA.
+       *
+       * Mudar a hora leva todo mundo junto, porque a aula continua na mesma
+       * data. O dia não: as aulas já marcadas são em datas de terça, e a turma
+       * passava a ser de quarta — elas sumiam da agenda da quarta, seguiam
+       * ocupando a terça e, para quem tem horário fixo, a geração criava as
+       * quartas por cima: duas aulas na semana pelo mesmo fixo. Mudar de dia é
+       * abrir a turma nova e passar os alunos para ela.
+       */
+      if (dto.diaSemana !== undefined && dto.diaSemana !== h.diaSemana) {
+        const fixos = await tx.horarioFixo.count({ where: { horarioId: id, ativo: true } });
+        const futuras = await tx.agendamento.count({
+          where: { horarioId: id, status: 'CONFIRMADO', dataAula: { gte: dayjs().startOf('day').toDate() } },
+        });
+        if (fixos || futuras) {
+          throw new BadRequestException(
+            `Esta turma tem ${fixos} aluno(s) em horário fixo e ${futuras} aula(s) marcada(s), todas em dia de ` +
+              `${h.diaSemana.toLowerCase().replace('terca', 'terça')}. Mudar o dia deixaria essas aulas na data errada. ` +
+              'Para mudar de dia, crie a turma nova no dia que você quer e passe os alunos para ela ' +
+              '(Alunos → Plano e horários). A hora, o número de vagas e a modalidade dá para mudar aqui.',
+          );
+        }
+      }
       return tx.horario.update({
         where: { id },
         data: {
@@ -315,7 +339,9 @@ export class HorariosService {
       where: { horarioId, status: 'CONFIRMADO', dataAula: { gte: dayjs().startOf('day').toDate() } },
     });
     if (fixos || aulas) {
-      throw new ConflictException(
+      // 400, não 409: a tela da dona trata 409 como "confirmar e seguir", e
+      // aqui não há o que confirmar — ela abria uma pergunta que dava erro.
+      throw new BadRequestException(
         `Esta turma tem ${fixos} horário(s) fixo(s) e ${aulas} agendamento(s) futuro(s). ` +
           'Remaneje os alunos e resolva os agendamentos antes de desligar a turma.',
       );

@@ -558,8 +558,8 @@ export class UsuariosService {
     return {
       mensagem:
         partes.length > 0
-          ? `${usuario.nome} foi desativado. ${partes.join(" e ")} — as vagas voltaram para as turmas.`
-          : `${usuario.nome} foi desativado.`,
+          ? `O cadastro de ${usuario.nome} foi desativado. ${partes.join(" e ")} — as vagas voltaram para as turmas.`
+          : `O cadastro de ${usuario.nome} foi desativado.`,
       horariosFixosRemovidos,
       aulasCanceladas,
     };
