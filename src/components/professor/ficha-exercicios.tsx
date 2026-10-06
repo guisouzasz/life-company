@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { LC } from '../../constants/theme';
 import { Icon } from '../ui/icon';
 import { cargaDeHoje } from './situacao';
+import { conjugacoes, juntarParceiros } from './conjugados';
 import type { ExercicioTreino } from '../../services/treinos/treinos.types';
 import type { EvolucaoExercicio } from '../../services/cargas/cargas.types';
 
@@ -72,6 +73,7 @@ export function FichaExercicios({ exercicios, evolucaoDe, onAbrirCarga }: Props)
   const secoes = agrupar(exercicios);
   const alternar = (grupo: string) => setRecolhidos((r) => ({ ...r, [grupo]: !r[grupo] }));
   const sequencia: ExercicioAberto[] = exercicios.map((e) => ({ nome: e.nome, reps: e.repeticoes, carga: e.carga }));
+  const blocos = conjugacoes(exercicios);
 
   return (
     <View style={s.lista}>
@@ -107,10 +109,11 @@ export function FichaExercicios({ exercicios, evolucaoDe, onAbrirCarga }: Props)
                   const anteriores = (evo?.registros ?? []).filter((r) => r !== hoje);
                   const ultima = anteriores[anteriores.length - 1];
                   const subiu = hoje && ultima ? hoje.peso - ultima.peso : 0;
+                  const bloco = blocos.get(n - 1);
                   return (
                     <Pressable
                       key={e.id}
-                      style={({ pressed }) => [s.cartao, hoje && s.cartaoFeito, pressed && s.cartaoApertado]}
+                      style={({ pressed }) => [s.cartao, bloco && s.cartaoConjugado, hoje && s.cartaoFeito, pressed && s.cartaoApertado]}
                       onPress={() => onAbrirCarga({ nome: e.nome, reps: e.repeticoes, carga: e.carga, sequencia })}
                       accessibilityRole="button"
                       accessibilityLabel={`Carga de ${e.nome}`}
@@ -125,6 +128,14 @@ export function FichaExercicios({ exercicios, evolucaoDe, onAbrirCarga }: Props)
 
                       <View style={s.meio}>
                         <Text style={s.nome}>{e.nome}</Text>
+                        {bloco ? (
+                          <View style={s.conjugadoLinha}>
+                            <Icon name="link-outline" size={12} color={LC.primaryDark} />
+                            <Text style={s.conjugadoTexto} numberOfLines={2}>
+                              <Text style={s.conjugadoRotulo}>{bloco.rotulo.toUpperCase()}</Text> com {juntarParceiros(bloco.parceiros)}
+                            </Text>
+                          </View>
+                        ) : null}
                         <View style={s.metaLinha}>
                           <View style={s.series}>
                             <Text style={s.seriesTexto}>
@@ -189,6 +200,11 @@ const s = StyleSheet.create({
     ...LC.shadow,
   },
   cartaoFeito: { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
+  /* Bloco de bi-set: a borda da esquerda na cor da marca liga os cartões. */
+  cartaoConjugado: { borderLeftWidth: 4, borderLeftColor: LC.primary },
+  conjugadoLinha: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 },
+  conjugadoTexto: { flexShrink: 1, fontSize: 12, color: LC.primaryDark },
+  conjugadoRotulo: { fontWeight: '800', letterSpacing: 0.4 },
   cartaoApertado: { backgroundColor: LC.primaryLight, borderColor: LC.primarySoft },
 
   numero: {

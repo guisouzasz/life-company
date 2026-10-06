@@ -8,6 +8,8 @@ export interface ExercicioTreino {
   repeticoes: string;
   carga?: string | null;
   observacao?: string | null;
+  /** Bi-set: feito junto com o próximo exercício da ficha. */
+  conjugado?: boolean;
 }
 
 export interface Treino {
@@ -59,6 +61,7 @@ export interface ExercicioPayload {
   repeticoes?: string;
   carga?: string;
   observacao?: string;
+  conjugado?: boolean;
 }
 
 /** Treino do DIA (Funcional): um por modalidade+data, para todas as aulas. */

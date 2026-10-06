@@ -9,6 +9,7 @@ import { Icon } from '../components/ui/icon';
 import { Badge } from '../components/ui/badge';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
 import { useMeusTreinos, useMeuTreinoDia } from '../services/treinos/treinos.queries';
+import { conjugacoes, juntarParceiros } from '../components/professor/conjugados';
 import { ordenarFichas } from '../components/professor/situacao';
 import { useMinhasCargas } from '../services/cargas/cargas.queries';
 import type { ExercicioTreino, Treino } from '../services/treinos/treinos.types';
@@ -64,7 +65,9 @@ export default function MeusTreinos() {
 
   const evolucaoDe = (nome: string) => (cargas.data ?? []).find((e) => e.exercicio === nome) ?? null;
 
-  const renderTreino = (t: Treino) => (
+  const renderTreino = (t: Treino) => {
+    const conjugadosDaFicha = conjugacoes(t.exercicios);
+    return (
     <Card key={t.id} style={[s.card, t.concluido && s.cardConcluido]} padding={16}>
       <View style={s.cardHead}>
         <View style={{ flex: 1 }}>
@@ -120,10 +123,17 @@ export default function MeusTreinos() {
           {bloco.grupo ? <Text style={s.grupoHeader}>{bloco.grupo}</Text> : null}
           {bloco.itens.map((e) => {
             const evo = evolucaoDe(e.nome);
+            const conj = conjugadosDaFicha.get(t.exercicios.indexOf(e));
             return (
               <View key={e.id} style={s.exLinha}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.exNome}>{e.nome}</Text>
+                  {/* Bi-set: o aluno faz este e o parceiro em sequência, cada um com a sua carga. */}
+                  {conj ? (
+                    <Text style={s.exConjugado}>
+                      {conj.rotulo.toUpperCase()} com {juntarParceiros(conj.parceiros)}
+                    </Text>
+                  ) : null}
                   {evo ? (
                     <View style={s.exEvoRow}>
                       <Icon
@@ -156,7 +166,8 @@ export default function MeusTreinos() {
       */}
       {t.conteudo ? <Text style={s.conteudo}>{t.conteudo}</Text> : null}
     </Card>
-  );
+    );
+  };
 
   return (
     <View style={s.root}>
@@ -250,6 +261,7 @@ const s = StyleSheet.create({
     gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: LC.border,
   },
   exNome: { fontSize: 14, fontWeight: '600', color: LC.textPrimary },
+  exConjugado: { fontSize: 12, fontWeight: '700', color: LC.primary, marginTop: 2 },
   exObs: { fontSize: 11, color: LC.textMuted, marginTop: 2, fontStyle: 'italic' },
   exEvoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   exEvoText: { fontSize: 11, fontWeight: '700', color: LC.textSecondary },

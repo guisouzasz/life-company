@@ -77,6 +77,7 @@ function agrupar(exercicios: Treino['exercicios']): Secao[] {
       repeticoes: e.repeticoes,
       carga: e.carga ?? '',
       observacao: e.observacao ?? '',
+      conjugado: !!e.conjugado,
     });
   }
   return secoes.length > 0 ? secoes : [secaoVazia()];
@@ -256,6 +257,22 @@ export default function TreinosAluno() {
       ),
     );
 
+  /** Bi-set: este exercício vai junto com o próximo da ficha. */
+  const setConjugado = (si: number, ii: number, valor: boolean) =>
+    setSecoes((atual) =>
+      atual.map((s, i) => (i !== si ? s : { ...s, itens: s.itens.map((e, j) => (j === ii ? { ...e, conjugado: valor } : e)) })),
+    );
+  /**
+   * O próximo exercício na ordem da ficha — no mesmo grupo ou, se este é o
+   * último do grupo, o primeiro do grupo seguinte (bíceps + tríceps é bi-set
+   * comum, e cada um mora no seu grupo).
+   */
+  const proximoDe = (si: number, ii: number): ExercicioForm | null => {
+    if (ii < secoes[si].itens.length - 1) return secoes[si].itens[ii + 1];
+    for (let k = si + 1; k < secoes.length; k++) if (secoes[k].itens.length > 0) return secoes[k].itens[0];
+    return null;
+  };
+
   const addItem = (si: number) =>
     setSecoes((atual) => atual.map((s, i) => (i === si ? { ...s, itens: [...s.itens, exercicioDoGrupo(s.grupo)] } : s)));
 
@@ -322,6 +339,7 @@ export default function TreinosAluno() {
             repeticoes: e.repeticoes?.trim() || '12',
             carga: e.carga?.trim() || undefined,
             observacao: e.observacao?.trim() || undefined,
+            conjugado: !!e.conjugado,
           })),
       );
       if (validos.length === 0) {
@@ -755,6 +773,28 @@ export default function TreinosAluno() {
                     </View>
                   </View>
                   <Input placeholder="Observação (opcional)" value={e.observacao} onChangeText={(v) => setItem(si, ii, 'observacao', v)} />
+                  {(() => {
+                    const proximo = proximoDe(si, ii);
+                    if (!proximo) return null;
+                    const ligado = !!e.conjugado;
+                    return (
+                      <Pressable
+                        style={[s.biset, ligado && s.bisetLigado]}
+                        onPress={() => setConjugado(si, ii, !ligado)}
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: ligado }}
+                        accessibilityLabel={`Bi-set de ${e.nome || 'este exercício'} com ${proximo.nome || 'o próximo'}`}
+                      >
+                        <Icon name={ligado ? 'link' : 'link-outline'} size={16} color={ligado ? '#fff' : LC.primary} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.bisetTexto, ligado && s.bisetTextoLigado]} numberOfLines={1}>
+                            {ligado ? `Bi-set com ${proximo.nome || 'o próximo exercício'}` : 'Fazer em bi-set com o próximo'}
+                          </Text>
+                          {ligado ? <Text style={s.bisetDica}>Cada um com a sua carga, feitos em sequência.</Text> : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })()}
                 </Card>
               ))}
 
@@ -1237,6 +1277,14 @@ const s = StyleSheet.create({
   metaErro: { fontSize: 12, color: LC.danger, marginTop: -2, marginBottom: 6 },
   exNum: { fontSize: 12, fontWeight: '800', color: LC.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4 },
   exRow: { flexDirection: 'row', gap: 8 },
+  biset: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, paddingHorizontal: 12,
+    borderRadius: LC.radius.md, borderWidth: 1.5, borderColor: LC.primarySoft, backgroundColor: LC.bgCard,
+  },
+  bisetLigado: { backgroundColor: LC.primary, borderColor: LC.primary },
+  bisetTexto: { fontSize: 13, fontWeight: '700', color: LC.primary },
+  bisetTextoLigado: { color: '#fff' },
+  bisetDica: { fontSize: 11.5, color: 'rgba(255,255,255,0.85)', marginTop: 1 },
   addExBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     paddingVertical: 13, borderRadius: LC.radius.md, borderWidth: 1.5, borderColor: LC.primary, borderStyle: 'dashed',

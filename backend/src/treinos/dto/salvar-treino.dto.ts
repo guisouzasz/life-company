@@ -11,6 +11,7 @@ import {
   MinLength,
   ValidateNested,
   MaxLength,
+  IsBoolean,
 } from 'class-validator';
 
 export class ExercicioDto {
@@ -32,6 +33,10 @@ export class ExercicioDto {
 
   @IsOptional() @IsString()
   observacao?: string;
+
+  /** Bi-set: feito junto com o próximo exercício. */
+  @IsOptional() @IsBoolean()
+  conjugado?: boolean;
 }
 
 export class SalvarTreinoDto {

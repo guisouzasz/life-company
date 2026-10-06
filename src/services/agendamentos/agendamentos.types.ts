@@ -51,6 +51,8 @@ export interface CriarAgendamentoAdminPayload {
   dataAula: string; // YYYY-MM-DD
   /** Aula da mesma semana que sai (sem crédito) para esta entrar. */
   substituirAgendamentoId?: string;
+  /** Marca como reposição, gastando um crédito do aluno (não usa a semana do plano). */
+  usarCredito?: boolean;
 }
 
 /** Aula que está ocupando a semana do aluno, devolvida no 403 de limite. */
@@ -74,6 +76,8 @@ export interface LimiteSemanalErro {
   codigo: 'LIMITE_SEMANAL';
   message: string;
   aulasDaSemana: AulaDaSemana[];
+  /** Créditos de reposição do aluno que valem no dia desta aula. */
+  creditosParaODia?: number;
 }
 
 export function ehLimiteSemanal(data: unknown): data is LimiteSemanalErro {

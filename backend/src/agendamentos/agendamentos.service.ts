@@ -277,11 +277,13 @@ export class AgendamentosService {
           });
           if (vencemAntes) {
             throw new ForbiddenException(
-              `Seu crédito de reposição vale até ${dayjs(vencemAntes.expiraEm).format('DD/MM')}. ` +
-                'Escolha uma aula até essa data.',
+              `${ctx.admin ? `O crédito de reposição de ${quem}` : 'Seu crédito de reposição'} vale até ` +
+                `${dayjs(vencemAntes.expiraEm).format('DD/MM')}. Escolha uma aula até essa data.`,
             );
           }
-          throw new ForbiddenException('Você não possui crédito de reposição válido');
+          throw new ForbiddenException(
+            ctx.admin ? `${quem} não tem crédito de reposição válido.` : 'Você não possui crédito de reposição válido',
+          );
         }
 
         /**
@@ -311,7 +313,7 @@ export class AgendamentosService {
             .add(DIAS_PERIODO_REPOSICOES, 'day')
             .format('DD/MM');
           throw new ForbiddenException(
-            `Você já agendou ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
+            `${ctx.admin ? `${quem} já agendou` : 'Você já agendou'} ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
               `que é o limite. A próxima vaga abre em ${liberaEm}.`,
           );
         }
@@ -376,9 +378,21 @@ export class AgendamentosService {
             include: { horario: { include: { modalidade: true } } },
             orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
           });
+          /**
+           * Quantos créditos de reposição o aluno tem que valem NESTE dia.
+           *
+           * A dona esbarrava no plano cheio ao encaixar uma reposição — ela
+           * deu crédito à aluna e a tela só oferecia trocar uma aula do plano.
+           * Com o número aqui, a tela oferece marcar como reposição, que gasta
+           * o crédito e não mexe na semana do plano.
+           */
+          const creditosParaODia = await tx.creditoReposicao.count({
+            where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date(), gte: dataAula } },
+          });
           throw new ForbiddenException({
             statusCode: 403,
             codigo: 'LIMITE_SEMANAL',
+            creditosParaODia,
             message:
               `${quem} já tem ${usadasNaSemana} aula${usadasNaSemana > 1 ? 's' : ''} nesta semana e o plano é ${usuarioPlano.plano.aulasSemanais}x/semana. ` +
               'Escolha qual sai para esta entrar.',

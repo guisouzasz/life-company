@@ -121,7 +121,7 @@ export function AlunosHorarioModal({
   const [alcance, setAlcance] = useState<'aula' | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   /** Aluno esbarrou no plano: quais aulas da semana dele podem sair no lugar. */
-  const [conflito, setConflito] = useState<{ aluno: AlunoAdmin; texto: string; aulas: AulaDaSemana[] } | null>(null);
+  const [conflito, setConflito] = useState<{ aluno: AlunoAdmin; texto: string; aulas: AulaDaSemana[]; creditos: number } | null>(null);
 
   // Lista inteira uma vez só e filtra aqui: o estúdio tem dezenas de alunos,
   // e assim a busca responde a cada tecla sem ida ao servidor.
@@ -231,7 +231,7 @@ export function AlunosHorarioModal({
     });
   };
 
-  const adicionarAluno = (aluno: AlunoAdmin, substituirAgendamentoId?: string) => {
+  const adicionarAluno = (aluno: AlunoAdmin, substituirAgendamentoId?: string, usarCredito = false) => {
     if (!horario || !data) return;
     if (lotado) {
       setFeedback(mensagemLotado);
@@ -240,14 +240,16 @@ export function AlunosHorarioModal({
     setConflito(null);
     setFeedback(null);
     adicionar.mutate(
-      { usuarioId: aluno.id, horarioId: horario.id, dataAula: data, substituirAgendamentoId },
+      { usuarioId: aluno.id, horarioId: horario.id, dataAula: data, substituirAgendamentoId, ...(usarCredito ? { usarCredito: true } : {}) },
       {
         onSuccess: () => {
           voltarParaLista();
           setFeedback(
-            substituirAgendamentoId
-              ? `${primeiroNome(aluno.nome)} foi remanejado para esta aula.`
-              : `${primeiroNome(aluno.nome)} entrou nesta aula.`,
+            usarCredito
+              ? `${primeiroNome(aluno.nome)} entrou nesta aula como reposição (usou 1 crédito).`
+              : substituirAgendamentoId
+                ? `${primeiroNome(aluno.nome)} foi remanejado para esta aula.`
+                : `${primeiroNome(aluno.nome)} entrou nesta aula.`,
           );
         },
         onError: (e) => {
@@ -260,7 +262,7 @@ export function AlunosHorarioModal({
            */
           if (e instanceof ApiError && ehLimiteSemanal(e.data)) {
             const trocaveis = e.data.aulasDaSemana.filter((a) => a.podeTrocar);
-            setConflito({ aluno, texto: e.data.message, aulas: trocaveis });
+            setConflito({ aluno, texto: e.data.message, aulas: trocaveis, creditos: e.data.creditosParaODia ?? 0 });
             return;
           }
           setFeedback(e instanceof ApiError ? e.message : 'Não foi possível adicionar.');
@@ -308,6 +310,26 @@ export function AlunosHorarioModal({
             */}
             <Text style={s.conflitoQuem}>{conflito.aluno.nome}</Text>
             <Text style={s.conflitoTitulo}>{conflito.texto}</Text>
+            {/*
+              Reposição primeiro: quando a dona deu crédito e quer encaixar a
+              aluna, é isso que ela procura. A aula entra como reposição,
+              gasta um crédito e não mexe nas aulas do plano da semana.
+            */}
+            {conflito.creditos > 0 ? (
+              <View style={s.reposicaoCaixa}>
+                <Text style={s.reposicaoTexto}>
+                  {primeiroNome(conflito.aluno.nome)} tem {conflito.creditos}{' '}
+                  {conflito.creditos === 1 ? 'crédito' : 'créditos'} de reposição que valem nesta data.
+                </Text>
+                <Button
+                  title="Marcar como reposição (usa 1 crédito)"
+                  size="sm"
+                  loading={adicionar.isPending}
+                  onPress={() => adicionarAluno(conflito.aluno, undefined, true)}
+                  leftIcon={<Icon name="ticket-outline" size={15} color="#fff" />}
+                />
+              </View>
+            ) : null}
             <Text style={s.conflitoNota}>
               As aulas abaixo são dele. Se não deveriam estar aí, use "Trocar" ou tire pelo cadastro
               (Alunos → Plano → Próximas aulas marcadas).
@@ -652,6 +674,11 @@ const s = StyleSheet.create({
   },
   conflitoQuem: { fontSize: 13.5, fontWeight: '800', color: LC.textPrimary, marginBottom: 4 },
   conflitoTitulo: { fontSize: 13, fontWeight: '700', color: LC.danger, lineHeight: 18, marginBottom: 6 },
+  reposicaoCaixa: {
+    gap: 8, padding: 10, borderRadius: 10, marginBottom: 10,
+    backgroundColor: LC.primaryLight, borderWidth: 1, borderColor: LC.primarySoft,
+  },
+  reposicaoTexto: { fontSize: 13, lineHeight: 18, color: LC.textPrimary, fontWeight: '600' },
   conflitoLinha: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 8, borderTopWidth: 1, borderTopColor: LC.border,

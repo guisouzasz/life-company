@@ -301,6 +301,9 @@ model ExercicioTreino {
   repeticoes String  @default("12") // "12", "10-12", "até a falha"...
   carga      String? // "20kg", "elástico forte"...
   observacao String?
+  /// Feito junto com o PRÓXIMO exercício da ficha (bi-set; em sequência,
+  /// tri-set). Cada um continua com a própria carga e o próprio histórico.
+  conjugado  Boolean @default(false)
 
   treino Treino @relation(fields: [treinoId], references: [id], onDelete: Cascade)
 

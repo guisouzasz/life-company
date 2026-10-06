@@ -276,6 +276,8 @@ export class TreinosService {
             repeticoes: e.repeticoes ?? '12',
             carga: e.carga,
             observacao: e.observacao,
+            // O último não tem com quem fazer bi-set.
+            conjugado: !!e.conjugado && i < (dto.exercicios ?? []).length - 1,
           })),
         },
       },
@@ -329,6 +331,8 @@ export class TreinosService {
             repeticoes: e.repeticoes ?? '12',
             carga: e.carga,
             observacao: e.observacao,
+            // O último não tem com quem fazer bi-set.
+            conjugado: !!e.conjugado && i < (dto.exercicios ?? []).length - 1,
           })),
         },
       },

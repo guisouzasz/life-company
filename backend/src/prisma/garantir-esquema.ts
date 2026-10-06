@@ -216,6 +216,12 @@ const AJUSTES: { descricao: string; sql: string }[] = [
               ON DELETE SET NULL ON UPDATE CASCADE;
           EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
   },
+  {
+    // Bi-set: o exercício que é feito junto com o próximo. Pedido do professor
+    // da musculação — no bi-set cada exercício tem a sua carga.
+    descricao: 'exercicios_treino: bi-set (feito junto com o próximo)',
+    sql: `ALTER TABLE "exercicios_treino" ADD COLUMN IF NOT EXISTS "conjugado" BOOLEAN NOT NULL DEFAULT false`,
+  },
 ];
 
 /**
