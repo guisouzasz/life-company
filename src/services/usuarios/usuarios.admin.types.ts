@@ -15,6 +15,10 @@ export interface AlunoAdmin {
    * nasce inativo e só liga quando o aluno abre o app pela primeira vez.
    */
   ativado?: boolean;
+  /** Créditos de reposição que ainda valem (lista da dona). */
+  creditos?: number;
+  /** Quando vence o primeiro desses créditos (ISO), ou null. */
+  creditoVenceEm?: string | null;
   // Ficha cadastral preenchida pelo admin. Vem null nos cadastros feitos
   // antes destes campos existirem.
   rg?: string | null;

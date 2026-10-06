@@ -22,9 +22,10 @@ import { nomeCurto } from '../../services/nome';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
 import { mascaraCep, mascaraCpf, mascaraData, mascaraTelefone, dataParaIso, isoParaData, soDigitos } from '../../services/mascaras';
 import { openBrowserAsync } from 'expo-web-browser';
+import { formatDate } from '../../services/date';
 import { linkWhatsapp, mensagemPrimeiroAcesso, telefoneParaWhatsapp } from '../../services/whatsapp';
 
-type Filtro = 'todos' | 'treinando' | 'pararam' | 'semAcesso';
+type Filtro = 'todos' | 'treinando' | 'pararam' | 'semAcesso' | 'comCredito';
 
 /**
  * Os recortes que a dona usa para achar gente.
@@ -39,6 +40,13 @@ const FILTROS: { chave: Filtro; rotulo: string; passa: (a: AlunoAdmin) => boolea
   { chave: 'treinando', rotulo: 'Treinando', passa: (a) => a.ativo },
   { chave: 'pararam', rotulo: 'Pararam', passa: (a) => !a.ativo },
   { chave: 'semAcesso', rotulo: 'Sem acesso ao app', passa: (a) => !a.ativado },
+  /*
+    Pedido da dona: ver de uma vez quem tem crédito de reposição e quantos —
+    é como ela confere se deu (ou não deu) o crédito, sem abrir aluno por
+    aluno. Só conta crédito que ainda vale (não usado, não excluído, não
+    vencido).
+  */
+  { chave: 'comCredito', rotulo: 'Com crédito', passa: (a) => (a.creditos ?? 0) > 0 },
 ];
 
 /** "Álvaro" e "alvaro" ficam juntos na letra A. */
@@ -72,8 +80,17 @@ function porLetra(alunos: AlunoAdmin[]): { letra: string; alunos: AlunoAdmin[] }
 
 /** Os selos da linha: só aparecem quando dizem algo que foge do normal. */
 function Selos({ aluno }: { aluno: AlunoAdmin }) {
+  const n = aluno.creditos ?? 0;
   return (
     <>
+      {n > 0 ? (
+        <View style={[s.selo, s.seloCredito]}>
+          <Text style={[s.seloTexto, { color: '#6D28D9' }]}>
+            {n} {n === 1 ? 'crédito' : 'créditos'}
+            {aluno.creditoVenceEm ? ` · vence ${formatDate(new Date(aluno.creditoVenceEm), 'DD/MM')}` : ''}
+          </Text>
+        </View>
+      ) : null}
       {!aluno.ativo ? (
         <View style={[s.selo, s.seloParou]}>
           <Text style={[s.seloTexto, { color: LC.textSecondary }]}>Parou</Text>
@@ -329,6 +346,7 @@ export default function AdminAlunos() {
       title={
         busca ? 'Ninguém encontrado'
         : filtro === 'semAcesso' ? 'Todo mundo já entrou no app'
+        : filtro === 'comCredito' ? 'Ninguém tem crédito de reposição agora'
         : filtro === 'pararam' ? 'Ninguém parou de treinar'
         : 'Nenhum aluno ainda'
       }
@@ -441,7 +459,7 @@ export default function AdminAlunos() {
                       {aluno.telefone ? mascaraTelefone(aluno.telefone) : aluno.email ?? '—'}
                     </Text>
                     <View style={[s.tCol, s.tColStatus, s.tSelos]}>
-                      {aluno.ativo && aluno.ativado ? (
+                      {aluno.ativo && aluno.ativado && !(aluno.creditos ?? 0) ? (
                         <Text style={[s.tTexto, { color: LC.successFg, fontWeight: '700' }]}>Treina</Text>
                       ) : (
                         <Selos aluno={aluno} />
@@ -764,6 +782,7 @@ const s = StyleSheet.create({
   selo: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: LC.radius.full },
   seloParou: { backgroundColor: LC.neutralBg },
   seloAcesso: { backgroundColor: LC.warningBg },
+  seloCredito: { backgroundColor: '#EDE9FE' },
   seloTexto: { fontSize: 11, fontWeight: '800' },
   fab: {
     position: 'absolute', right: 20, bottom: 92, width: 56, height: 56, borderRadius: 28,

@@ -271,7 +271,31 @@ export class UsuariosService {
      * aluno abre o app. Sem separar os dois, quem a dona acabou de cadastrar
      * aparece como "Inativo" — que na tela dela quer dizer aluno desligado.
      */
-    return alunos.map(({ senhaHash, ...a }) => ({ ...a, ativado: !!senhaHash }));
+    /**
+     * Créditos de reposição que ainda valem, por aluno: quantos e quando vence
+     * o primeiro. É o filtro "Com crédito" da tela de alunos — a dona queria
+     * conferir de uma vez quem tem crédito e quantos, sem abrir aluno por
+     * aluno (e saber se ela deu ou não deu).
+     */
+    const creditos = await this.prisma.creditoReposicao.groupBy({
+      by: ["usuarioId"],
+      where: {
+        usuarioId: { in: alunos.map((a) => a.id) },
+        usado: false,
+        revogado: false,
+        expiraEm: { gt: new Date() },
+      },
+      _count: { _all: true },
+      _min: { expiraEm: true },
+    });
+    const porAluno = new Map(creditos.map((c) => [c.usuarioId, c]));
+
+    return alunos.map(({ senhaHash, ...a }) => ({
+      ...a,
+      ativado: !!senhaHash,
+      creditos: porAluno.get(a.id)?._count._all ?? 0,
+      creditoVenceEm: porAluno.get(a.id)?._min.expiraEm ?? null,
+    }));
   }
 
   /**

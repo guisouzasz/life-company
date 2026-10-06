@@ -3,7 +3,11 @@ import { creditosService } from './creditos.service';
 
 function useInvalidarCreditos() {
   const qc = useQueryClient();
-  return () => qc.invalidateQueries({ queryKey: ['creditos'] });
+  return () => {
+    qc.invalidateQueries({ queryKey: ['creditos'] });
+    // A lista de alunos mostra quantos créditos cada um tem.
+    qc.invalidateQueries({ queryKey: ['usuarios', 'alunos'] });
+  };
 }
 
 export function useConcederCredito() {

@@ -40,6 +40,7 @@ export function useAdicionarAlunoNaAula() {
       qc.invalidateQueries({ queryKey: ['agendamentos'] });
       qc.invalidateQueries({ queryKey: ['horarios'] });
       qc.invalidateQueries({ queryKey: ['relatorios'] });
+      qc.invalidateQueries({ queryKey: ['usuarios', 'alunos'] });
     },
   });
 }
@@ -65,6 +66,7 @@ export function useCancelarAgendamentoAdmin() {
       qc.invalidateQueries({ queryKey: ['agendamentos'] });
       qc.invalidateQueries({ queryKey: ['horarios'] });
       qc.invalidateQueries({ queryKey: ['creditos'] });
+      qc.invalidateQueries({ queryKey: ['usuarios', 'alunos'] });
     },
   });
 }

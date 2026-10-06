@@ -118,11 +118,23 @@ test('roda todo dia às 08:00 no fuso de São Paulo', () => {
   assert.equal(opcoes.timeZone, 'America/Sao_Paulo');
 });
 
+/**
+ * O serviço confere a partir do relógio de verdade. A turma do teste é a do
+ * próximo dia útil (amanhã, ou segunda), para cair sempre dentro dos 7 dias —
+ * com a terça fixa, o teste falhava rodando numa terça depois das 8h.
+ */
+function turmaDoProximoDiaUtil() {
+  const NOMES = { 1: 'SEGUNDA', 2: 'TERCA', 3: 'QUARTA', 4: 'QUINTA', 5: 'SEXTA' };
+  const d = new Date();
+  do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+  return turma(`pil-${NOMES[d.getDay()]}-08:00`, NOMES[d.getDay()], '08:00', '09:00');
+}
+
 function servico({ ligado = true, comPendencia = true } = {}) {
   const enviados = [];
   let gravado;
   const prisma = {
-    ...banco({ fixos: comPendencia ? [fixoDe('ana', 'ANA LIMA', terca8)] : [] }),
+    ...banco({ fixos: comPendencia ? [fixoDe('ana', 'ANA LIMA', turmaDoProximoDiaUtil())] : [] }),
     conferenciaDiaria: {
       upsert: async ({ create }) => (gravado = { id: 'c1', ...create }),
       update: async ({ data }) => (gravado = { ...gravado, ...data }),
@@ -143,8 +155,7 @@ test('com pendência e e-mail ligado: manda o e-mail para a dona', async () => {
   const [para, assunto, texto] = enviados[0];
   assert.equal(para, 'dona@estudio.com');
   assert.match(assunto, /1 ponto para revisar/);
-  // O serviço confere a partir de agora (relógio de verdade): a terça é a próxima que vier.
-  assert.match(texto, /ANA LIMA — terça \d\d\/\d\d às 08:00 \(Pilates\)/);
+  assert.match(texto, /ANA LIMA — (segunda|terça|quarta|quinta|sexta) \d\d\/\d\d às 08:00 \(Pilates\)/);
 });
 
 test('sem pendência, ou sem e-mail configurado: não manda nada', async () => {
