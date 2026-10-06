@@ -7,7 +7,11 @@ export interface AulaHoje {
   modalidade: string;
   agendados: number;
   capacidade: number;
-  /** Chamada feita: quantos vieram e quantos faltaram (0 antes da aula). */
+  /**
+   * Depois que a aula termina: quantos contam como presentes (todo mundo que
+   * estava marcado — não existe chamada) e faltas registradas à mão (exceção).
+   * 0 e 0 antes de a aula terminar.
+   */
   presentes?: number;
   faltas?: number;
 }
@@ -16,10 +20,14 @@ export interface RelatorioDashboard {
   totalAlunos: number;
   alunosAtivos: number;
   aulasSemana: number;
+  /** Aulas da semana que já terminaram e contam como dadas (marcadas e não canceladas). */
   presencas: number;
+  /** Faltas registradas à mão (exceção — nenhuma tela registra hoje). */
   faltas: number;
+  /** Aulas da semana que o próprio aluno cancelou no prazo. */
+  canceladasSemana?: number;
   ocupacao: number;
-  /** Presentes ÷ (presentes + faltas) na semana; null sem chamada feita. */
+  /** Dadas ÷ (dadas + canceladas pelo aluno + faltas) na semana; null sem nenhuma ainda. */
   taxaPresenca?: number | null;
   // Opcionais: presentes só após o deploy do backend ampliado
   aulasPorDia?: { dia: DiaSemanaRelatorio; total: number }[];
@@ -50,15 +58,26 @@ export interface RelatorioDashboard {
   }[];
 }
 
+/**
+ * Frequência de um aluno nos últimos `periodoDias` dias, já calculada na API
+ * pela regra do estúdio: aula marcada e não cancelada conta como dada quando
+ * termina.
+ */
 export interface AlunoFrequencia {
   id: string;
   nome: string;
-  agendamentos: {
-    id: string;
-    status: string;
-    dataAula: string;
-    presenca?: { compareceu: boolean } | null;
-  }[];
+  periodoDias: number;
+  /** Aulas dadas (inclui as reposições). */
+  presencas: number;
+  reposicoes: number;
+  /** Canceladas pelo próprio aluno, no prazo. */
+  canceladas: number;
+  /** Faltas registradas à mão (exceção). */
+  faltas: number;
+  /** Dadas ÷ (dadas + canceladas + faltas); null sem nenhuma aula no período. */
+  assiduidade: number | null;
+  /** YYYY-MM-DD da última aula dada, ou null. */
+  ultimaAula: string | null;
   usuarioPlanos: {
     plano: { nome: string; aulasSemanais: number };
     modalidade: { nome: string };

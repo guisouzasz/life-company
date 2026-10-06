@@ -17,7 +17,7 @@ import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { Loading } from '../components/ui/states';
 import { SaldoDots } from '../components/ui/saldo-dots';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
-import { useMeusAgendamentos, useHistorico } from '../services/agendamentos/agendamentos.queries';
+import { useMeusAgendamentos, useResumoDoMes } from '../services/agendamentos/agendamentos.queries';
 import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mutations';
 import type { Agendamento } from '../services/agendamentos/agendamentos.types';
 import { podeCancelar, prazoLabel } from '../services/cancelamento';
@@ -28,7 +28,13 @@ export default function Dashboard() {
   const nome = useAuthStore((s) => s.nome);
   const saldo = useSaldo();
   const meus = useMeusAgendamentos();
-  const historico = useHistorico();
+  /**
+   * O mês já vem contado da API, pela regra do estúdio: aula marcada e não
+   * cancelada conta como feita quando termina. Antes a tela contava a
+   * chamada (que ninguém fazia) na primeira página do histórico — "0 aulas
+   * feitas" para todo mundo.
+   */
+  const resumo = useResumoDoMes();
   const cancelar = useCancelarAgendamento();
   const [alvo, setAlvo] = useState<Agendamento | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -47,8 +53,8 @@ export default function Dashboard() {
   const onRefresh = useCallback(() => {
     saldo.refetch();
     meus.refetch();
-    historico.refetch();
-  }, [saldo, meus, historico]);
+    resumo.refetch();
+  }, [saldo, meus, resumo]);
 
   if (saldo.isLoading || meus.isLoading) {
     return (
@@ -62,10 +68,8 @@ export default function Dashboard() {
   // O cadastro é todo em caixa alta; "Olá, MARINA!" grita com a aluna.
   const primeiroNome = nome ? soPrimeiroNome(nome) : 'Aluno';
   const proxima = meus.data?.[0];
-  const hist = historico.data ?? [];
-  const aulasFeitas = hist.filter((a) => a.status === 'REALIZADO' || a.presenca?.compareceu).length;
-  const avaliadas = hist.filter((a) => a.status === 'REALIZADO' || a.status === 'FALTOU' || a.presenca).length;
-  const presencaPct = avaliadas > 0 ? Math.round((aulasFeitas / avaliadas) * 100) : null;
+  const aulasFeitas = resumo.data?.feitas ?? 0;
+  const presencaPct = resumo.data?.presenca ?? null;
 
   return (
     <View style={s.root}>

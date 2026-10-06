@@ -455,6 +455,24 @@ model DiaFechado {
   @@map("dias_fechados")
 }
 
+/// A conferência diária dos horários fixos (roda às 08:00) — o alerta da dona.
+/// Uma por dia. Guarda o que foi achado já pronto para a tela: nomes e o que
+/// falta, nunca CPF, contato ou dado de saúde.
+model ConferenciaDiaria {
+  id          String    @id @default(uuid())
+  /// Meia-noite (no fuso do estúdio) do dia da conferência.
+  data        DateTime  @unique
+  rodadaEm    DateTime  @map("rodada_em")
+  /// Quantos itens pedem revisão (0 = tudo certo).
+  pendencias  Int
+  resultado   Json
+  revisadaEm  DateTime? @map("revisada_em")
+  /// Nome de quem marcou como revisada.
+  revisadaPor String?   @map("revisada_por")
+
+  @@map("conferencias_diarias")
+}
+
 model CreditoReposicao {
   id                  String    @id @default(uuid())
   usuarioId           String    @map("usuario_id")

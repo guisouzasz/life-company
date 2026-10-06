@@ -60,6 +60,8 @@ const REGRAS: Regra[] = [
   // ── Dias fechados ────────────────────────────────────────────────
   { metodo: 'POST', padrao: /^\/dias-fechados$/, resumo: 'Fechou um dia (feriado/recesso)' },
   { metodo: 'DELETE', padrao: /^\/dias-fechados\/[^/]+$/, resumo: 'Reabriu um dia fechado' },
+  { metodo: 'POST', padrao: /^\/conferencia\/rodar$/, resumo: 'Conferiu os horários fixos de novo' },
+  { metodo: 'POST', padrao: /^\/conferencia\/[^/]+\/revisada$/, resumo: 'Marcou a conferência dos horários fixos como revisada' },
 
   // ── Presença ─────────────────────────────────────────────────────
   { metodo: 'POST', padrao: /^\/presencas/, resumo: 'Marcou presença/falta' },

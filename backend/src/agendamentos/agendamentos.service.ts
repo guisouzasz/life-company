@@ -14,6 +14,7 @@ import {
 } from '../creditos/creditos.constantes';
 import { capacidadeEfetiva } from '../horarios/capacidade';
 import { cotaDaSemana } from './cota-semanal';
+import { contaComoPresenca, quemCancelou, temFaltaRegistrada } from '../presencas/regra-de-presenca';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -664,6 +665,54 @@ export class AgendamentosService {
       include: { horario: { include: { modalidade: true } }, diaFechado: { select: { motivo: true } } },
       orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
     });
+  }
+
+  /**
+   * O resumo do mês na tela inicial do aluno: aulas feitas e presença.
+   *
+   * Pela regra do estúdio (presencas/regra-de-presenca.ts): aula marcada e
+   * não cancelada conta como feita quando termina. A tela contava a chamada,
+   * que ninguém fazia, e mostrava "0 aulas feitas" para todo mundo. E contava
+   * só a primeira página do histórico, não o mês.
+   *
+   * Presença = feitas ÷ (feitas + canceladas por ele + faltas registradas).
+   * Aula que a academia ou a dona cancelou não entra: não foi escolha dele.
+   */
+  async resumoDoMes(usuarioId: string) {
+    const agora = new Date();
+    const aulas = await this.prisma.agendamento.findMany({
+      where: {
+        usuarioId,
+        dataAula: { gte: dayjs().startOf('month').toDate(), lte: dayjs().endOf('month').toDate() },
+      },
+      select: {
+        id: true, status: true, dataAula: true, reposicao: true, diaFechadoId: true,
+        horario: { select: { horaFim: true } },
+        presenca: { select: { compareceu: true } },
+      },
+    });
+    const canceladasIds = aulas.filter((a) => a.status === 'CANCELADO').map((a) => a.id);
+    const doAluno = new Set(
+      canceladasIds.length === 0
+        ? []
+        : (
+            await this.prisma.creditoReposicao.findMany({
+              where: { origemAgendamentoId: { in: canceladasIds }, concedidoAdmin: false },
+              select: { origemAgendamentoId: true },
+            })
+          ).map((c) => c.origemAgendamentoId!),
+    );
+    const feitas = aulas.filter((a) => contaComoPresenca(a, agora)).length;
+    const canceladas = aulas.filter((a) => a.status === 'CANCELADO' && quemCancelou(a, doAluno) === 'aluno').length;
+    const faltas = aulas.filter((a) => temFaltaRegistrada(a)).length;
+    const base = feitas + canceladas + faltas;
+    return {
+      mes: dayjs().format('YYYY-MM'),
+      feitas,
+      canceladas,
+      faltas,
+      presenca: base > 0 ? Math.round((feitas / base) * 100) : null,
+    };
   }
 
   async historico(usuarioId: string, page = 1) {

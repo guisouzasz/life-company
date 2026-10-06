@@ -10,6 +10,14 @@ export function useMinhasAulasEmDiaFechado() {
   });
 }
 
+/** Aulas feitas e presença do mês (tela inicial do aluno). */
+export function useResumoDoMes() {
+  return useQuery({
+    queryKey: ['agendamentos', 'meus', 'resumo'],
+    queryFn: agendamentosService.resumoDoMes,
+  });
+}
+
 export function useMeusAgendamentos() {
   return useQuery({
     queryKey: queryKeys.meusAgendamentos,

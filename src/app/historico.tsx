@@ -11,22 +11,22 @@ import { useHistoricoPaginado } from '../services/agendamentos/agendamentos.quer
 import type { Agendamento } from '../services/agendamentos/agendamentos.types';
 import { formatDate } from '../services/date';
 
+/**
+ * O selo de cada aula passada, pela regra do estúdio: não existe chamada —
+ * aula marcada e não cancelada é presença (o histórico só traz dias que já
+ * passaram). Falta só aparece se alguém registrou à mão.
+ */
 function badgeDoHistorico(ag: Agendamento): { label: string; variant: BadgeVariant } {
-  if (ag.presenca) {
-    return ag.presenca.compareceu
-      ? { label: 'Presença', variant: 'success' }
-      : { label: 'Falta', variant: 'danger' };
-  }
+  if (ag.presenca?.compareceu === false || ag.status === 'FALTOU') return { label: 'Falta', variant: 'danger' };
   switch (ag.status) {
     case 'CONFIRMADO':
-      // Histórico só traz aulas passadas: confirmada sem registro = aconteceu
-      return { label: 'Realizada', variant: 'info' };
-    case 'CANCELADO':
-      return { label: 'Cancelada', variant: 'danger' };
     case 'REALIZADO':
-      return { label: 'Concluída', variant: 'info' };
-    case 'FALTOU':
-      return { label: 'Falta', variant: 'danger' };
+      return { label: ag.reposicao ? 'Presença · reposição' : 'Presença', variant: 'success' };
+    case 'CANCELADO':
+      // Dia fechado não foi cancelamento de ninguém: a academia não abriu.
+      return ag.diaFechadoId
+        ? { label: 'Academia fechada', variant: 'neutral' }
+        : { label: 'Cancelada', variant: 'neutral' };
     default:
       return { label: ag.status, variant: 'neutral' };
   }

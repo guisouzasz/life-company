@@ -222,6 +222,24 @@ const AJUSTES: { descricao: string; sql: string }[] = [
     descricao: 'exercicios_treino: bi-set (feito junto com o próximo)',
     sql: `ALTER TABLE "exercicios_treino" ADD COLUMN IF NOT EXISTS "conjugado" BOOLEAN NOT NULL DEFAULT false`,
   },
+  {
+    // A conferência das 08:00 dos horários fixos — o alerta da dona.
+    descricao: 'conferencias_diarias: a conferência diária dos horários fixos',
+    sql: `CREATE TABLE IF NOT EXISTS "conferencias_diarias" (
+            "id" TEXT NOT NULL,
+            "data" TIMESTAMP(3) NOT NULL,
+            "rodada_em" TIMESTAMP(3) NOT NULL,
+            "pendencias" INTEGER NOT NULL,
+            "resultado" JSONB NOT NULL,
+            "revisada_em" TIMESTAMP(3),
+            "revisada_por" TEXT,
+            CONSTRAINT "conferencias_diarias_pkey" PRIMARY KEY ("id")
+          )`,
+  },
+  {
+    descricao: 'conferencias_diarias: uma por dia',
+    sql: `CREATE UNIQUE INDEX IF NOT EXISTS "conferencias_diarias_data_key" ON "conferencias_diarias"("data")`,
+  },
 ];
 
 /**

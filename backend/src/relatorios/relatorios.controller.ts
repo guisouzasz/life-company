@@ -7,6 +7,7 @@ import * as dayjs from 'dayjs';
 import { Prisma } from '@prisma/client';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { capacidadeEfetiva } from '../horarios/capacidade';
+import { aulaJaTerminou, contaComoPresenca, quemCancelou, temFaltaRegistrada } from '../presencas/regra-de-presenca';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -31,7 +32,8 @@ export class RelatoriosController {
     const ontemIni = dayjs().subtract(1, 'day').startOf('day').toDate();
     const ontemFim = dayjs().subtract(1, 'day').endOf('day').toDate();
 
-    const [totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, agsSemana, horariosHoje, canceladosOntemRaw, creditosValidos, aguardandoAcessoRaw] = await Promise.all([
+    const agora = new Date();
+    const [totalAlunos, alunosAtivos, aulasSemana, daSemana, agsSemana, horariosHoje, canceladosOntemRaw, creditosValidos, aguardandoAcessoRaw] = await Promise.all([
       this.prisma.usuario.count({ where: { tipoUsuario: 'ALUNO' } }),
       this.prisma.usuario.count({ where: { tipoUsuario: 'ALUNO', ativo: true } }),
       /**
@@ -44,8 +46,20 @@ export class RelatoriosController {
        * (chegou a 255% com três semanas de histórico).
        */
       this.prisma.agendamento.count({ where: { status: { in: ['CONFIRMADO', 'REALIZADO'] }, dataAula: { gte: inicioSemana, lte: fimSemana } } }),
-      this.prisma.presenca.count({ where: { compareceu: true, registradoEm: { gte: inicioSemana } } }),
-      this.prisma.presenca.count({ where: { compareceu: false, registradoEm: { gte: inicioSemana } } }),
+      /**
+       * As aulas da semana, para contar presença pela regra do estúdio
+       * (presencas/regra-de-presenca.ts): marcada, não cancelada e já
+       * terminada é aula dada. Antes contava registros de chamada — que
+       * nenhuma tela fazia —, e a presença da semana ficava sempre zerada.
+       */
+      this.prisma.agendamento.findMany({
+        where: { dataAula: { gte: inicioSemana, lte: fimSemana } },
+        select: {
+          id: true, status: true, dataAula: true, diaFechadoId: true,
+          horario: { select: { horaFim: true } },
+          presenca: { select: { compareceu: true } },
+        },
+      }),
       // Agrupamos pelo diaSemana do horário (evita ambiguidade de fuso do dataAula)
       this.prisma.agendamento.findMany({
         where: { status: { in: ['CONFIRMADO', 'REALIZADO'] }, dataAula: { gte: inicioSemana, lte: fimSemana } },
@@ -64,15 +78,16 @@ export class RelatoriosController {
                */
               agendamentos: {
                 where: { status: { in: ['CONFIRMADO', 'REALIZADO'] }, dataAula: { gte: inicioHoje, lte: fimHoje } },
-                select: { presenca: { select: { compareceu: true } } },
+                select: { status: true, dataAula: true, presenca: { select: { compareceu: true } } },
               },
             },
             orderBy: { horaInicio: 'asc' },
           })
         : Promise.resolve([]),
-      // Resumo de ontem: aulas de ontem que constam como canceladas
+      // Resumo de ontem: aulas de ontem que constam como canceladas. Dia
+      // fechado fica de fora: num feriado a lista viraria a turma inteira.
       this.prisma.agendamento.findMany({
-        where: { status: 'CANCELADO', dataAula: { gte: ontemIni, lte: ontemFim } },
+        where: { status: 'CANCELADO', diaFechadoId: null, dataAula: { gte: ontemIni, lte: ontemFim } },
         include: {
           usuario: { select: { nome: true } },
           horario: { select: { horaInicio: true, modalidade: { select: { nome: true } } } },
@@ -93,13 +108,22 @@ export class RelatoriosController {
       }),
     ]);
 
+    const presencas = daSemana.filter((a) => contaComoPresenca(a, agora)).length;
+    const faltas = daSemana.filter((a) => temFaltaRegistrada(a)).length;
+    // Canceladas pelo PRÓPRIO aluno no prazo (as da academia e da dona não
+    // contam contra ele) — ver quemCancelou.
+    const canceladasIds = daSemana.filter((a) => a.status === 'CANCELADO').map((a) => a.id);
+    const doAluno = await this.origensDeCancelamentoDoAluno(canceladasIds);
+    const canceladasSemana = daSemana.filter((a) => a.status === 'CANCELADO' && quemCancelou(a, doAluno) === 'aluno').length;
+
     const ocupacao = aulasSemana > 0 ? Math.round((presencas / aulasSemana) * 100) : 0;
     /**
-     * De quem teve a chamada feita, quantos vieram. A `ocupacao` acima divide
-     * as presenças pelas aulas da semana INTEIRA — na segunda de manhã dava
-     * 10%, com a semana ainda por acontecer, e parecia estúdio vazio.
+     * Das aulas da semana que já tiveram a vez delas (dadas ou canceladas pelo
+     * aluno), quantas foram dadas. Antes era "presentes ÷ chamada feita" — sem
+     * chamada, nunca saía do traço.
      */
-    const taxaPresenca = presencas + faltas > 0 ? Math.round((presencas / (presencas + faltas)) * 100) : null;
+    const base = presencas + faltas + canceladasSemana;
+    const taxaPresenca = base > 0 ? Math.round((presencas / base) * 100) : null;
     const aulasPorDia = DIAS.map((dia) => ({
       dia,
       total: agsSemana.filter((a) => a.horario.diaSemana === dia).length,
@@ -110,9 +134,10 @@ export class RelatoriosController {
       horaFim: h.horaFim,
       modalidade: h.modalidade.nome,
       agendados: h.agendamentos.length,
-      // Chamada feita: quem veio e quem faltou (0 e 0 antes da aula).
-      presentes: h.agendamentos.filter((a) => a.presenca?.compareceu === true).length,
-      faltas: h.agendamentos.filter((a) => a.presenca?.compareceu === false).length,
+      // Aula que já terminou: quem estava marcado conta como presente (a
+      // regra do estúdio); antes de terminar, 0 e 0.
+      presentes: h.agendamentos.filter((a) => contaComoPresenca({ ...a, horario: { horaFim: h.horaFim } }, agora)).length,
+      faltas: aulaJaTerminou(inicioHoje, h.horaFim, agora) ? h.agendamentos.filter((a) => temFaltaRegistrada(a)).length : 0,
       // O teto da modalidade, não só o número gravado: turma de Pilates salva
       // com 4 mostraria "3/4" no painel e pareceria ter vaga que a API recusa.
       capacidade: capacidadeEfetiva(h.capacidadeMaxima, h.modalidade.nome),
@@ -138,7 +163,7 @@ export class RelatoriosController {
     };
 
     return {
-      totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, ocupacao, taxaPresenca, aulasPorDia, aulasHoje,
+      totalAlunos, alunosAtivos, aulasSemana, presencas, faltas, canceladasSemana, ocupacao, taxaPresenca, aulasPorDia, aulasHoje,
       canceladosOntem, reposicoesPendentes, aguardandoAcesso,
       aniversariantes: await this.aniversariantesDaSemana(),
     };
@@ -226,15 +251,76 @@ export class RelatoriosController {
       .sort((a, b) => (a.data === b.data ? a.nome.localeCompare(b.nome) : a.data.localeCompare(b.data)));
   }
 
+  /**
+   * Aulas canceladas que geraram crédito PARA O ALUNO — a marca de que foi
+   * ele quem cancelou, no prazo. O crédito que o estúdio dá ao tirar alguém
+   * da aula vem com `concedidoAdmin`, e o dia fechado não gera crédito.
+   */
+  private async origensDeCancelamentoDoAluno(ids: string[]): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const creditos = await this.prisma.creditoReposicao.findMany({
+      where: { origemAgendamentoId: { in: ids }, concedidoAdmin: false },
+      select: { origemAgendamentoId: true },
+    });
+    return new Set(creditos.map((c) => c.origemAgendamentoId!).filter(Boolean));
+  }
+
+  /**
+   * Frequência dos últimos 30 dias, por aluno ativo.
+   *
+   * Pela regra do estúdio (presencas/regra-de-presenca.ts): aula marcada que
+   * não foi cancelada conta como dada quando termina. Antes esta rota
+   * devolvia as aulas CONFIRMADAS — inclusive as futuras — e a tela contava
+   * só a chamada, que ninguém fazia: todo mundo aparecia com 0 presenças.
+   *
+   * Assiduidade = dadas ÷ (dadas + canceladas pelo aluno + faltas
+   * registradas). Cancelamento da academia (dia fechado) e da dona não
+   * entram: não foram escolha do aluno.
+   */
   @Get('frequencia')
   async frequencia() {
-    return this.prisma.usuario.findMany({
-      where: { tipoUsuario: 'ALUNO', ativo: true },
+    const agora = new Date();
+    const desde = dayjs().subtract(29, 'day').startOf('day').toDate();
+    const ate = dayjs().endOf('day').toDate();
+    const alunos = await this.prisma.usuario.findMany({
+      where: { tipoUsuario: 'ALUNO', ativo: true, NOT: { cpf: { startsWith: 'REMOVIDO-' } } },
       select: {
         id: true, nome: true,
-        agendamentos: { where: { status: 'CONFIRMADO' }, include: { presenca: true }, orderBy: { dataAula: 'desc' }, take: 20 },
         usuarioPlanos: { include: { plano: true, modalidade: true }, where: { vigenciaFim: null } },
+        agendamentos: {
+          where: { dataAula: { gte: desde, lte: ate } },
+          select: {
+            id: true, status: true, dataAula: true, reposicao: true, diaFechadoId: true,
+            horario: { select: { horaFim: true } },
+            presenca: { select: { compareceu: true } },
+          },
+        },
       },
+      orderBy: { nome: 'asc' },
+    });
+    const canceladasIds = alunos.flatMap((a) => a.agendamentos.filter((x) => x.status === 'CANCELADO').map((x) => x.id));
+    const doAluno = await this.origensDeCancelamentoDoAluno(canceladasIds);
+
+    return alunos.map((a) => {
+      const dadas = a.agendamentos.filter((x) => contaComoPresenca(x, agora));
+      const canceladas = a.agendamentos.filter((x) => x.status === 'CANCELADO' && quemCancelou(x, doAluno) === 'aluno').length;
+      const faltas = a.agendamentos.filter((x) => temFaltaRegistrada(x)).length;
+      const base = dadas.length + canceladas + faltas;
+      const ultima = dadas.reduce<Date | null>((m, x) => (!m || x.dataAula > m ? x.dataAula : m), null);
+      return {
+        id: a.id,
+        nome: a.nome,
+        usuarioPlanos: a.usuarioPlanos,
+        periodoDias: 30,
+        presencas: dadas.length,
+        reposicoes: dadas.filter((x) => x.reposicao).length,
+        canceladas,
+        faltas,
+        assiduidade: base > 0 ? Math.round((dadas.length / base) * 100) : null,
+        ultimaAula: ultima ? dayjs(ultima).format('YYYY-MM-DD') : null,
+        // Versão antiga da tela contava por esta lista; vazia, ela não quebra.
+        agendamentos: [],
+      };
     });
   }
 }

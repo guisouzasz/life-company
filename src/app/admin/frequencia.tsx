@@ -7,13 +7,22 @@ import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useRelatorioFrequencia } from '../../services/relatorios/relatorios.queries';
 import type { AlunoFrequencia } from '../../services/relatorios/relatorios.types';
 import { useIsDesktop } from '../../hooks/use-is-desktop';
+import { formatDate } from '../../services/date';
 
+/**
+ * Os números já vêm calculados da API, pela regra do estúdio: aula marcada e
+ * não cancelada conta como dada quando termina — não existe chamada. Antes a
+ * tela contava a chamada, que ninguém fazia, e todo mundo aparecia com zero.
+ */
 function resumo(aluno: AlunoFrequencia) {
-  const presencas = aluno.agendamentos.filter((a) => a.presenca?.compareceu).length;
-  const faltas = aluno.agendamentos.filter((a) => a.presenca && !a.presenca.compareceu).length;
-  const avaliadas = presencas + faltas;
-  const pct = avaliadas > 0 ? Math.round((presencas / avaliadas) * 100) : null;
-  return { presencas, faltas, pct };
+  return {
+    presencas: aluno.presencas ?? 0,
+    canceladas: aluno.canceladas ?? 0,
+    faltas: aluno.faltas ?? 0,
+    reposicoes: aluno.reposicoes ?? 0,
+    pct: aluno.assiduidade ?? null,
+    ultima: aluno.ultimaAula ? formatDate(aluno.ultimaAula, 'DD/MM') : null,
+  };
 }
 
 export default function AdminFrequencia() {
@@ -25,7 +34,9 @@ export default function AdminFrequencia() {
       <StatusBar barStyle="dark-content" />
       <View style={isDesktop ? s.deskHeader : s.header}>
         <Text style={s.title}>Frequência</Text>
-        <Text style={s.subtitle}>Presenças e faltas por aluno</Text>
+        <Text style={s.subtitle}>
+          Últimos 30 dias. Aula marcada e não cancelada no prazo conta como presença.
+        </Text>
       </View>
 
       {frequencia.isLoading ? (
@@ -33,7 +44,7 @@ export default function AdminFrequencia() {
       ) : frequencia.isError ? (
         <ErrorState onRetry={() => frequencia.refetch()} />
       ) : !frequencia.data || frequencia.data.length === 0 ? (
-        <EmptyState icon="stats-chart-outline" title="Sem dados de frequência" description="Os registros de presença aparecerão aqui." />
+        <EmptyState icon="stats-chart-outline" title="Sem alunos ativos" description="A frequência de cada aluno aparece aqui." />
       ) : isDesktop ? (
         // ── Desktop: tabela ──────────────────────────────────────────
         <ScrollView contentContainerStyle={s.deskScroll} showsVerticalScrollIndicator={false}>
@@ -41,12 +52,13 @@ export default function AdminFrequencia() {
             <View style={[s.tRow, s.tHead]}>
               <Text style={[s.tCol, s.tColAluno, s.tHeadText]}>Aluno</Text>
               <Text style={[s.tCol, s.tColPlano, s.tHeadText]}>Plano</Text>
-              <Text style={[s.tCol, s.tColNum, s.tHeadText]}>Presenças</Text>
-              <Text style={[s.tCol, s.tColNum, s.tHeadText]}>Faltas</Text>
+              <Text style={[s.tCol, s.tColNum, s.tHeadText]}>Aulas feitas</Text>
+              <Text style={[s.tCol, s.tColNum, s.tHeadText]}>Canceladas</Text>
+              <Text style={[s.tCol, s.tColNum, s.tHeadText]}>Última</Text>
               <Text style={[s.tCol, s.tColPct, s.tHeadText]}>Assiduidade</Text>
             </View>
             {frequencia.data.map((aluno) => {
-              const { presencas, faltas, pct } = resumo(aluno);
+              const { presencas, canceladas, pct, ultima } = resumo(aluno);
               const plano = aluno.usuarioPlanos?.[0];
               return (
                 <View key={aluno.id} style={s.tRow}>
@@ -58,7 +70,8 @@ export default function AdminFrequencia() {
                     {plano?.plano?.nome ?? '—'}
                   </Text>
                   <Text style={[s.tCol, s.tColNum, s.tTexto, { color: LC.success, fontWeight: '700' }]}>{presencas}</Text>
-                  <Text style={[s.tCol, s.tColNum, s.tTexto, faltas > 0 && { color: LC.danger, fontWeight: '700' }]}>{faltas}</Text>
+                  <Text style={[s.tCol, s.tColNum, s.tTexto, canceladas > 0 && { color: LC.warningFg, fontWeight: '700' }]}>{canceladas}</Text>
+                  <Text style={[s.tCol, s.tColNum, s.tTexto]}>{ultima ?? '—'}</Text>
                   <View style={[s.tCol, s.tColPct, s.tPctWrap]}>
                     <View style={s.tTrack}>
                       <View style={[s.tFill, { width: `${pct ?? 0}%` }]} />
@@ -74,7 +87,7 @@ export default function AdminFrequencia() {
       ) : (
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
           {frequencia.data.map((aluno) => {
-            const { presencas, faltas, pct } = resumo(aluno);
+            const { presencas, canceladas, faltas, reposicoes, pct, ultima } = resumo(aluno);
             const plano = aluno.usuarioPlanos?.[0];
             return (
               <Card key={aluno.id} style={s.card} padding={16}>
@@ -100,13 +113,25 @@ export default function AdminFrequencia() {
                 <View style={s.statsRow}>
                   <View style={s.statItem}>
                     <View style={[s.dot, { backgroundColor: LC.success }]} />
-                    <Text style={s.statText}>{presencas} presenças</Text>
+                    <Text style={s.statText}>
+                      {presencas} {presencas === 1 ? 'aula feita' : 'aulas feitas'}
+                      {reposicoes > 0 ? ` (${reposicoes} de reposição)` : ''}
+                    </Text>
                   </View>
                   <View style={s.statItem}>
-                    <View style={[s.dot, { backgroundColor: LC.danger }]} />
-                    <Text style={s.statText}>{faltas} faltas</Text>
+                    <View style={[s.dot, { backgroundColor: LC.warning }]} />
+                    <Text style={s.statText}>
+                      {canceladas} {canceladas === 1 ? 'cancelada' : 'canceladas'} no prazo
+                    </Text>
                   </View>
+                  {faltas > 0 ? (
+                    <View style={s.statItem}>
+                      <View style={[s.dot, { backgroundColor: LC.danger }]} />
+                      <Text style={s.statText}>{faltas} {faltas === 1 ? 'falta' : 'faltas'}</Text>
+                    </View>
+                  ) : null}
                 </View>
+                <Text style={s.ultima}>{ultima ? `Última aula: ${ultima}` : 'Nenhuma aula nos últimos 30 dias'}</Text>
               </Card>
             );
           })}
@@ -152,7 +177,8 @@ const s = StyleSheet.create({
   pct: { fontSize: 20, fontWeight: '800', color: LC.primary },
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: LC.border, overflow: 'hidden', marginTop: 14 },
   progressFill: { height: '100%', borderRadius: 4, backgroundColor: LC.primary },
-  statsRow: { flexDirection: 'row', gap: 18, marginTop: 12 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 18, rowGap: 6, marginTop: 12 },
+  ultima: { fontSize: 12, color: LC.textMuted, marginTop: 8 },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   statText: { fontSize: 12, color: LC.textSecondary, fontWeight: '600' },

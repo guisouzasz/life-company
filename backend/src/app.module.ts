@@ -24,6 +24,7 @@ import { EmailModule } from './email/email.module';
 import { LogsModule } from './logs/logs.module';
 import { DiagnosticoModule } from './diagnostico/diagnostico.module';
 import { DiasFechadosModule } from './dias-fechados/dias-fechados.module';
+import { ConferenciaModule } from './conferencia/conferencia.module';
 import { LogsInterceptor } from './logs/logs.interceptor';
 import { LIMITE_POR_CONTA } from './auth/limite-por-conta';
 
@@ -47,6 +48,7 @@ import { LIMITE_POR_CONTA } from './auth/limite-por-conta';
     CreditosModule,
     HorariosFixosModule,
     DiasFechadosModule,
+    ConferenciaModule,
     AutoAgendamentoModule,
     FinanceiroModule,
     TreinosModule,

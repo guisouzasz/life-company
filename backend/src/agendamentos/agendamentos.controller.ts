@@ -37,6 +37,9 @@ export class AgendamentosController {
   @Get('meus') @ApiOperation({ summary: 'Meus agendamentos futuros' })
   meus(@Request() req) { return this.service.listarMeus(req.user.id); }
 
+  @Get('meus/resumo') @ApiOperation({ summary: 'Aulas feitas e presença do aluno no mês' })
+  meuResumo(@Request() req) { return this.service.resumoDoMes(req.user.id); }
+
   @Get('meus/dias-fechados') @ApiOperation({ summary: 'Minhas aulas que caíram em dia fechado (feriado/recesso)' })
   meusEmDiaFechado(@Request() req) { return this.service.listarFechadasDoAluno(req.user.id); }
 

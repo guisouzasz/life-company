@@ -36,6 +36,8 @@ export interface Agendamento {
   presenca?: Presenca | null;
   /** Aula que caiu em dia fechado (feriado/recesso). */
   diaFechado?: { motivo: string } | null;
+  /** Id do dia fechado que tirou a aula da agenda (vem em toda aula da API). */
+  diaFechadoId?: string | null;
 }
 
 export interface CriarAgendamentoPayload {
@@ -88,6 +90,20 @@ export interface LimiteSemanalErro {
 
 export function ehLimiteSemanal(data: unknown): data is LimiteSemanalErro {
   return !!data && typeof data === 'object' && (data as { codigo?: string }).codigo === 'LIMITE_SEMANAL';
+}
+
+/**
+ * O mês do aluno: aulas feitas e presença.
+ *
+ * Aula marcada e não cancelada conta como feita quando termina (não existe
+ * chamada). Presença = feitas ÷ (feitas + canceladas por ele + faltas).
+ */
+export interface ResumoDoMes {
+  mes: string; // YYYY-MM
+  feitas: number;
+  canceladas: number;
+  faltas: number;
+  presenca: number | null;
 }
 
 /** A semana tem vaga e o aluno tem crédito: a dona escolhe se é reposição ou plano. */

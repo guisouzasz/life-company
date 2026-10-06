@@ -13,6 +13,8 @@ import { Icon, type IconName } from '../../components/ui/icon';
 import { Loading, ErrorState } from '../../components/ui/states';
 import { AppModal } from '../../components/ui/modal';
 import { AlunosHorarioModal, type HorarioDoModal } from '../../components/admin/alunos-horario-modal';
+import { ConferenciaModal } from '../../components/admin/conferencia-modal';
+import { useConferenciaHoje } from '../../services/conferencia/conferencia.queries';
 import { situacaoDoAluno } from '../../components/professor/situacao';
 import { useRelatorioDashboard } from '../../services/relatorios/relatorios.queries';
 import { useResumoFinanceiro } from '../../services/financeiro/financeiro.queries';
@@ -157,7 +159,7 @@ function LinhaDoDia({ d, largo }: { d?: RelatorioDashboard; largo?: boolean }) {
         </View>
         <Text style={[s.tileConta, estado === 'agora' && { color: 'rgba(255,255,255,0.9)' }]}>
           {estado === 'dada' && chamada
-            ? `${a.presentes} vieram${a.faltas ? ` · ${a.faltas} faltou` : ''}`
+            ? `${a.presentes} ${a.presentes === 1 ? 'aluno' : 'alunos'}${a.faltas ? ` · ${a.faltas} ${a.faltas === 1 ? 'falta' : 'faltas'}` : ''}`
             : `${a.agendados} de ${a.capacidade}`}
         </Text>
       </Pressable>
@@ -197,6 +199,9 @@ function PrecisaDeVoce({ d, fin }: { d?: RelatorioDashboard; fin?: ResumoFinance
   const resumo = useResumoTreinos();
   const alunos = useAlunos();
   const [lista, setLista] = useState<Lista | null>(null);
+  /** A conferência das 08:00 dos horários fixos (o alerta do dia). */
+  const conferencia = useConferenciaHoje();
+  const [verConferencia, setVerConferencia] = useState(false);
 
   const abrirAluno = (nome: string) => {
     setLista(null);
@@ -220,6 +225,28 @@ function PrecisaDeVoce({ d, fin }: { d?: RelatorioDashboard; fin?: ResumoFinance
   }, [resumo.data, alunos.data]);
 
   const itens: Item[] = [];
+
+  /*
+    O alerta das 08:00 vem primeiro: é a conferência dos horários fixos dos
+    próximos 7 dias. Some quando ela marca como revisado (ou quando, ao
+    conferir de novo, não sobra nada).
+  */
+  const c = conferencia.data;
+  if (c && c.pendencias > 0 && !c.revisadaEm) {
+    const nomes = [
+      ...new Set(
+        c.resultado.pontos
+          .filter((p) => p.nivel === 'revisar')
+          .flatMap((p) => p.itens.map((i) => i.nome).filter((n): n is string => !!n)),
+      ),
+    ];
+    itens.push({
+      chave: 'conferencia', icone: 'calendar', cor: LC.dangerFg, fundo: LC.dangerBg,
+      titulo: `Horários fixos: ${c.pendencias} ${c.pendencias === 1 ? 'ponto' : 'pontos'} para revisar hoje`,
+      sub: nomes.length ? juntar(nomes.map(nomeCurto)) : 'Toque para ver a conferência das 08:00',
+      onPress: () => setVerConferencia(true),
+    });
+  }
 
   const atrasados = (fin?.alunos ?? []).filter((a) => a.status === 'ATRASADO').sort((a, b) => b.dias - a.dias);
   if (atrasados.length > 0) {
@@ -379,6 +406,31 @@ function PrecisaDeVoce({ d, fin }: { d?: RelatorioDashboard; fin?: ResumoFinance
         })
       )}
 
+      {/*
+        Sem alerta, uma linha discreta diz que a conferência rodou — é ela
+        que dá à dona a certeza de que "nada para revisar" foi conferido, e
+        não esquecido.
+      */}
+      {c && !(c.pendencias > 0 && !c.revisadaEm) ? (
+        <Pressable
+          style={({ pressed }) => [s.conferenciaLinha, pressed && { opacity: 0.7 }]}
+          onPress={() => setVerConferencia(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Ver a conferência dos horários fixos"
+        >
+          <Icon name="shield-checkmark" size={15} color={LC.successFg} />
+          <Text style={s.conferenciaTexto}>
+            {c.pendencias > 0
+              ? `Conferência dos horários fixos revisada${c.revisadaEm ? ` às ${formatDate(new Date(c.revisadaEm), 'HH:mm')}` : ''}.`
+              : `Horários fixos conferidos às ${formatDate(new Date(c.rodadaEm), 'HH:mm')}: tudo certo.`}
+            {c.resultado.avisos > 0 ? ` ${c.resultado.avisos} ${c.resultado.avisos === 1 ? 'aviso' : 'avisos'}.` : ''}
+          </Text>
+          <Icon name="chevron-forward" size={14} color={LC.textMuted} />
+        </Pressable>
+      ) : null}
+
+      <ConferenciaModal conferencia={c} visivel={verConferencia} onClose={() => setVerConferencia(false)} />
+
       <AppModal visible={!!lista} onClose={() => setLista(null)} title={lista?.titulo ?? ''}>
         <Text style={s.listaDica}>{lista?.dica}</Text>
         <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
@@ -489,12 +541,20 @@ function Semana({ d }: { d?: RelatorioDashboard }) {
           );
         })}
       </View>
+      {/*
+        Não existe chamada: aula marcada e não cancelada conta como dada quando
+        termina (a regra do estúdio). A frase antes esperava uma chamada que
+        nenhuma tela fazia, e ficava parada em "quando a chamada começar".
+      */}
       <View style={s.presenca}>
         <Icon name="hand-left" size={15} color={LC.infoFg} />
         <Text style={s.presencaTexto}>
-          {taxa == null
-            ? 'A presença aparece aqui quando a chamada da semana começar.'
-            : `Presença de ${taxa}% nas aulas com chamada (${d?.presencas} vieram, ${d?.faltas} ${d?.faltas === 1 ? 'faltou' : 'faltaram'})`}
+          {(d?.presencas ?? 0) === 0 && (d?.canceladasSemana ?? 0) === 0
+            ? 'As aulas dadas aparecem aqui conforme a semana acontece.'
+            : `Até agora: ${d?.presencas ?? 0} ${d?.presencas === 1 ? 'aula dada' : 'aulas dadas'}` +
+              ` · ${d?.canceladasSemana ?? 0} ${d?.canceladasSemana === 1 ? 'cancelada' : 'canceladas'} pelos alunos no prazo` +
+              (taxa != null ? ` · presença de ${taxa}%` : '') +
+              (d?.faltas ? ` · ${d.faltas} ${d.faltas === 1 ? 'falta registrada' : 'faltas registradas'}` : '')}
         </Text>
       </View>
     </View>
@@ -609,7 +669,7 @@ export default function AdminDashboard() {
       { rotulo: 'Alunos hoje', valor: String(hoje.alunos), sub: `em ${hoje.aulas} ${hoje.aulas === 1 ? 'aula' : 'aulas'}`, icone: 'people', cor: '#4F46E5', fundo: '#EEF2FF' },
       { rotulo: 'Lotação hoje', valor: `${hoje.lotacao}%`, sub: 'das vagas da grade', icone: 'speedometer', cor: LC.primary, fundo: LC.primaryLight },
       { rotulo: 'Recebido no mês', valor: fin ? reais(fin.recebido) : '—', sub: fin ? `de ${reais(fin.previsto)}` : '', icone: 'wallet', cor: '#15803D', fundo: LC.successBg },
-      { rotulo: 'Presença na semana', valor: d?.taxaPresenca == null ? '—' : `${d.taxaPresenca}%`, sub: `${d?.presencas ?? 0} vieram · ${d?.faltas ?? 0} faltas`, icone: 'hand-left', cor: '#1D4ED8', fundo: LC.infoBg },
+      { rotulo: 'Aulas dadas na semana', valor: String(d?.presencas ?? 0), sub: `${d?.canceladasSemana ?? 0} canceladas no prazo${d?.taxaPresenca != null ? ` · presença ${d.taxaPresenca}%` : ''}`, icone: 'hand-left', cor: '#1D4ED8', fundo: LC.infoBg },
     ];
     return (
       <View style={s.root}>
@@ -844,6 +904,8 @@ const s = StyleSheet.create({
   graficoBarra: { width: '100%', borderRadius: 8, backgroundColor: LC.primarySoft },
   graficoDia: { fontSize: 11.5, fontWeight: '600', color: LC.textMuted, marginTop: 6 },
   presenca: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: LC.border },
+  conferenciaLinha: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: LC.border },
+  conferenciaTexto: { flex: 1, fontSize: 12.5, fontWeight: '600', color: LC.textSecondary, lineHeight: 17 },
   presencaTexto: { flex: 1, fontSize: 12.5, fontWeight: '600', color: LC.textSecondary, lineHeight: 17 },
 
   // Aniversários
