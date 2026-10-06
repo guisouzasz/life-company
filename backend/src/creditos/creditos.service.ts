@@ -73,6 +73,6 @@ export class CreditosService {
     const existe = await this.prisma.creditoReposicao.findUnique({ where: { id } });
     if (!existe) throw new NotFoundException('Crédito não encontrado');
     await this.prisma.creditoReposicao.update({ where: { id }, data: { revogado: true } });
-    return { mensagem: 'Crédito revogado' };
+    return { mensagem: 'Crédito excluído' };
   }
 }
