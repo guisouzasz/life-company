@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { voltar } from '../services/navegacao';
 import { LC } from '../constants/theme';
 import { Header } from '../components/ui/header';
 import { Card } from '../components/ui/card';
@@ -509,7 +509,7 @@ export default function AnamneseAluno() {
         onClose={() => {
           const ok = aviso === '__ok__';
           setAviso(null);
-          if (ok) router.back();
+          if (ok) voltar();
         }}
       />
     </View>

@@ -22,7 +22,7 @@ import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mu
 import type { Agendamento } from '../services/agendamentos/agendamentos.types';
 import { podeCancelar, prazoLabel } from '../services/cancelamento';
 import { ApiError } from '../services/http';
-import { endOfIsoWeekFormatted, formatDate } from '../services/date';
+import { renovacaoDaSemanaFormatada, formatDate } from '../services/date';
 
 export default function Dashboard() {
   const nome = useAuthStore((s) => s.nome);
@@ -114,7 +114,7 @@ export default function Dashboard() {
                 <Text style={s.saldoCount}>
                   {saldo.data.usadas} de {saldo.data.total} aulas usadas
                 </Text>
-                <Text style={s.saldoRenova}>Renova em {endOfIsoWeekFormatted()}</Text>
+                <Text style={s.saldoRenova}>Renova na segunda, {renovacaoDaSemanaFormatada()}</Text>
                 <Toque escala={0.94} style={s.linkRow} onPress={() => router.push('/meu-plano')} hitSlop={6}>
                   <Text style={s.linkText}>{saldo.data.plano}</Text>
                   <Icon name="chevron-forward" size={15} color="#fff" />

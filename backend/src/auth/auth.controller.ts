@@ -8,13 +8,18 @@ import { EsqueciSenhaDto } from './dto/esqueci-senha.dto';
 import { PrimeiroAcessoDto } from './dto/primeiro-acesso.dto';
 import { AtivarContaDto } from './dto/ativar-conta.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LimitePorConta } from './limite-por-conta';
 
 /**
- * Rotas de autenticação são públicas, então levam um limite bem mais apertado
- * que o teto global: 8 tentativas por minuto por IP em login e ativação, o
- * que impede varredura de CPF/senha sem incomodar quem só errou a senha.
+ * Rotas de autenticação são públicas, então levam limites bem mais apertados
+ * que o teto global: 8 tentativas por minuto para a mesma conta
+ * (`@LimitePorConta`) e um teto por IP para quem varre contas diferentes.
+ *
+ * O teto por IP já foi 8 e barrava gente honesta: no Wi-Fi da academia todo
+ * mundo sai pelo mesmo IP. 30 por minuto deixa uma turma entrar junta e
+ * ainda segura varredura de CPF/senha.
  */
-const LIMITE_TENTATIVAS = { default: { limit: 8, ttl: 60_000 } };
+const LIMITE_POR_REDE = { default: { limit: 30, ttl: 60_000 } };
 
 @ApiTags('auth')
 @Controller('auth')
@@ -22,17 +27,20 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('login')
-  @Throttle(LIMITE_TENTATIVAS)
+  @Throttle(LIMITE_POR_REDE)
+  @LimitePorConta()
   @ApiOperation({ summary: 'Login com email e senha' })
   login(@Body() dto: LoginDto) { return this.authService.login(dto); }
 
   @Post('primeiro-acesso')
-  @Throttle(LIMITE_TENTATIVAS)
+  @Throttle(LIMITE_POR_REDE)
+  @LimitePorConta()
   @ApiOperation({ summary: 'Ativar conta no primeiro acesso (via link/token)' })
   primeiroAcesso(@Body() dto: PrimeiroAcessoDto) { return this.authService.primeiroAcesso(dto); }
 
   @Post('ativar-conta')
-  @Throttle(LIMITE_TENTATIVAS)
+  @Throttle(LIMITE_POR_REDE)
+  @LimitePorConta()
   @ApiOperation({ summary: 'Ativar conta com CPF + e-mail (sem link)' })
   ativarConta(@Body() dto: AtivarContaDto) { return this.authService.ativarConta(dto); }
 
@@ -47,7 +55,12 @@ export class AuthController {
     return this.authService.esqueciMinhaSenha(dto.email);
   }
 
+  /*
+    Pede a senha atual: com um token roubado, dá para tentar adivinhá-la e
+    trancar o dono fora da conta. O limite segura isso.
+  */
   @Post('alterar-senha')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Trocar a própria senha (sabendo a atual)' })

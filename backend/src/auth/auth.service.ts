@@ -40,6 +40,12 @@ type FichaDoPrimeiroAcesso = {
   dataNascimento?: string;
 };
 
+/**
+ * Hash de uma senha que ninguém tem, para o login gastar o mesmo tempo com
+ * ou sem conta (ver `login`). Custo 12, igual ao das senhas de verdade.
+ */
+const HASH_FALSO = bcrypt.hashSync(uuidv4(), 12);
+
 /** Quanto vale o link de acesso. O e-mail avisa o mesmo número. */
 const HORAS_DO_LINK = 72;
 
@@ -70,6 +76,16 @@ export class AuthService {
       await tx.refreshToken.deleteMany({ where: { usuarioId } });
       await tx.primeiroAcesso.deleteMany({ where: { usuarioId } });
       await tx.horarioFixo.deleteMany({ where: { usuarioId } });
+      /*
+        As aulas futuras saem das turmas, como quando a dona desativa
+        (usuarios.service › tirarDasTurmas). Sem isto, quem excluía a conta
+        pelo app seguia ocupando a vaga em toda aula já marcada — com um
+        cadastro que nem nome tem mais. A que já aconteceu fica: é histórico.
+      */
+      await tx.agendamento.updateMany({
+        where: { usuarioId, status: 'CONFIRMADO', dataAula: { gte: dayjs().startOf('day').toDate() } },
+        data: { status: 'CANCELADO' },
+      });
       await tx.creditoReposicao.deleteMany({ where: { usuarioId } });
       /**
        * Só o que é DO aluno: as fichas e cargas que ele recebeu.
@@ -149,11 +165,20 @@ export class AuthService {
     const usuario = await this.prisma.usuario.findUnique({
       where: ehCpf ? { cpf: somenteDigitos } : { email: entrada },
     });
-    if (!usuario || !usuario.senhaHash)
+    /**
+     * A senha é conferida SEMPRE, e antes de qualquer outra resposta.
+     *
+     * "Conta inativa" vinha antes da senha: bastava digitar um CPF qualquer
+     * para descobrir se a pessoa é (ou foi) aluna do estúdio. E sem conta, a
+     * resposta saía na hora, sem o bcrypt — o tempo de resposta também
+     * entregava quem existe. Agora as duas situações gastam o mesmo tempo e
+     * só quem acerta a senha fica sabendo que a conta foi desligada.
+     */
+    const ok = await bcrypt.compare(dto.senha, usuario?.senhaHash ?? HASH_FALSO);
+    if (!usuario || !usuario.senhaHash || !ok) {
       throw new UnauthorizedException("Credenciais inválidas");
+    }
     if (!usuario.ativo) throw new UnauthorizedException("Conta inativa");
-    const ok = await bcrypt.compare(dto.senha, usuario.senhaHash);
-    if (!ok) throw new UnauthorizedException("Credenciais inválidas");
     return this.gerarTokens(usuario.id, usuario.tipoUsuario, usuario.nome);
   }
 
@@ -420,7 +445,9 @@ export class AuthService {
     if (!usuario?.senhaHash) throw new NotFoundException("Conta não encontrada");
 
     const confere = await bcrypt.compare(dto.senhaAtual, usuario.senhaHash);
-    if (!confere) throw new UnauthorizedException("A senha atual não confere.");
+    // 400, não 401: a sessão está boa, quem errou foi a senha digitada. Com
+    // 401 o app achava que a sessão tinha vencido e renovava à toa.
+    if (!confere) throw new BadRequestException("A senha atual não confere.");
     if (dto.senhaAtual === dto.novaSenha) {
       throw new BadRequestException("A senha nova precisa ser diferente da atual.");
     }
@@ -439,7 +466,14 @@ export class AuthService {
         data: { revogado: true },
       }),
     ]);
-    return { mensagem: "Senha alterada. As outras sessões foram desconectadas." };
+    /*
+      A sessão de quem trocou continua — com um par de tokens novo. A
+      renovação deste aparelho caiu junto com as das outras sessões (o
+      servidor não sabe qual delas é esta), e sem uma nova o app deslogava
+      sozinho uns 15 minutos depois, quando o token de acesso vencia.
+    */
+    const sessao = await this.gerarTokens(usuarioId, usuario.tipoUsuario, usuario.nome);
+    return { mensagem: "Senha alterada. As outras sessões foram desconectadas.", ...sessao };
   }
 
   async refreshToken(token: string) {

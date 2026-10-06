@@ -20,7 +20,7 @@ export class UsuariosController {
   criar(@Body() dto: CriarUsuarioDto) { return this.service.criar(dto); }
 
   // Professor também lista alunos (para montar treinos) — leitura apenas
-  @Get() @UseGuards(StaffGuard) listar(@Query('busca') busca?: string) { return this.service.listar(busca); }
+  @Get() @UseGuards(StaffGuard) listar(@Request() req, @Query('busca') busca?: string) { return this.service.listar(busca, req.user?.tipo); }
 
   // Rota fixa ANTES de @Get(':id'), senão "professores" entraria como um id
   @Get('professores') @UseGuards(AdminGuard) @ApiOperation({ summary: 'Professores do estúdio (admin)' })

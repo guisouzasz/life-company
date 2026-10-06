@@ -55,6 +55,19 @@ const CAMPOS_PERMITIDOS = new Set([
 /** Até onde o detalhe pode crescer. Log é índice, não arquivo. */
 const LIMITE_DETALHE = 400;
 
+/**
+ * CPF digitado num campo de texto sai mascarado (***.456.789-**, o formato
+ * que o governo usa para publicar CPF).
+ *
+ * O login aceita CPF no campo "email" — e "email" está na lista acima. Sem
+ * isto, cada senha errada de quem entra pelo CPF gravava o número inteiro.
+ */
+export function mascararSeForCpf(v: string): string {
+  const d = v.replace(/\D/g, '');
+  if (/^[\d.\-\s]+$/.test(v.trim()) && d.length === 11) return `***.${d.slice(3, 6)}.${d.slice(6, 9)}-**`;
+  return v;
+}
+
 /** Trunca um VALOR longo. O objeto inteiro nunca é cortado — veja abaixo. */
 function encurtar(v: string): string {
   return v.length > 120 ? `${v.slice(0, 117)}...` : v;
@@ -74,7 +87,7 @@ export function detalheSeguro(corpo: unknown): string | null {
   for (const [chave, valor] of Object.entries(corpo as Record<string, unknown>)) {
     if (!CAMPOS_PERMITIDOS.has(chave)) continue;
     if (valor === null || valor === undefined) continue;
-    if (typeof valor === 'string') limpo[chave] = encurtar(valor);
+    if (typeof valor === 'string') limpo[chave] = encurtar(mascararSeForCpf(valor));
     else if (typeof valor === 'number' || typeof valor === 'boolean') limpo[chave] = valor;
     // objeto/array dentro de um campo permitido também não entra
   }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { voltar } from '../services/navegacao';
 import { LC } from '../constants/theme';
 import { Card } from '../components/ui/card';
 import { Icon } from '../components/ui/icon';
@@ -48,7 +48,7 @@ export default function EsqueciSenha() {
       <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Pressable style={s.back} onPress={() => router.back()} hitSlop={10}>
+          <Pressable style={s.back} onPress={() => voltar('/login')} hitSlop={10}>
             <Icon name="chevron-back" size={26} color={LC.textPrimary} />
           </Pressable>
 
@@ -68,7 +68,7 @@ export default function EsqueciSenha() {
                 </Text>
               </Card>
 
-              <Button title="Voltar para o login" onPress={() => router.back()} style={s.botao} />
+              <Button title="Voltar para o login" onPress={() => voltar('/login')} style={s.botao} />
             </>
           ) : (
             <>

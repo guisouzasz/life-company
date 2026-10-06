@@ -28,7 +28,7 @@ export const authService = {
     return data;
   },
 
-  async alterarSenha(payload: { senhaAtual: string; novaSenha: string }): Promise<{ mensagem: string }> {
+  async alterarSenha(payload: { senhaAtual: string; novaSenha: string }): Promise<{ mensagem: string } & Partial<AuthResponse>> {
     const { data } = await http.post<{ mensagem: string }>('/auth/alterar-senha', payload);
     return data;
   },

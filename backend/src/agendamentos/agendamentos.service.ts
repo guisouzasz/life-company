@@ -572,10 +572,13 @@ export class AgendamentosService {
       }
     }
     const dataAula = dayjs(data).startOf('day').toDate();
+    // CPF só para a dona (ela distingue os homônimos por ele); a tela do
+    // professor não mostra, então não vai.
+    const comCpf = solicitante?.tipo !== 'PROFESSOR';
     const [agendamentos, fixos] = await Promise.all([
       this.prisma.agendamento.findMany({
         where: { horarioId, dataAula, status: 'CONFIRMADO' },
-        include: { usuario: { select: { id: true, nome: true, cpf: true } } },
+        include: { usuario: { select: { id: true, nome: true, cpf: comCpf } } },
       }),
       /**
        * Quem está nesta aula por horário fixo, e qual é o fixo.

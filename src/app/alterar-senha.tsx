@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { voltar } from '../services/navegacao';
 import { LC } from '../constants/theme';
 import { Button } from '../components/ui/button';
 import { Input, PasswordToggle } from '../components/ui/input';
@@ -52,7 +52,7 @@ export default function AlterarSenha() {
       <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-          <Pressable style={s.back} onPress={() => router.back()} hitSlop={10}>
+          <Pressable style={s.back} onPress={() => voltar()} hitSlop={10}>
             <Icon name="chevron-back" size={26} color={LC.textPrimary} />
           </Pressable>
 
@@ -124,7 +124,7 @@ export default function AlterarSenha() {
         visible={pronto}
         title="Senha alterada"
         message="Pronto. Da próxima vez que entrar, use a senha nova. As outras sessões foram desconectadas."
-        onClose={() => { setPronto(false); router.back(); }}
+        onClose={() => { setPronto(false); voltar(); }}
       />
     </View>
   );

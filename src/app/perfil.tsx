@@ -44,7 +44,8 @@ export default function Perfil() {
       alerta: !anamnese.isLoading && !anamnese.data, // ainda não preencheu
     },
     { label: 'Dados pessoais', icon: 'person-outline', onPress: () => setEmBreve(true) },
-    { label: 'Alterar senha', icon: 'lock-closed-outline', onPress: () => setEmBreve(true) },
+    // "Alterar senha" saiu daqui: dizia "disponível em breve" logo acima do
+    // botão "Alterar minha senha", que funciona.
     { label: 'Notificações', icon: 'notifications-outline', onPress: () => router.push('/notificacoes') },
   ];
 

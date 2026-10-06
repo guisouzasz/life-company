@@ -111,8 +111,14 @@ export function getProximosDiasUteis(n = 10): Array<{
   return dias;
 }
 
-export function endOfIsoWeekFormatted(): string {
-  return formatDate(endOfIsoWeek(new Date()), 'DD/MM/YYYY');
+/**
+ * Dia em que o saldo da semana recomeça: a segunda-feira seguinte ("19/10").
+ *
+ * Antes mostrava o domingo, último dia da semana — "Renova em 18/10" num
+ * domingo sem aula, quando a conta zera mesmo é na segunda.
+ */
+export function renovacaoDaSemanaFormatada(): string {
+  return formatDate(addDays(endOfIsoWeek(new Date()), 1), 'DD/MM');
 }
 
 export function formatRelative(dateStr: string): string {

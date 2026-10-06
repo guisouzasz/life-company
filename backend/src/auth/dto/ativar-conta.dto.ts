@@ -66,7 +66,12 @@ export class AtivarContaDto {
 
   @ApiProperty({ example: 'minhasenha123' })
   @IsString()
-  @MinLength(6)
+  // A mesma régua da tela (e da troca de senha): sem ela no servidor, quem
+  // montasse o pedido fora do app criaria a conta com "123456".
+  @MinLength(6, { message: 'A senha precisa de pelo menos 6 caracteres' })
+  @MaxLength(72, { message: 'A senha pode ter no máximo 72 caracteres' })
+  @Matches(/[A-Z]/, { message: 'A senha precisa de pelo menos uma letra maiúscula' })
+  @Matches(/\d/, { message: 'A senha precisa de pelo menos um número' })
   senha: string;
 
   /*

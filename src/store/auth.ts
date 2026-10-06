@@ -25,7 +25,18 @@ interface AuthState {
   nome: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setTokens: (data: Sessao) => Promise<void>;
+  /**
+   * Para onde levar quem ACABOU de entrar, quando não é a tela inicial do
+   * papel — o aluno que criou a senha agora vai para a ficha de saúde.
+   *
+   * Quem navega é o layout: ele já redireciona quem entra, e a tela do
+   * primeiro acesso é desmontada nesse redirecionamento antes de conseguir
+   * navegar por conta própria (por isso o aluno novo caía no Início e nunca
+   * via a ficha). A tela só diz o destino; o layout leva e apaga.
+   */
+  destinoAoEntrar: string | null;
+  setTokens: (data: Sessao, destinoAoEntrar?: string) => Promise<void>;
+  limparDestino: () => void;
   logout: () => Promise<void>;
   hydrate: () => Promise<void>;
 }
@@ -40,8 +51,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   nome: null,
   isAuthenticated: false,
   isLoading: true,
+  destinoAoEntrar: null,
 
-  setTokens: async (data) => {
+  setTokens: async (data, destinoAoEntrar) => {
     await Storage.multiSet([
       ['accessToken', data.accessToken],
       ['refreshToken', data.refreshToken ?? ''],
@@ -49,8 +61,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       ['usuarioId', data.usuarioId ?? ''],
       ['nome', data.nome ?? ''],
     ]);
-    set({ ...data, isAuthenticated: true, isLoading: false });
+    set({ ...data, isAuthenticated: true, isLoading: false, destinoAoEntrar: destinoAoEntrar ?? null });
   },
+
+  limparDestino: () => set({ destinoAoEntrar: null }),
 
   logout: async () => {
     await Storage.multiRemove([...STORAGE_KEYS]);
@@ -62,6 +76,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       nome: null,
       isAuthenticated: false,
       isLoading: false,
+      destinoAoEntrar: null,
     });
   },
 

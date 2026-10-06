@@ -25,14 +25,16 @@ import { LogsModule } from './logs/logs.module';
 import { DiagnosticoModule } from './diagnostico/diagnostico.module';
 import { DiasFechadosModule } from './dias-fechados/dias-fechados.module';
 import { LogsInterceptor } from './logs/logs.interceptor';
+import { LIMITE_POR_CONTA } from './auth/limite-por-conta';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
     // Teto largo por IP para o uso normal do app; as rotas de autenticação
-    // apertam esse limite com @Throttle no próprio controller.
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
+    // apertam esse limite com @Throttle no próprio controller, e contam
+    // também por conta (ver limite-por-conta.ts).
+    ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 300 }, LIMITE_POR_CONTA]),
     PrismaModule,
     AuthModule,
     UsuariosModule,

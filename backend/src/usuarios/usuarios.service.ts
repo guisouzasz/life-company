@@ -206,7 +206,35 @@ export class UsuariosService {
     return { usuario, linkAcesso: link };
   }
 
-  async listar(busca?: string) {
+  async listar(busca?: string, tipoSolicitante?: string) {
+    /**
+     * Professor recebe só o que as telas dele usam: nome, se treina e o plano.
+     *
+     * A lista ia inteira para qualquer conta de professor — CPF, RG, endereço,
+     * CEP, nascimento, e-mail, telefone e mensalidade de TODOS os alunos —, e
+     * as contas de professor são compartilhadas por modalidade. Nenhuma tela de
+     * professor mostra esses dados; mandar sem precisar é exposição pura (LGPD).
+     * A busca dele também é só por nome: procurar por CPF serviria para
+     * descobrir de quem é um CPF.
+     */
+    if (tipoSolicitante === "PROFESSOR") {
+      return this.prisma.usuario.findMany({
+        select: {
+          id: true,
+          nome: true,
+          ativo: true,
+          tipoUsuario: true,
+          usuarioPlanos: { select: { plano: true, modalidade: true }, where: { vigenciaFim: null } },
+        },
+        where: {
+          tipoUsuario: "ALUNO",
+          NOT: { cpf: { startsWith: "REMOVIDO-" } },
+          ...(busca ? { nome: { contains: busca, mode: "insensitive" as const } } : {}),
+        },
+        orderBy: { nome: "asc" },
+      });
+    }
+
     const alunos = await this.prisma.usuario.findMany({
       select: {
         ...CAMPOS_DO_CADASTRO,

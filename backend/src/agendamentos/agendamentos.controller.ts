@@ -37,7 +37,11 @@ export class AgendamentosController {
   meusEmDiaFechado(@Request() req) { return this.service.listarFechadasDoAluno(req.user.id); }
 
   @Get('historico')
-  historico(@Request() req, @Query('page') page = '1') { return this.service.historico(req.user.id, parseInt(page)); }
+  historico(@Request() req, @Query('page') page = '1') {
+    // Página inválida ("abc", "0", "-3") vira a primeira, em vez de erro 500.
+    const n = parseInt(page, 10);
+    return this.service.historico(req.user.id, Number.isFinite(n) && n > 0 ? Math.min(n, 1000) : 1);
+  }
 
   // Professor também vê a lista de alunos da aula (só da modalidade dele)
   @Get('horario/:horarioId')

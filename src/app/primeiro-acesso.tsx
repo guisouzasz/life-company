@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,6 +23,7 @@ import { useAtivarConta, usePrimeiroAcesso } from '../services/auth/auth.mutatio
 import { TermoModal } from '../components/termo-modal';
 import { useTermo } from '../services/termos/termos.queries';
 import { ApiError } from '../services/http';
+import { voltar } from '../services/navegacao';
 
 const RULES = [
   { label: 'Mínimo de 6 caracteres', test: (v: string) => v.length >= 6 },
@@ -108,8 +109,14 @@ export default function PrimeiroAcesso() {
   */
   const redefinindo = params.redefinir === '1';
   const [showSenha, setShowSenha] = useState(false);
-  const primeiroAcesso = usePrimeiroAcesso();
-  const ativarConta = useAtivarConta();
+  /*
+    Aluno recém-ativado cai direto na ficha de saúde (é o "cadastro" dele),
+    com o Início embaixo. Quem leva é o layout; professor e dona vão para a
+    tela inicial deles, e quem só redefiniu a senha volta para o Início.
+  */
+  const destino = { destinoDoAluno: redefinindo ? undefined : '/anamnese' };
+  const primeiroAcesso = usePrimeiroAcesso(destino);
+  const ativarConta = useAtivarConta(destino);
   const pendente = comToken ? primeiroAcesso.isPending : ativarConta.isPending;
 
   /**
@@ -136,15 +143,6 @@ export default function PrimeiroAcesso() {
 
   const senhaAtual = watch('senha') ?? '';
 
-  // Aluno recém-ativado cai direto na ficha de saúde (é o "cadastro" dele);
-  // o botão de voltar da ficha leva ao dashboard. Professor e admin vão direto.
-  const irParaApp = (data: { tipoUsuario: string }) => {
-    if (data.tipoUsuario === 'ADMIN') return router.replace('/admin/dashboard');
-    if (data.tipoUsuario === 'PROFESSOR') return router.replace('/professor/agenda' as any);
-    router.replace('/dashboard');
-    router.push('/anamnese' as any);
-  };
-
   const onSubmit = handleSubmit((values) => {
     // Sem aceite não conclui. A API recusa do mesmo jeito; aqui é só para o
     // aluno ver o motivo na hora, em vez de levar um erro do servidor.
@@ -163,15 +161,9 @@ export default function PrimeiroAcesso() {
       dataNascimento: dataParaIso(values.nascimento ?? '') ?? undefined,
     };
     if (comToken) {
-      primeiroAcesso.mutate(
-        { token: tokenFromLink, cpf, senha: values.senha, termoVersao: versaoAceita ?? undefined, ...ficha },
-        { onSuccess: irParaApp },
-      );
+      primeiroAcesso.mutate({ token: tokenFromLink, cpf, senha: values.senha, termoVersao: versaoAceita ?? undefined, ...ficha });
     } else {
-      ativarConta.mutate(
-        { cpf, senha: values.senha, termoVersao: versaoAceita ?? undefined, ...ficha },
-        { onSuccess: irParaApp },
-      );
+      ativarConta.mutate({ cpf, senha: values.senha, termoVersao: versaoAceita ?? undefined, ...ficha });
     }
   });
 
@@ -183,7 +175,7 @@ export default function PrimeiroAcesso() {
       <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Pressable style={s.back} onPress={() => router.back()} hitSlop={10}>
+          <Pressable style={s.back} onPress={() => voltar()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Voltar">
             <Icon name="chevron-back" size={26} color={LC.textPrimary} />
           </Pressable>
 
@@ -196,9 +188,7 @@ export default function PrimeiroAcesso() {
             <Text style={s.subtitle}>
               {redefinindo
                 ? 'Confirme seu CPF e escolha a senha nova. O resto do seu cadastro continua como está.'
-                : comToken
-                  ? 'Para sua segurança, crie uma nova senha.'
-                  : 'Informe seu CPF, cadastre seu e-mail e crie sua senha.'}
+                : 'Confirme seu CPF, complete seus dados e crie a senha que você vai usar para entrar.'}
             </Text>
           </View>
 
@@ -345,7 +335,7 @@ export default function PrimeiroAcesso() {
               name="senha"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Nova senha"
+                  label={redefinindo ? 'Nova senha' : 'Crie sua senha'}
                   placeholder="Crie uma senha segura"
                   secureTextEntry={!showSenha}
                   autoCapitalize="none"
@@ -364,7 +354,7 @@ export default function PrimeiroAcesso() {
               name="confirmar"
               render={({ field: { onChange, onBlur, value } }) => (
                 <Input
-                  label="Confirmar nova senha"
+                  label={redefinindo ? 'Confirmar nova senha' : 'Confirme a senha'}
                   placeholder="Repita a senha"
                   secureTextEntry={!showSenha}
                   autoCapitalize="none"

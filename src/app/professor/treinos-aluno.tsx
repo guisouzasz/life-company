@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
+import { voltar } from '../../services/navegacao';
 import { LC } from '../../constants/theme';
 import { juntarNomes, modalidadesDe, nomeModalidade, usaFichaEstruturada } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
@@ -858,7 +859,7 @@ export default function TreinosAluno() {
       <StatusBar barStyle="dark-content" />
       <View style={s.header}>
         <View style={s.headerRow}>
-          <Pressable style={s.backBtn} hitSlop={8} onPress={() => router.back()}>
+          <Pressable style={s.backBtn} hitSlop={8} onPress={() => voltar('/professor/treinos')}>
             <Icon name="arrow-back" size={20} color={LC.textPrimary} />
           </Pressable>
           <Avatar nome={alunoNome} size={40} />

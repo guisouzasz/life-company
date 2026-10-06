@@ -13,7 +13,7 @@ import { Loading, ErrorState } from '../components/ui/states';
 import { useSaldo } from '../services/usuarios/usuarios.queries';
 import { useMeusCreditos } from '../services/creditos/creditos.queries';
 import { useMinhaSituacaoFinanceira } from '../services/financeiro/financeiro.queries';
-import { endOfIsoWeekFormatted, formatDate } from '../services/date';
+import { renovacaoDaSemanaFormatada, formatDate } from '../services/date';
 
 export default function MeuPlano() {
   const saldo = useSaldo();
@@ -39,7 +39,7 @@ export default function MeuPlano() {
               <View style={{ flex: 1 }}>
                 <Text style={s.planNome}>{saldo.data.plano}</Text>
                 <Text style={s.planSub}>{saldo.data.total} aulas por semana</Text>
-                <Text style={s.planRenova}>Renova em {endOfIsoWeekFormatted()}</Text>
+                <Text style={s.planRenova}>Renova na segunda, {renovacaoDaSemanaFormatada()}</Text>
               </View>
               <View style={s.ativoBadge}>
                 <Text style={s.ativoText}>Ativo</Text>

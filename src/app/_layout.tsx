@@ -14,6 +14,8 @@ function RootNavigator() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const tipoUsuario = useAuthStore((s) => s.tipoUsuario);
+  const destinoAoEntrar = useAuthStore((s) => s.destinoAoEntrar);
+  const limparDestino = useAuthStore((s) => s.limparDestino);
   const hydrate = useAuthStore((s) => s.hydrate);
   const pathname = usePathname();
 
@@ -61,8 +63,25 @@ function RootNavigator() {
       : tipoUsuario === 'PROFESSOR' ? pathname.startsWith('/professor')
       : !pathname.startsWith('/admin') && !pathname.startsWith('/professor');
 
+    /*
+      Acabou de criar a senha: vai direto para o destino (a ficha de saúde).
+      Uma navegação só — um push logo depois de um replace se perdia no
+      roteador. E o destino só é apagado quando a tela chega: apagado antes,
+      o layout ainda via "/primeiro-acesso" e mandava para o Início por cima.
+      O "voltar" da ficha cai no Início (ver services/navegacao).
+    */
+    if (destinoAoEntrar) {
+      if (pathname === destinoAoEntrar) {
+        limparDestino();
+        return;
+      }
+      if (rotaPublica) {
+        router.replace(destinoAoEntrar as any);
+        return;
+      }
+    }
     if (rotaPublica || !areaCorreta) router.replace(home as any);
-  }, [isLoading, isAuthenticated, tipoUsuario, pathname]);
+  }, [isLoading, isAuthenticated, tipoUsuario, pathname, destinoAoEntrar, limparDestino]);
 
   if (isLoading) {
     return (

@@ -7,8 +7,22 @@ import {
 } from '@nestjs/common';
 import { Observable, tap } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
-import { detalheSeguro } from './detalhe-seguro';
+import { detalheSeguro, mascararSeForCpf } from './detalhe-seguro';
 import { idDaRota, resumoDaRota } from './resumo-da-rota';
+
+/**
+ * O que a pessoa digitou no campo "E-mail ou CPF" de um login recusado.
+ *
+ * E-mail vai como veio. CPF não: o registro não guarda CPF, e o login aceita
+ * CPF no lugar do e-mail — sem isto, cada senha errada de quem entra pelo CPF
+ * deixava o número inteiro no registro. Fica no formato que o governo usa
+ * para publicar CPF (***.456.789-**), que basta para reconhecer a conta.
+ */
+function identificacaoDigitada(valor: unknown): string {
+  const digitado = String(valor ?? 'desconhecido').trim();
+  const mascarado = mascararSeForCpf(digitado);
+  return mascarado !== digitado ? `CPF ${mascarado}` : digitado.slice(0, 120);
+}
 
 /**
  * Grava no banco tudo que o estúdio ESCREVE no sistema.
@@ -86,7 +100,7 @@ export class LogsInterceptor implements NestInterceptor {
       } else {
         // Quem tentou: só o que a pessoa digitou no campo, nunca a senha.
         tipo = 'ANONIMO';
-        nome = String(req?.body?.email ?? 'desconhecido').slice(0, 120);
+        nome = identificacaoDigitada(req?.body?.email);
         quemId = null;
       }
     } else if (tipo !== 'ADMIN' && tipo !== 'PROFESSOR') {

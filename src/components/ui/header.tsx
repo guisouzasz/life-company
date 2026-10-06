@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { voltar } from '../../services/navegacao';
 import { LC } from '../../constants/theme';
 import { Icon, type IconName } from './icon';
 
@@ -18,7 +18,7 @@ export function Header({ title, subtitle, showBack, rightIcon, onRightPress, rig
     <View style={styles.row}>
       <View style={styles.left}>
         {showBack ? (
-          <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
+          <Pressable style={styles.backBtn} onPress={() => voltar()} hitSlop={8}>
             <Icon name="chevron-back" size={24} color={LC.textPrimary} />
           </Pressable>
         ) : null}

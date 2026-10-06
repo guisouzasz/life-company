@@ -9,38 +9,50 @@ import type { AtivarContaPayload, AuthResponse, LoginPayload, PrimeiroAcessoPayl
  */
 function useSalvarSessao() {
   const setTokens = useAuthStore((s) => s.setTokens);
-  return async (data: AuthResponse) => {
-    await setTokens({
-      accessToken: data.accessToken,
-      refreshToken: data.refreshToken,
-      tipoUsuario: data.tipoUsuario,
-      usuarioId: data.usuarioId,
-      nome: data.nome,
-    });
+  return async (data: AuthResponse, destinoAoEntrar?: string) => {
+    await setTokens(
+      {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        tipoUsuario: data.tipoUsuario,
+        usuarioId: data.usuarioId,
+        nome: data.nome,
+      },
+      destinoAoEntrar,
+    );
   };
 }
+
+/**
+ * Ativação de conta: o aluno vai para `destinoDoAluno` (a ficha de saúde) em
+ * vez do Início. Fica aqui, no onSuccess da mutação, e não no `mutate` da
+ * tela: o do `mutate` não roda quando a tela é desmontada — e ela é, assim que
+ * a sessão é salva e o layout leva a pessoa para dentro do app.
+ */
+type OpcoesAtivacao = { destinoDoAluno?: string };
 
 export function useLogin() {
   const salvarSessao = useSalvarSessao();
   return useMutation({
     mutationFn: (payload: LoginPayload) => authService.login(payload),
-    onSuccess: salvarSessao,
+    // Só o `data`: o segundo argumento do onSuccess é o pedido, não um destino.
+    onSuccess: (data) => salvarSessao(data),
   });
 }
 
-export function usePrimeiroAcesso() {
+export function usePrimeiroAcesso({ destinoDoAluno }: OpcoesAtivacao = {}) {
   const salvarSessao = useSalvarSessao();
   return useMutation({
     mutationFn: (payload: PrimeiroAcessoPayload) => authService.primeiroAcesso(payload),
-    onSuccess: salvarSessao,
+    onSuccess: (data) => salvarSessao(data, data.tipoUsuario === 'ALUNO' ? destinoDoAluno : undefined),
   });
 }
 
-export function useAtivarConta() {
+export function useAtivarConta({ destinoDoAluno }: OpcoesAtivacao = {}) {
   const salvarSessao = useSalvarSessao();
   return useMutation({
     mutationFn: (payload: AtivarContaPayload) => authService.ativarConta(payload),
-    onSuccess: salvarSessao,
+    onSuccess: (data) => salvarSessao(data, data.tipoUsuario === 'ALUNO' ? destinoDoAluno : undefined),
   });
 }
 
@@ -71,13 +83,17 @@ export function useLogout() {
 }
 
 /**
- * Trocar a própria senha. Não mexe no cache de sessão: o token atual continua
- * válido — quem cai são as OUTRAS sessões, do lado do servidor.
+ * Trocar a própria senha. As OUTRAS sessões caem, do lado do servidor; esta
+ * continua com os tokens novos que vêm na resposta — os antigos caíram junto.
  */
 export function useAlterarSenha() {
+  const salvarSessao = useSalvarSessao();
   return useMutation({
     mutationFn: (payload: { senhaAtual: string; novaSenha: string }) =>
       authService.alterarSenha(payload),
+    onSuccess: async (data) => {
+      if (data.accessToken && data.refreshToken) await salvarSessao(data as AuthResponse);
+    },
   });
 }
 
