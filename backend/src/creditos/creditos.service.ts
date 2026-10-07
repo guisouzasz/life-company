@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import * as dayjs from 'dayjs';
 import { PrismaService } from '../prisma/prisma.service';
-import { DIAS_VALIDADE_CREDITO } from './creditos.constantes';
+import { DIAS_VALIDADE_CREDITO, MAX_REPOSICOES_POR_PERIODO } from './creditos.constantes';
+import { reposicoesNaJanela } from './reposicoes-na-janela';
 
 type Credito = {
   id: string;
@@ -32,12 +33,23 @@ export class CreditosService {
     return creditos.map((c) => ({ ...c, status: this.statusDe(c) }));
   }
 
-  /** Quantidade de créditos válidos (disponíveis para uso). */
+  /**
+   * Quantidade de créditos válidos e quantas reposições o aluno ainda pode
+   * marcar agora. São coisas diferentes: créditos se acumulam, mas o termo
+   * deixa marcar só 3 reposições a cada 30 dias — o app precisa das duas
+   * para não oferecer o que o servidor vai recusar.
+   */
   async saldo(usuarioId: string) {
     const disponiveis = await this.prisma.creditoReposicao.count({
       where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
     });
-    return { disponiveis };
+    const janela = await reposicoesNaJanela(this.prisma, usuarioId);
+    return {
+      disponiveis,
+      reposicoesRestantes: janela.restantes,
+      maxReposicoes: MAX_REPOSICOES_POR_PERIODO,
+      proximaReposicaoEm: janela.liberaEm,
+    };
   }
 
   // ── Admin ──────────────────────────────────────────────────────────

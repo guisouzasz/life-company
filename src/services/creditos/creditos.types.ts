@@ -17,4 +17,9 @@ export interface Credito {
 
 export interface SaldoCredito {
   disponiveis: number;
+  /** Reposições que ainda dá para MARCAR agora (termo: 3 a cada 30 dias). */
+  reposicoesRestantes?: number;
+  maxReposicoes?: number;
+  /** Com o limite atingido: quando abre a próxima vaga. */
+  proximaReposicaoEm?: string | null;
 }

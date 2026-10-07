@@ -14,6 +14,7 @@ import {
 } from '../creditos/creditos.constantes';
 import { capacidadeEfetiva } from '../horarios/capacidade';
 import { cotaDaSemana } from './cota-semanal';
+import { reposicoesNaJanela } from '../creditos/reposicoes-na-janela';
 import { contaComoPresenca, quemCancelou, temFaltaRegistrada } from '../presencas/regra-de-presenca';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
@@ -372,26 +373,14 @@ export class AgendamentosService {
          * dela — travar ali só a mandaria procurar um jeito de contornar.
          */
         if (!ctx.admin) {
-          const desde = dayjs().subtract(DIAS_PERIODO_REPOSICOES, 'day').toDate();
-          const marcadasNaJanela = await tx.agendamento.findMany({
-            where: {
-              usuarioId,
-              reposicao: true,
-              status: { not: 'CANCELADO' },
-              createdAt: { gte: desde },
-            },
-            orderBy: { createdAt: 'asc' },
-            select: { createdAt: true },
-          });
-          if (marcadasNaJanela.length >= MAX_REPOSICOES_POR_PERIODO) {
+          // A mesma conta que o app usa para mostrar o botão (reposicoes-na-janela.ts).
+          const janela = await reposicoesNaJanela(tx, usuarioId);
+          if (janela.restantes === 0) {
             // Quando a mais antiga sair da janela, abre uma vaga de novo — dizer
             // a data evita o aluno ficar tentando todo dia sem saber o porquê.
-            const liberaEm = dayjs(marcadasNaJanela[0].createdAt)
-              .add(DIAS_PERIODO_REPOSICOES, 'day')
-              .format('DD/MM');
             throw new ForbiddenException(
               `Você já agendou ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
-                `que é o limite. A próxima vaga abre em ${liberaEm}.`,
+                `que é o limite. A próxima vaga abre em ${dayjs(janela.liberaEm).format('DD/MM')}.`,
             );
           }
         }

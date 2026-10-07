@@ -18,7 +18,7 @@ import { useModalidades } from '../services/modalidades/modalidades.queries';
 import { useVagas } from '../services/horarios/horarios.queries';
 import { useCriarAgendamento } from '../services/agendamentos/agendamentos.mutations';
 import { useMeusAgendamentos } from '../services/agendamentos/agendamentos.queries';
-import { useMeusCreditos } from '../services/creditos/creditos.queries';
+import { useMeusCreditos, useSaldoCreditos } from '../services/creditos/creditos.queries';
 import { useDiasFechados } from '../services/dias-fechados/dias-fechados.queries';
 import type { Modalidade } from '../services/agendamentos/agendamentos.types';
 import type { HorarioVaga } from '../services/horarios/horarios.types';
@@ -54,6 +54,13 @@ export default function Agendamento() {
    * Vira `Date` antes de formatar: o crédito vence às 23:59 daqui, que em UTC
    * já é o dia seguinte, e formatar o texto ISO mostraria um dia a mais.
    */
+  /**
+   * Quantas reposições ainda dá para MARCAR (termo: 3 a cada 30 dias). O
+   * botão mostrava só os créditos guardados — "(13)" — e o servidor recusava
+   * a 4ª. Sem a resposta ainda, não limita: quem decide é o servidor.
+   */
+  const saldo = useSaldoCreditos();
+  const reposicoesRestantes = saldo.data?.reposicoesRestantes;
   const ultimoDiaDeCredito = validos.reduce<Date | null>((maior, c) => {
     const d = new Date(c.expiraEm);
     return !maior || d.getTime() > maior.getTime() ? d : maior;
@@ -146,6 +153,8 @@ export default function Agendamento() {
     const minha = jaAgendado(detalhe.id);
     const passou = jaComecou(detalhe) && !minha;
     const creditosDoDia = creditosParaODia(diaSel.data);
+    const usaveis = reposicoesRestantes === undefined ? creditosDoDia : Math.min(creditosDoDia, reposicoesRestantes);
+    const limiteDeReposicoes = creditosDoDia > 0 && reposicoesRestantes === 0;
     /**
      * Marcar depois do prazo de cancelamento vale, mas a aula não pode mais ser
      * desmarcada e conta como feita (termo, seção 2). Quem marca às 21h a aula
@@ -206,9 +215,16 @@ export default function Agendamento() {
               loading={criar.isPending && criar.variables?.usarCredito !== true}
               onPress={() => agendar(detalhe)}
             />
-            {!lotado && !minha && !passou && creditosDoDia > 0 ? (
+            {!lotado && !minha && !passou && limiteDeReposicoes ? (
+              <Text style={s.creditoNota}>
+                Você já marcou {saldo.data?.maxReposicoes ?? 3} reposições nos últimos 30 dias, que é o limite.
+                {saldo.data?.proximaReposicaoEm
+                  ? ` A próxima pode ser marcada a partir de ${formatDate(new Date(saldo.data.proximaReposicaoEm), 'DD/MM')}.`
+                  : ''}
+              </Text>
+            ) : !lotado && !minha && !passou && usaveis > 0 ? (
               <Button
-                title={`Usar crédito de reposição (${creditosDoDia})`}
+                title={`Usar crédito de reposição (${usaveis})`}
                 variant="outline"
                 size="lg"
                 loading={criar.isPending && criar.variables?.usarCredito === true}
@@ -246,22 +262,27 @@ export default function Agendamento() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.daysScroll} contentContainerStyle={s.daysRow}>
-          {dias.map((d, i) => {
+          {/*
+            Os dias NÃO entram animados. Entravam um a um, apagados e subindo,
+            toda vez que a agenda abria, e a dona viu os números "bugarem" e
+            depois voltarem ao normal. A régua é navegação, não conteúdo novo:
+            tem que estar pronta quando a tela aparece.
+          */}
+          {dias.map((d) => {
             const sel = diaSel?.data === d.data;
             const fechado = !!motivoFechado(d.data);
             return (
-              <EntraSubindo key={d.data} indice={i} distancia={8}>
-                <Toque
-                  escala={0.93}
-                  style={[s.dayBtn, fechado && s.dayBtnFechado, sel && s.dayBtnSel]}
-                  onPress={() => setDiaSel(d)}
-                  accessibilityLabel={fechado ? `${d.diaNome} ${d.diaNum}, academia fechada` : undefined}
-                >
-                  <Text style={[s.dayNome, sel && s.daySelText]}>{d.diaNome}</Text>
-                  <Text style={[s.dayNum, sel && s.daySelText, fechado && !sel && s.dayNumFechado]}>{d.diaNum}</Text>
-                  {fechado ? <Text style={[s.dayFechado, sel && s.dayFechadoSel]}>fechado</Text> : sel && <View style={s.dayPonto} />}
-                </Toque>
-              </EntraSubindo>
+              <Toque
+                key={d.data}
+                escala={0.93}
+                style={[s.dayBtn, fechado && s.dayBtnFechado, sel && s.dayBtnSel]}
+                onPress={() => setDiaSel(d)}
+                accessibilityLabel={fechado ? `${d.diaNome} ${d.diaNum}, academia fechada` : undefined}
+              >
+                <Text style={[s.dayNome, sel && s.daySelText]}>{d.diaNome}</Text>
+                <Text style={[s.dayNum, sel && s.daySelText, fechado && !sel && s.dayNumFechado]}>{d.diaNum}</Text>
+                {fechado ? <Text style={[s.dayFechado, sel && s.dayFechadoSel]}>fechado</Text> : sel && <View style={s.dayPonto} />}
+              </Toque>
             );
           })}
         </ScrollView>
