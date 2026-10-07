@@ -11,7 +11,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { InfoModal } from '../components/ui/modal';
 import { EmptyState } from '../components/ui/states';
-import { Toque, EntraSubindo, BarraAnimada } from '../components/ui/motion';
+import { Toque } from '../components/ui/motion';
 import { EsqueletoLista } from '../components/ui/esqueleto';
 import { CelebracaoAula } from '../components/celebracao-aula';
 import { useModalidades } from '../services/modalidades/modalidades.queries';
@@ -316,58 +316,66 @@ export default function Agendamento() {
         ) : horariosDoDia.length === 0 ? (
           <EmptyState icon="time-outline" title="Sem horários neste dia" description="Tente outro dia ou modalidade." />
         ) : (
-          horariosDoDia.map((h, i) => {
+          /*
+            A lista NÃO entra animada. Cada horário entrava subindo, um atrás
+            do outro, e a barra de lotação enchia e trocava de cor; no
+            navegador a animação de entrada ficava sendo reaplicada nos
+            horários de baixo, e a dona via a agenda "atualizando" sem parar.
+            A lista aparece pronta, com a barra já no tamanho e na cor certos.
+          */
+          horariosDoDia.map((h) => {
             const lotado = h.vagas <= 0;
             const minha = jaAgendado(h.id);
             const passou = jaComecou(h) && !minha;
             /**
              * A barra de lotação: 3 de 4 preenchida conta a mesma coisa que o
-             * texto "3/4", só que antes de a aluna ler. Ela enche ao aparecer,
-             * então bater o olho na lista já mostra onde ainda cabe gente.
+             * texto "3/4", só que antes de a aluna ler: bater o olho na lista
+             * já mostra onde ainda cabe gente.
              */
             const ocupacao = h.capacidadeMaxima > 0 ? h.agendados / h.capacidadeMaxima : 0;
             const corBarra = lotado ? LC.danger : ocupacao >= 0.75 ? LC.warning : LC.primaryMid;
             return (
-              <EntraSubindo key={h.id} indice={i}>
-                <Toque
-                  style={[s.slot, lotado && !minha && !passou && s.slotLotado, passou && s.slotPassou, minha && s.slotMinha]}
-                  onPress={() => (passou ? undefined : setDetalhe(h))}
-                  disabled={passou}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${nomeModalidade(h.modalidade.nome)} às ${h.horaInicio}, ${h.agendados} de ${h.capacidadeMaxima}`}
-                >
-                  <View style={s.slotTime}>
-                    <Text style={[s.slotHora, (lotado || passou) && !minha && s.mutedText]}>{h.horaInicio}</Text>
-                    <Text style={s.slotHoraFim}>{h.horaFim}</Text>
+              <Toque
+                key={h.id}
+                style={[s.slot, lotado && !minha && !passou && s.slotLotado, passou && s.slotPassou, minha && s.slotMinha]}
+                onPress={() => (passou ? undefined : setDetalhe(h))}
+                disabled={passou}
+                accessibilityRole="button"
+                accessibilityLabel={`${nomeModalidade(h.modalidade.nome)} às ${h.horaInicio}, ${h.agendados} de ${h.capacidadeMaxima}`}
+              >
+                <View style={s.slotTime}>
+                  <Text style={[s.slotHora, (lotado || passou) && !minha && s.mutedText]}>{h.horaInicio}</Text>
+                  <Text style={s.slotHoraFim}>{h.horaFim}</Text>
+                </View>
+                <View style={s.slotInfo}>
+                  <Text style={[s.slotModalidade, lotado && !minha && s.mutedText]}>{nomeModalidade(h.modalidade.nome)}</Text>
+                  <View style={s.slotMetaRow}>
+                    <Icon name="people-outline" size={13} color={lotado && !minha ? LC.danger : LC.textMuted} />
+                    <Text style={[s.slotMeta, lotado && !minha && { color: LC.danger }]}>
+                      {h.agendados}/{h.capacidadeMaxima}
+                    </Text>
+                    <Text style={s.slotStudio}>
+                      {lotado ? 'sem vaga' : `${h.vagas} ${h.vagas === 1 ? 'vaga' : 'vagas'}`}
+                    </Text>
                   </View>
-                  <View style={s.slotInfo}>
-                    <Text style={[s.slotModalidade, lotado && !minha && s.mutedText]}>{nomeModalidade(h.modalidade.nome)}</Text>
-                    <View style={s.slotMetaRow}>
-                      <Icon name="people-outline" size={13} color={lotado && !minha ? LC.danger : LC.textMuted} />
-                      <Text style={[s.slotMeta, lotado && !minha && { color: LC.danger }]}>
-                        {h.agendados}/{h.capacidadeMaxima}
-                      </Text>
-                      <Text style={s.slotStudio}>
-                        {lotado ? 'sem vaga' : `${h.vagas} ${h.vagas === 1 ? 'vaga' : 'vagas'}`}
-                      </Text>
-                    </View>
-                    {!passou && (
-                      <View style={s.slotBarra}>
-                        <BarraAnimada fracao={ocupacao} cor={corBarra} fundo={LC.neutralBg} atraso={80 + i * 45} />
+                  {!passou && (
+                    <View style={s.slotBarra}>
+                      <View style={s.barraFundo}>
+                        <View style={[s.barraCheia, { width: `${Math.round(Math.min(1, ocupacao) * 100)}%`, backgroundColor: corBarra }]} />
                       </View>
-                    )}
-                  </View>
-                  {minha ? (
-                    <Badge label="Agendada" variant="success" />
-                  ) : passou ? (
-                    <Badge label="Encerrada" variant="neutral" />
-                  ) : lotado ? (
-                    <Badge label="Lotada" variant="danger" />
-                  ) : (
-                    <Button title="Agendar" size="sm" fullWidth={false} onPress={() => setDetalhe(h)} style={s.slotBtn} />
+                    </View>
                   )}
-                </Toque>
-              </EntraSubindo>
+                </View>
+                {minha ? (
+                  <Badge label="Agendada" variant="success" />
+                ) : passou ? (
+                  <Badge label="Encerrada" variant="neutral" />
+                ) : lotado ? (
+                  <Badge label="Lotada" variant="danger" />
+                ) : (
+                  <Button title="Agendar" size="sm" fullWidth={false} onPress={() => setDetalhe(h)} style={s.slotBtn} />
+                )}
+              </Toque>
             );
           })
         )}
@@ -459,6 +467,8 @@ const s = StyleSheet.create({
     ...LC.shadowCard,
   },
   slotBarra: { marginTop: 9, marginRight: 4 },
+  barraFundo: { height: 5, borderRadius: 5, backgroundColor: LC.neutralBg, overflow: 'hidden' },
+  barraCheia: { height: 5, borderRadius: 5 },
   slotLotado: { backgroundColor: LC.dangerBg, opacity: 0.75 },
   // Aula encerrada não é problema, é passado: cinza, e não o vermelho de
   // lotada — senão o aluno lê "encheu" onde deveria ler "já aconteceu".
