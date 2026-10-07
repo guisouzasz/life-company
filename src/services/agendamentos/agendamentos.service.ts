@@ -5,6 +5,7 @@ import type {
   CriarAgendamentoAdminPayload,
   CriarAgendamentoPayload,
   ResumoDoMes,
+  AulaCancelada,
 } from './agendamentos.types';
 
 export const agendamentosService = {
@@ -16,6 +17,12 @@ export const agendamentosService = {
   /** Minhas aulas que caíram em dia fechado (feriado/recesso), daqui em diante. */
   async meusEmDiaFechado(): Promise<Agendamento[]> {
     const { data } = await http.get<Agendamento[]>('/agendamentos/meus/dias-fechados');
+    return data;
+  },
+
+  /** Minhas aulas futuras canceladas (por mim ou pelo estúdio), com o crédito que geraram. */
+  async meusCanceladas(): Promise<AulaCancelada[]> {
+    const { data } = await http.get<AulaCancelada[]>('/agendamentos/meus/canceladas');
     return data;
   },
 

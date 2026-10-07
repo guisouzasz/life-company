@@ -44,21 +44,86 @@ const amanha18h = () => ({
   horario: { horaInicio: '18:00', modalidade: { nome: 'Academia' } },
 });
 
+/**
+ * O cancelamento decide pela aula como ela está DEPOIS da trava: a leitura
+ * de fora da transação só serve para achar a turma e o aluno. O mock guarda o
+ * estado da aula como o banco guardaria.
+ */
+function aulaNoBanco(db, inicial) {
+  const estado = { ...inicial };
+  const travas = [];
+  db.$queryRaw = async (partes) => { travas.push(partes.join('?')); return []; };
+  db.agendamento.findFirst = async () => ({ id: estado.id, horarioId: 'h1', usuarioId: estado.usuarioId });
+  db.agendamento.findUnique = async () => ({ ...estado });
+  db.agendamento.updateMany = async (a) => {
+    const casa = Object.entries(a.where).every(([k, v]) => estado[k] === v);
+    if (casa) Object.assign(estado, a.data);
+    return { count: casa ? 1 : 0 };
+  };
+  return { estado, travas };
+}
+
 test('cancelar duas vezes ao mesmo tempo gera UM crédito só', async () => {
   const { db, escritas } = banco();
-  db.agendamento.findFirst = async () => amanha18h();
-  // O segundo pedido chega depois do primeiro ter cancelado: o update
-  // condicional não acha mais a aula CONFIRMADA.
-  let vez = 0;
-  db.agendamento.updateMany = async (a) => {
-    escritas.push(['aulas', a]);
-    assert.equal(a.where.status, 'CONFIRMADO', 'só cancela o que ainda está confirmado');
-    return { count: vez++ === 0 ? 1 : 0 };
-  };
+  aulaNoBanco(db, amanha18h());
   const s = new AgendamentosService(db);
   await s.cancelar('ag', 'aluno');
   await assert.rejects(s.cancelar('ag', 'aluno'), /já foi cancelada/);
   assert.equal(escritas.filter(([k]) => k === 'credito').length, 1);
+});
+
+test('cancelamento atrasado: se a aula virou reposição, recusa e não gera crédito', async () => {
+  const { db, escritas } = banco();
+  const { estado, travas } = aulaNoBanco(db, amanha18h());
+  // Entre a leitura de fora e a trava: outro pedido cancelou e o aluno repôs a aula.
+  const achar = db.agendamento.findFirst;
+  db.agendamento.findFirst = async (a) => {
+    const r = await achar(a);
+    Object.assign(estado, { status: 'CONFIRMADO', reposicao: true, creditoId: 'c1' });
+    return r;
+  };
+  const s = new AgendamentosService(db);
+  await assert.rejects(s.cancelar('ag', 'aluno'), /reposição não pode ser cancelada/);
+  assert.equal(estado.status, 'CONFIRMADO');
+  assert.equal(escritas.filter(([k]) => k === 'credito').length, 0);
+  // Travas na ordem da marcação: turma, plano, aula.
+  assert.deepEqual(
+    travas.map((t) => t.match(/FROM (\w+)/)[1]),
+    ['horarios', 'usuario_planos', 'agendamentos'],
+  );
+});
+
+test('a dona desmarca uma aula que virou reposição no meio do caminho: o crédito volta', async () => {
+  const { db, escritas } = banco();
+  const { estado } = aulaNoBanco(db, amanha18h());
+  const achar = db.agendamento.findFirst;
+  db.agendamento.findUnique = async (a) => {
+    if (a.select) { // a leitura de fora (antes da trava)
+      const r = await achar(a);
+      Object.assign(estado, { reposicao: true, creditoId: 'c1' });
+      return r;
+    }
+    return { ...estado };
+  };
+  const s = new AgendamentosService(db);
+  await s.desmarcarSemCredito('ag');
+  const devolvido = escritas.find(([k, a]) => k === 'creditos-up' && a.where.id === 'c1');
+  assert.ok(devolvido, 'o crédito pago na reposição volta');
+});
+
+test('cota da semana: crédito de uma aula que voltou como reposição continua ocupando a semana', async () => {
+  // Plano 1x: cancelou a terça (crédito c1) e repôs a MESMA terça com c1 — a
+  // linha está CONFIRMADO de novo, como reposição. A semana tem que estar cheia.
+  const { db } = banco();
+  db.agendamento.count = async () => 0; // reposição não conta como aula do plano
+  db.agendamento.findMany = async (a) => {
+    if (a.where.diaFechadoId) return [];
+    assert.equal(a.where.status, undefined, 'origem do crédito em qualquer situação, não só cancelada');
+    return [{ id: 'terca', dataAula: new Date(2026, 9, 6) }];
+  };
+  db.creditoReposicao.findMany = async () => [{ id: 'c1', usado: true, origemAgendamentoId: 'terca' }];
+  const cota = await cotaDaSemana(db, 'aluno', new Date(2026, 9, 5), new Date(2026, 9, 11));
+  assert.equal(cota.usadas + cota.repostas.length, 1);
 });
 
 test('cota da semana conta a aula cancelada que já virou reposição e a do dia fechado', async () => {

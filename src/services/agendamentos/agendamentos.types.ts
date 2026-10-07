@@ -40,6 +40,22 @@ export interface Agendamento {
   diaFechadoId?: string | null;
 }
 
+/**
+ * Aula futura cancelada (GET /agendamentos/meus/canceladas): sai de "Minhas
+ * aulas" ativas, mas o aluno precisa ver que cancelou e o que ganhou com isso.
+ */
+export interface AulaCancelada {
+  id: string;
+  dataAula: string;
+  status: 'CANCELADO';
+  reposicao: boolean;
+  horario: Horario;
+  /** aluno: ele cancelou no prazo; estudio: a dona tirou; academia: dia fechado. */
+  canceladaPor: 'aluno' | 'estudio' | 'academia';
+  /** O crédito que o cancelamento gerou, se gerou. */
+  credito: { situacao: 'disponivel' | 'usado' | 'vencido' | 'removido'; expiraEm: string } | null;
+}
+
 export interface CriarAgendamentoPayload {
   horarioId: string;
   dataAula: string; // YYYY-MM-DD

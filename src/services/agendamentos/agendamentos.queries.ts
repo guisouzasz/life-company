@@ -10,6 +10,17 @@ export function useMinhasAulasEmDiaFechado() {
   });
 }
 
+/**
+ * Aulas futuras canceladas. A chave fica debaixo de ['agendamentos', 'meus']:
+ * cancelar ou marcar invalida as duas listas juntas.
+ */
+export function useMinhasAulasCanceladas() {
+  return useQuery({
+    queryKey: ['agendamentos', 'meus', 'canceladas'],
+    queryFn: agendamentosService.meusCanceladas,
+  });
+}
+
 /** Aulas feitas e presença do mês (tela inicial do aluno). */
 export function useResumoDoMes() {
   return useQuery({

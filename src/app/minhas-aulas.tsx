@@ -11,9 +11,9 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { ConfirmModal, InfoModal } from '../components/ui/modal';
 import { Loading, EmptyState, ErrorState } from '../components/ui/states';
-import { useMeusAgendamentos, useMinhasAulasEmDiaFechado } from '../services/agendamentos/agendamentos.queries';
+import { useMeusAgendamentos, useMinhasAulasCanceladas, useMinhasAulasEmDiaFechado } from '../services/agendamentos/agendamentos.queries';
 import { useCancelarAgendamento } from '../services/agendamentos/agendamentos.mutations';
-import type { Agendamento } from '../services/agendamentos/agendamentos.types';
+import type { Agendamento, AulaCancelada } from '../services/agendamentos/agendamentos.types';
 import { podeCancelar, prazoLabel } from '../services/cancelamento';
 import { ApiError } from '../services/http';
 import { formatDate } from '../services/date';
@@ -29,6 +29,12 @@ export default function MinhasAulas() {
   const todas = [...(meus.data ?? []), ...(emDiaFechado.data ?? [])].sort(
     (a, b) => a.dataAula.localeCompare(b.dataAula) || a.horario.horaInicio.localeCompare(b.horario.horaInicio),
   );
+  /**
+   * As que o aluno (ou o estúdio) cancelou, daqui para a frente. Antes elas
+   * sumiam: saíam das marcadas e só entravam no histórico quando o dia
+   * passava — o aluno cancelava e não tinha onde conferir.
+   */
+  const canceladas = useMinhasAulasCanceladas();
   const cancelar = useCancelarAgendamento();
   const [alvo, setAlvo] = useState<Agendamento | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -60,7 +66,18 @@ export default function MinhasAulas() {
         <ScrollView
           contentContainerStyle={s.scroll}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={false} onRefresh={() => meus.refetch()} colors={[LC.primary]} tintColor={LC.primary} />}
+          refreshControl={
+            <RefreshControl
+              refreshing={false}
+              onRefresh={() => {
+                meus.refetch();
+                emDiaFechado.refetch();
+                canceladas.refetch();
+              }}
+              colors={[LC.primary]}
+              tintColor={LC.primary}
+            />
+          }
         >
           {todas.length > 0 ? (
             todas.map((ag) => {
@@ -138,6 +155,15 @@ export default function MinhasAulas() {
               onAction={() => router.push('/agendamento')}
             />
           )}
+          {(canceladas.data ?? []).length > 0 ? (
+            <View style={s.secao}>
+              <Text style={s.secaoTitulo}>Canceladas</Text>
+              <Text style={s.secaoSub}>Não estão marcadas — saem daqui quando o dia passar e ficam no histórico.</Text>
+              {canceladas.data!.map((ag) => (
+                <CartaoCancelada key={ag.id} ag={ag} />
+              ))}
+            </View>
+          ) : null}
           <View style={{ height: 8 }} />
         </ScrollView>
       )}
@@ -163,6 +189,41 @@ export default function MinhasAulas() {
   );
 }
 
+/** O que dizer debaixo da aula cancelada: quem cancelou e o que virou o crédito. */
+function notaDaCancelada(ag: AulaCancelada): string {
+  const quem =
+    ag.canceladaPor === 'aluno' ? 'Você cancelou' : ag.canceladaPor === 'academia' ? 'Academia fechada' : 'Cancelada pelo estúdio';
+  const c = ag.credito;
+  if (!c) return `${quem}.`;
+  // expiraEm é um instante (fim do dia, no fuso do estúdio), não uma data
+  // pura: precisa do new Date, senão o UTC empurra para o dia seguinte.
+  if (c.situacao === 'disponivel') return `${quem} • crédito de reposição válido até ${formatDate(new Date(c.expiraEm), 'DD/MM')}`;
+  if (c.situacao === 'usado') return `${quem} • o crédito já foi usado em uma reposição`;
+  if (c.situacao === 'vencido') return `${quem} • o crédito venceu em ${formatDate(new Date(c.expiraEm), 'DD/MM')}`;
+  return `${quem}.`;
+}
+
+function CartaoCancelada({ ag }: { ag: AulaCancelada }) {
+  return (
+    <Card style={[s.card, s.cardCancelada]} padding={16}>
+      <View style={[s.dateBubble, s.dateBubbleCancelada]}>
+        <Text style={[s.dateNum, s.dateCanceladaTexto]}>{formatDate(ag.dataAula, 'DD')}</Text>
+        <Text style={[s.dateMes, s.dateCanceladaTexto]}>{formatDate(ag.dataAula, 'MMM')}</Text>
+      </View>
+      <View style={s.info}>
+        <View style={s.tituloRow}>
+          <Text style={[s.modalidade, s.riscado]}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
+          <Badge label="Cancelada" variant="neutral" />
+        </View>
+        <Text style={s.infoText}>
+          {DIAS_PT[ag.horario.diaSemana]} • {formatDate(ag.dataAula, 'DD/MM')} • {ag.horario.horaInicio} - {ag.horario.horaFim}
+        </Text>
+        <Text style={s.fechadoNota}>{notaDaCancelada(ag)}</Text>
+      </View>
+    </Card>
+  );
+}
+
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
@@ -185,6 +246,12 @@ const s = StyleSheet.create({
   dateFechadoTexto: { color: LC.warningFg },
   riscado: { textDecorationLine: 'line-through', color: LC.textSecondary },
   fechadoNota: { fontSize: 11.5, color: LC.textMuted, marginTop: 2 },
+  secao: { marginTop: 18 },
+  secaoTitulo: { fontSize: 15, fontWeight: '800', color: LC.textPrimary },
+  secaoSub: { fontSize: 12, color: LC.textMuted, marginTop: 2, marginBottom: 10 },
+  cardCancelada: { opacity: 0.8 },
+  dateBubbleCancelada: { backgroundColor: LC.bg },
+  dateCanceladaTexto: { color: LC.textMuted },
   prazoTag: { backgroundColor: LC.bg, borderRadius: LC.radius.full, paddingHorizontal: 10, paddingVertical: 5 },
   prazoText: { fontSize: 11, fontWeight: '600', color: LC.textMuted },
 });

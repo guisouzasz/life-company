@@ -43,6 +43,13 @@ export class AgendamentosController {
   @Get('meus/dias-fechados') @ApiOperation({ summary: 'Minhas aulas que caíram em dia fechado (feriado/recesso)' })
   meusEmDiaFechado(@Request() req) { return this.service.listarFechadasDoAluno(req.user.id); }
 
+  /**
+   * Aulas futuras que o aluno (ou o estúdio) cancelou: elas saem de "meus" e
+   * só entram no histórico quando o dia passa — sem isto sumiam no meio.
+   */
+  @Get('meus/canceladas') @ApiOperation({ summary: 'Minhas aulas futuras canceladas' })
+  meusCanceladas(@Request() req) { return this.service.listarCanceladasFuturas(req.user.id); }
+
   @Get('historico')
   historico(@Request() req, @Query('page') page = '1') {
     // Página inválida ("abc", "0", "-3") vira a primeira, em vez de erro 500.

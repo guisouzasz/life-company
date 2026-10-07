@@ -46,18 +46,30 @@ export async function cotaDaSemana(db: Banco, usuarioId: string, inicio: Date, f
   /** Aulas da semana que caíram em dia fechado — contam, e o aviso diz por quê. */
   const emDiaFechado = fechadas.map((f) => ({ dataAula: f.dataAula, motivo: f.diaFechado?.motivo ?? 'Academia fechada' }));
 
-  const canceladas = await db.agendamento.findMany({
-    where: { usuarioId, dataAula: { gte: inicio, lte: fim }, status: 'CANCELADO' },
+  /**
+   * As aulas da semana que geraram crédito do próprio cancelamento — em
+   * QUALQUER situação atual da linha, não só as que seguem canceladas.
+   *
+   * O crédito é a vaga da semana que virou crédito, e isso não muda quando a
+   * linha da aula volta a ser usada. Olhando só as canceladas, uma brecha:
+   * o aluno de plano 1x cancelava a terça, repunha a MESMA terça com o crédito
+   * (a linha volta a CONFIRMADO, como reposição) e a semana ficava zerada — a
+   * quinta entrava pelo plano. Um direito, duas aulas. Agora a terça reposta
+   * continua ocupando a semana, e um crédito ainda livre de uma aula que
+   * voltou como reposição paga com OUTRO crédito continua derrubável.
+   */
+  const daSemana = await db.agendamento.findMany({
+    where: { usuarioId, dataAula: { gte: inicio, lte: fim } },
     select: { id: true, dataAula: true },
   });
-  if (canceladas.length === 0) return { usadas, emDiaFechado, repostas: [] as Date[], creditoLivreId: null as string | null };
+  if (daSemana.length === 0) return { usadas, emDiaFechado, repostas: [] as Date[], creditoLivreId: null as string | null };
 
   const creditos = await db.creditoReposicao.findMany({
     where: {
       usuarioId,
       revogado: false,
       concedidoAdmin: false,
-      origemAgendamentoId: { in: canceladas.map((c) => c.id) },
+      origemAgendamentoId: { in: daSemana.map((c) => c.id) },
     },
     orderBy: { criadoEm: 'asc' },
     select: { id: true, usado: true, origemAgendamentoId: true },
@@ -69,7 +81,7 @@ export async function cotaDaSemana(db: Banco, usuarioId: string, inicio: Date, f
     /** Dias das aulas canceladas cujo crédito já virou reposição. */
     repostas: creditos
       .filter((c) => c.usado)
-      .map((c) => canceladas.find((a) => a.id === c.origemAgendamentoId)!.dataAula),
+      .map((c) => daSemana.find((a) => a.id === c.origemAgendamentoId)!.dataAula),
     /** Crédito de um cancelamento da semana que ainda não foi usado. */
     creditoLivreId: creditos.find((c) => !c.usado)?.id ?? null,
   };
