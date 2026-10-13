@@ -29,6 +29,7 @@ import { linkWhatsapp, mensagemAniversario, telefoneParaWhatsapp } from '../../s
 import { nomeCurto, primeiroNome } from '../../services/nome';
 import type { AulaHoje, RelatorioDashboard } from '../../services/relatorios/relatorios.types';
 import type { ResumoFinanceiro } from '../../services/financeiro/financeiro.types';
+import { naSituacao, passouDoDia } from '../../services/financeiro/situacao';
 
 /**
  * O painel da dona: o que acontece hoje, o que precisa dela e como está o mês.
@@ -248,7 +249,8 @@ function PrecisaDeVoce({ d, fin }: { d?: RelatorioDashboard; fin?: ResumoFinance
     });
   }
 
-  const atrasados = (fin?.alunos ?? []).filter((a) => a.status === 'ATRASADO').sort((a, b) => b.dias - a.dias);
+  // Mesma conta do Financeiro: inclui quem está "Sem registro" e já passou do dia.
+  const atrasados = (fin?.alunos ?? []).filter((a) => passouDoDia(a)).sort((a, b) => b.dias - a.dias);
   if (atrasados.length > 0) {
     const soma = atrasados.reduce((t, a) => t + (a.valorMensalidade ?? 0), 0);
     itens.push({
@@ -461,6 +463,9 @@ function PrecisaDeVoce({ d, fin }: { d?: RelatorioDashboard; fin?: ResumoFinance
 function DinheiroDoMes({ fin, carregando }: { fin?: ResumoFinanceiro; carregando: boolean }) {
   const mes = formatDate(new Date(), 'MMMM');
   const pct = fin && fin.previsto > 0 ? Math.min(fin.recebido / fin.previsto, 1) : 0;
+  // Contadas como no Financeiro: "Sem registro" que passou do dia é atrasado.
+  const nAtrasados = (fin?.alunos ?? []).filter((a) => naSituacao(a, 'passou')).length;
+  const nAVencer = (fin?.alunos ?? []).filter((a) => naSituacao(a, 'aVencer')).length;
   return (
     <Pressable
       style={({ pressed }) => [s.bloco, pressed && { opacity: 0.9 }]}
@@ -490,8 +495,8 @@ function DinheiroDoMes({ fin, carregando }: { fin?: ResumoFinanceiro; carregando
           </Text>
           <View style={s.dinheiroContas}>
             <Conta n={fin.pagos} rotulo={fin.pagos === 1 ? 'pagou' : 'pagaram'} cor={LC.successFg} fundo={LC.successBg} />
-            <Conta n={fin.aVencer} rotulo="a vencer" cor={LC.textSecondary} fundo={LC.neutralBg} />
-            <Conta n={fin.atrasados} rotulo={fin.atrasados === 1 ? 'atrasado' : 'atrasados'} cor={fin.atrasados ? LC.dangerFg : LC.textSecondary} fundo={fin.atrasados ? LC.dangerBg : LC.neutralBg} />
+            <Conta n={nAVencer} rotulo="a vencer" cor={LC.textSecondary} fundo={LC.neutralBg} />
+            <Conta n={nAtrasados} rotulo={nAtrasados === 1 ? 'atrasado' : 'atrasados'} cor={nAtrasados ? LC.dangerFg : LC.textSecondary} fundo={nAtrasados ? LC.dangerBg : LC.neutralBg} />
           </View>
           {fin.semValor > 0 ? (
             <Text style={s.dinheiroAviso}>

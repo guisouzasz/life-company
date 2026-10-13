@@ -9,6 +9,7 @@ import { Icon } from '../../components/ui/icon';
 import { Badge } from '../../components/ui/badge';
 import { AlunosAulaModal } from '../../components/professor/alunos-aula-modal';
 import { AulaAgora } from '../../components/professor/aula-agora';
+import { AvisoFichas } from '../../components/professor/aviso-fichas';
 import { Loading, EmptyState, ErrorState } from '../../components/ui/states';
 import { useVagasDia } from '../../services/horarios/horarios.queries';
 import { useIsTablet } from '../../hooks/use-is-desktop';
@@ -85,6 +86,10 @@ export default function ProfessorAgenda() {
         ) : null}
       </View>
 
+      <View style={[s.avisoWrap, largo]}>
+        <AvisoFichas />
+      </View>
+
       {hojeEhUtil ? <AulaAgora aulasDeHoje={aulasDeHoje} hoje={hoje} /> : null}
 
       <Text style={[s.secao, largo]}>Agenda da semana</Text>
@@ -154,6 +159,7 @@ export default function ProfessorAgenda() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: LC.bg },
   header: { ...LC.coluna, paddingHorizontal: 20, paddingTop: 56, paddingBottom: 12 },
+  avisoWrap: { ...LC.coluna, paddingHorizontal: 16 },
   title: { fontSize: 24, fontWeight: '800', color: LC.textPrimary, letterSpacing: -0.3 },
   data: { fontSize: 12.5, fontWeight: '700', color: LC.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 2 },
   modsLinha: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },

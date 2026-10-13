@@ -5,7 +5,7 @@ import { Icon } from '../ui/icon';
 import { Loading, ErrorState } from '../ui/states';
 import { FichaExercicios, type ExercicioAberto } from './ficha-exercicios';
 import { alertasDaFicha } from './ficha-saude';
-import { cargaDeHoje, diasAte, fichaSugerida, ordenarFichas } from './situacao';
+import { AVISO_DIAS, cargaDeHoje, diasAte, fichaSugerida, ordenarFichas } from './situacao';
 import { useTreinosDoAluno } from '../../services/treinos/treinos.queries';
 import { useCargasDoAluno } from '../../services/cargas/cargas.queries';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
@@ -178,8 +178,8 @@ export function FichaDoAluno({ alunoId, ativo, onAbrirCarga, onVerFicha, alturaM
                 </Text>
               </View>
               {diasVenc !== null ? (
-                <View style={[s.venc, diasVenc < 0 ? s.vencVencida : diasVenc <= 10 ? s.vencPerto : null]}>
-                  <Text style={[s.vencTexto, diasVenc < 0 ? { color: LC.dangerFg } : diasVenc <= 10 ? { color: LC.warningFg } : null]}>
+                <View style={[s.venc, diasVenc < 0 ? s.vencVencida : diasVenc <= AVISO_DIAS ? s.vencPerto : null]}>
+                  <Text style={[s.vencTexto, diasVenc < 0 ? { color: LC.dangerFg } : diasVenc <= AVISO_DIAS ? { color: LC.warningFg } : null]}>
                     {diasVenc < 0 ? `Venceu ${formatDate(aberta.vencimento!, 'DD/MM')}` : `Vence ${formatDate(aberta.vencimento!, 'DD/MM')}`}
                   </Text>
                 </View>

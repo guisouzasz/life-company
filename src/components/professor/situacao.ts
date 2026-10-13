@@ -43,8 +43,11 @@ export type Situacao = {
   urgente: boolean;
 };
 
-/** Até quantos dias antes do vencimento a ficha já pede atenção. */
-const AVISO_DIAS = 10;
+/**
+ * Até quantos dias antes do vencimento a ficha já pede atenção — uma semana,
+ * como a dona pediu: dá tempo de o professor montar a ficha nova antes.
+ */
+export const AVISO_DIAS = 7;
 
 export function situacaoDoAluno(r?: ResumoAluno | null, hoje = hojeIso()): Situacao {
   if (!r || r.fichas === 0) {

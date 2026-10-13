@@ -14,6 +14,7 @@ import { RegistrarPagamentoModal, ConfigFinanceiroModal } from '../../components
 import { useResumoFinanceiro } from '../../services/financeiro/financeiro.queries';
 import { useDesfazerPagamento } from '../../services/financeiro/financeiro.mutations';
 import type { AlunoFinanceiro } from '../../services/financeiro/financeiro.types';
+import { naSituacao, passouDoDia, type SituacaoPagamento } from '../../services/financeiro/situacao';
 import { formatDate } from '../../services/date';
 import { formatarReal, valorOuNulo } from '../../services/mascaras';
 import { ApiError } from '../../services/http';
@@ -32,7 +33,8 @@ import { nomeCurto } from '../../services/nome';
 function useAvisoWhatsapp() {
   const [erro, setErro] = useState<string | null>(null);
 
-  const cabeAviso = (a: AlunoFinanceiro) => a.status === 'A_VENCER' || a.status === 'ATRASADO';
+  // Inclui quem está "Sem registro" e já passou do dia: para a dona, está devendo.
+  const cabeAviso = (a: AlunoFinanceiro) => a.status === 'A_VENCER' || a.status === 'ATRASADO' || passouDoDia(a);
 
   const avisar = async (a: AlunoFinanceiro) => {
     const numero = telefoneParaWhatsapp(a.telefone);
@@ -46,7 +48,7 @@ function useAvisoWhatsapp() {
     const texto = mensagemVencimento({
       nome: a.nome,
       vencimento: a.vencimento,
-      atrasado: a.status === 'ATRASADO',
+      atrasado: passouDoDia(a),
       valor: a.valorMensalidade,
     });
     try {
@@ -59,6 +61,8 @@ function useAvisoWhatsapp() {
   return { avisar, cabeAviso, erro, limparErro: () => setErro(null) };
 }
 
+type Situacao = SituacaoPagamento;
+
 function statusInfo(a: AlunoFinanceiro): { label: string; variant: BadgeVariant } {
   switch (a.status) {
     case 'EM_DIA':
@@ -66,7 +70,9 @@ function statusInfo(a: AlunoFinanceiro): { label: string; variant: BadgeVariant 
     case 'ATRASADO':
       return { label: `Atrasado ${a.dias}d`, variant: 'danger' };
     case 'SEM_REGISTRO':
-      return { label: 'Sem registro', variant: 'neutral' };
+      return passouDoDia(a)
+        ? { label: `Sem registro · passou dia ${a.diaVencimento}`, variant: 'warning' }
+        : { label: 'Sem registro', variant: 'neutral' };
     default:
       return { label: a.dias === 0 ? 'Vence hoje' : `Vence em ${a.dias}d`, variant: a.dias <= 3 ? 'primary' : 'neutral' };
   }
@@ -82,6 +88,7 @@ export default function AdminFinanceiro() {
   const [desfazendo, setDesfazendo] = useState<AlunoFinanceiro | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [diaVencimentoFiltro, setDiaVencimentoFiltro] = useState<number | null>(null);
+  const [situacao, setSituacao] = useState<Situacao>('todos');
   const aviso = useAvisoWhatsapp();
 
   const dados = resumo.data;
@@ -90,13 +97,26 @@ export default function AdminFinanceiro() {
     () => [...new Set(alunosFinanceiro.map((a) => a.diaVencimento))].sort((a, b) => a - b),
     [alunosFinanceiro],
   );
-  const alunosFiltrados = useMemo(
+  const doDia = useMemo(
     () =>
       diaVencimentoFiltro === null
         ? alunosFinanceiro
         : alunosFinanceiro.filter((a) => a.diaVencimento === diaVencimentoFiltro),
     [alunosFinanceiro, diaVencimentoFiltro],
   );
+  const alunosFiltrados = useMemo(() => doDia.filter((a) => naSituacao(a, situacao)), [doDia, situacao]);
+  /** Os números do topo, contados do mesmo jeito que o filtro (o "Sem registro" que passou do dia entra em atrasados). */
+  const contagem = useMemo(
+    () => ({
+      pagou: alunosFinanceiro.filter((a) => naSituacao(a, 'pagou')).length,
+      aVencer: alunosFinanceiro.filter((a) => naSituacao(a, 'aVencer')).length,
+      passou: alunosFinanceiro.filter((a) => naSituacao(a, 'passou')).length,
+    }),
+    [alunosFinanceiro],
+  );
+  /** Toque no quadro do topo: filtra; tocar de novo volta para todos. */
+  const alternar = (sit: Situacao) => setSituacao((atual) => (atual === sit ? 'todos' : sit));
+  const vazio = situacao === 'todos' ? 'Nenhum aluno vence nesse dia.' : 'Nenhum aluno nesta situação.';
 
   const confirmarDesfazer = () => {
     if (!desfazendo?.pagamento) return;
@@ -176,32 +196,68 @@ export default function AdminFinanceiro() {
 
   const statCards = dados ? (
     <View style={s.stats}>
-      <Card style={s.statCard} padding={14}>
-        <View style={[s.statIcon, { backgroundColor: LC.successBg }]}>
-          <Icon name="checkmark-circle-outline" size={18} color={LC.success} />
-        </View>
-        <Text style={s.statValor}>{dados.pagos}</Text>
-        <Text style={s.statLabel}>{dados.pagos === 1 ? 'Pagou' : 'Pagaram'}</Text>
-      </Card>
-      <Card style={s.statCard} padding={14}>
-        <View style={[s.statIcon, { backgroundColor: LC.primaryLight }]}>
-          <Icon name="hourglass-outline" size={18} color={LC.primary} />
-        </View>
-        <Text style={s.statValor}>{dados.aVencer}</Text>
-        <Text style={s.statLabel}>A vencer</Text>
-      </Card>
-      <Card style={s.statCard} padding={14}>
-        <View style={[s.statIcon, { backgroundColor: LC.dangerBg }]}>
-          <Icon name="alert-circle-outline" size={18} color={LC.danger} />
-        </View>
-        <Text style={[s.statValor, dados.atrasados > 0 && { color: LC.danger }]}>{dados.atrasados}</Text>
-        <Text style={s.statLabel}>{dados.atrasados === 1 ? 'Atrasado' : 'Atrasados'}</Text>
-      </Card>
+      <Pressable style={s.statToque} onPress={() => alternar('pagou')} accessibilityRole="button" accessibilityState={{ selected: situacao === 'pagou' }}>
+        <Card style={[s.statCard, situacao === 'pagou' && s.statCardSel]} padding={14}>
+          <View style={[s.statIcon, { backgroundColor: LC.successBg }]}>
+            <Icon name="checkmark-circle-outline" size={18} color={LC.success} />
+          </View>
+          <Text style={s.statValor}>{contagem.pagou}</Text>
+          <Text style={s.statLabel}>{contagem.pagou === 1 ? 'Pagou' : 'Pagaram'}</Text>
+        </Card>
+      </Pressable>
+      <Pressable style={s.statToque} onPress={() => alternar('aVencer')} accessibilityRole="button" accessibilityState={{ selected: situacao === 'aVencer' }}>
+        <Card style={[s.statCard, situacao === 'aVencer' && s.statCardSel]} padding={14}>
+          <View style={[s.statIcon, { backgroundColor: LC.primaryLight }]}>
+            <Icon name="hourglass-outline" size={18} color={LC.primary} />
+          </View>
+          <Text style={s.statValor}>{contagem.aVencer}</Text>
+          <Text style={s.statLabel}>A vencer</Text>
+        </Card>
+      </Pressable>
+      <Pressable style={s.statToque} onPress={() => alternar('passou')} accessibilityRole="button" accessibilityState={{ selected: situacao === 'passou' }}>
+        <Card style={[s.statCard, situacao === 'passou' && s.statCardSel]} padding={14}>
+          <View style={[s.statIcon, { backgroundColor: LC.dangerBg }]}>
+            <Icon name="alert-circle-outline" size={18} color={LC.danger} />
+          </View>
+          <Text style={[s.statValor, contagem.passou > 0 && { color: LC.danger }]}>{contagem.passou}</Text>
+          <Text style={s.statLabel}>{contagem.passou === 1 ? 'Atrasado' : 'Atrasados'}</Text>
+        </Card>
+      </Pressable>
     </View>
   ) : null;
 
-  const filtroVencimento = dados && diasVencimento.length > 0 ? (
+  const SITUACOES: { chave: Situacao; rotulo: string }[] = [
+    { chave: 'todos', rotulo: 'Todos' },
+    { chave: 'faltam', rotulo: 'Faltam pagar' },
+    { chave: 'passou', rotulo: 'Passaram do dia' },
+    { chave: 'aVencer', rotulo: 'A vencer' },
+    { chave: 'pagou', rotulo: 'Pagaram' },
+  ];
+  const filtroVencimento = dados ? (
     <Card style={s.filtroCard} padding={12}>
+      <View style={s.filtroTopo}>
+        <View style={s.filtroTituloLinha}>
+          <Icon name="funnel-outline" size={16} color={LC.primary} />
+          <Text style={s.filtroTitulo}>Situação</Text>
+        </View>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[s.filtroChips, s.filtroChipsSituacao]}>
+        {SITUACOES.map((f) => {
+          const sel = situacao === f.chave;
+          const n = doDia.filter((a) => naSituacao(a, f.chave)).length;
+          return (
+            <Pressable
+              key={f.chave}
+              style={[s.filtroChip, sel && s.filtroChipSel]}
+              onPress={() => setSituacao(f.chave)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sel }}
+            >
+              <Text style={[s.filtroChipText, sel && s.filtroChipTextSel]}>{f.rotulo} ({n})</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       <View style={s.filtroTopo}>
         <View style={s.filtroTituloLinha}>
           <Icon name="calendar-number-outline" size={16} color={LC.primary} />
@@ -209,7 +265,7 @@ export default function AdminFinanceiro() {
         </View>
         <Text style={s.filtroResumo}>
           {diaVencimentoFiltro === null
-            ? `${alunosFiltrados.length} alunos`
+            ? `${alunosFiltrados.length} ${alunosFiltrados.length === 1 ? 'aluno' : 'alunos'}`
             : `${alunosFiltrados.length} no dia ${diaVencimentoFiltro}`}
         </Text>
       </View>
@@ -274,7 +330,7 @@ export default function AdminFinanceiro() {
               </View>
               {alunosFiltrados.length === 0 ? (
                 <View style={s.tVazio}>
-                  <Text style={s.tVazioText}>Nenhum aluno vence nesse dia.</Text>
+                  <Text style={s.tVazioText}>{vazio}</Text>
                 </View>
               ) : (
                 alunosFiltrados.map((a) => {
@@ -373,7 +429,7 @@ export default function AdminFinanceiro() {
           {filtroVencimento}
           {alunosFiltrados.length === 0 ? (
             <Card style={s.card} padding={14}>
-              <Text style={s.cardVazio}>Nenhum aluno vence nesse dia.</Text>
+              <Text style={s.cardVazio}>{vazio}</Text>
             </Card>
           ) : (
             alunosFiltrados.map((a) => {
@@ -460,7 +516,9 @@ const s = StyleSheet.create({
 
   // ── Stat cards ──────────────────────────────────────────────────
   stats: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  statCard: { flex: 1 },
+  statToque: { flex: 1 },
+  statCard: { flex: 1, borderWidth: 1.5, borderColor: 'transparent' },
+  statCardSel: { borderColor: LC.primary },
   dinheiro: { marginBottom: 12 },
   dinheiroLinha: { flexDirection: 'row', alignItems: 'center' },
   dinheiroItem: { flex: 1, alignItems: 'center' },
@@ -482,6 +540,7 @@ const s = StyleSheet.create({
 
   // ── Filtro de vencimento ───────────────────────────────────────
   filtroCard: { marginBottom: 12 },
+  filtroChipsSituacao: { marginBottom: 12 },
   filtroTopo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
   filtroTituloLinha: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   filtroTitulo: { fontSize: 13.5, fontWeight: '800', color: LC.textPrimary },

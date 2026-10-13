@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LC } from '../../constants/theme';
 import { modalidadesDe, usaTreinoDoDia } from '../../constants/assets';
 import { TabBar } from '../../components/tab-bar';
@@ -181,9 +181,13 @@ function quando(p: { data: string; hora: string }): string {
  * dia, vencendo, vencida ou se não existe. "Precisam de ficha" junta num toque
  * o trabalho que ele tem para fazer.
  */
-function TreinosPorAluno({ compacto = false }: { compacto?: boolean }) {
+function TreinosPorAluno({ compacto = false, filtroInicial = null }: { compacto?: boolean; filtroInicial?: Filtro | null }) {
   const [busca, setBusca] = useState('');
-  const [filtro, setFiltro] = useState<Filtro | null>(null);
+  // Vindo do aviso "Troca de ficha" (Agenda), já abre em "Precisam de você".
+  const [filtro, setFiltro] = useState<Filtro | null>(filtroInicial);
+  useEffect(() => {
+    if (filtroInicial) setFiltro(filtroInicial);
+  }, [filtroInicial]);
   const alunos = useAlunos();
   const resumo = useResumoTreinos();
 
@@ -332,6 +336,8 @@ export default function ProfessorTreinos() {
   const temDia = mods.some((m) => usaTreinoDoDia(m.nome));
   const temFichas = mods.length === 0 || mods.some((m) => !usaTreinoDoDia(m.nome));
   const [aba, setAba] = useState<'fichas' | 'dia'>('fichas');
+  const { filtro: filtroDaRota } = useLocalSearchParams<{ filtro?: string }>();
+  const filtroInicial: Filtro | null = filtroDaRota === 'atencao' ? 'atencao' : null;
   const mostraDia = temDia && (!temFichas || aba === 'dia');
 
   return (
@@ -367,7 +373,7 @@ export default function ProfessorTreinos() {
               </View>
             </View>
           ) : null}
-          {mostraDia ? <TreinoDoDia compacto={temFichas} /> : <TreinosPorAluno compacto={temDia} />}
+          {mostraDia ? <TreinoDoDia compacto={temFichas} /> : <TreinosPorAluno compacto={temDia} filtroInicial={filtroInicial} />}
         </>
       )}
       <TabBar isProfessor />
