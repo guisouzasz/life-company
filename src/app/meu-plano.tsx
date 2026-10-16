@@ -114,7 +114,11 @@ export default function MeuPlano() {
               <View style={s.credList}>
                 {validos.map((c) => (
                   <View key={c.id} style={s.credRow}>
-                    <Text style={s.credRowText}>Válido até {formatDate(new Date(c.expiraEm), 'DD/MM/YYYY')}</Text>
+                    <Text style={s.credRowText}>
+                      {c.extra
+                        ? `Crédito extra do recesso — de ${formatDate(new Date(c.validoDe ?? c.criadoEm), 'DD/MM/YYYY')} a ${formatDate(new Date(c.expiraEm), 'DD/MM/YYYY')}`
+                        : `Válido até ${formatDate(new Date(c.expiraEm), 'DD/MM/YYYY')}`}
+                    </Text>
                     <Badge label="Disponível" variant="success" />
                   </View>
                 ))}

@@ -24,7 +24,8 @@ function useInvalidarTudo() {
 export function useFecharDia() {
   const invalidar = useInvalidarTudo();
   return useMutation({
-    mutationFn: ({ data, motivo }: { data: string; motivo: string }) => diasFechadosService.fechar(data, motivo),
+    mutationFn: ({ data, motivo, recesso }: { data: string; motivo: string; recesso?: boolean }) =>
+      diasFechadosService.fechar(data, motivo, recesso),
     onSuccess: invalidar,
   });
 }

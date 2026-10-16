@@ -11,6 +11,10 @@ export interface Credito {
   usadoAgendamentoId?: string | null;
   revogado: boolean;
   concedidoAdmin: boolean;
+  /** Crédito extra do recesso (Termo, seção 4): fora do limite de reposições. */
+  extra?: boolean;
+  /** Primeiro dia em que pode ser usado (o extra do recesso vale no ano seguinte). */
+  validoDe?: string | null;
   status: StatusCredito;
   usuario?: { id: string; nome: string; email: string };
 }

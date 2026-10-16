@@ -38,6 +38,12 @@ const hojeISO = () => formatDate(new Date(), 'YYYY-MM-DD');
  * plano é a API (POST /agendamentos/admin), a mesma que a tela de Horários
  * usa. Esta tela só facilita chegar até lá.
  */
+/** O crédito extra do recesso vale no ano em que as aulas voltam (o mesmo cálculo da API). */
+function anoDoCreditoExtra(data: string): number {
+  const [ano, mes] = data.split('-').map(Number);
+  return mes === 12 ? ano + 1 : ano;
+}
+
 export default function AdminAgenda() {
   const isDesktop = useIsDesktop();
   /** undefined = semana corrente; a API ancora na segunda de qualquer data. */
@@ -59,6 +65,8 @@ export default function AdminAgenda() {
   const reabrirDia = useReabrirDia();
   const [fechando, setFechando] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('Feriado');
+  /** Recesso de fim de ano dá crédito extra (termo, seção 4); feriado não (seção 3). */
+  const [recesso, setRecesso] = useState(false);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   /** "Seg 12/10" a partir da data — sem depender da grade, que vem mais abaixo. */
   const dataCurta = (data: string) =>
@@ -67,7 +75,7 @@ export default function AdminAgenda() {
   const confirmarFechamento = () => {
     if (!fechando) return;
     fecharDia.mutate(
-      { data: fechando, motivo: motivo.trim() || 'Feriado' },
+      { data: fechando, motivo: motivo.trim() || (recesso ? 'Recesso de fim de ano' : 'Feriado'), recesso },
       {
         onSuccess: (r) => {
           setFechando(null);
@@ -91,7 +99,7 @@ export default function AdminAgenda() {
       <View style={s.fechadoBanner}>
         <Icon name="lock-closed" size={16} color={LC.warningFg} />
         <View style={{ flex: 1 }}>
-          <Text style={s.fechadoTitulo}>Academia fechada</Text>
+          <Text style={s.fechadoTitulo}>{dia.fechado.recesso ? 'Recesso — alunos ganharam crédito extra' : 'Academia fechada'}</Text>
           <Text style={s.fechadoMotivo}>{dia.fechado.motivo}</Text>
         </View>
         {dia.data >= hoje ? (
@@ -128,17 +136,40 @@ export default function AdminAgenda() {
   const formularioFechar = fechando ? (
     <Card style={s.fecharCard} padding={16}>
       <Text style={s.fecharTitulo}>Fechar {dataCurta(fechando)}</Text>
-      <Text style={s.fecharTexto}>
-        Ninguém consegue marcar aula nesse dia. As aulas já marcadas saem da agenda e contam como dadas na
-        semana de cada aluno, sem crédito de reposição. Quem marcou reposição nesse dia recebe o crédito de volta.
-      </Text>
       <View style={s.motivos}>
-        {['Feriado', 'Recesso', 'Manutenção'].map((m) => (
-          <Pressable key={m} style={[s.chip, motivo === m && s.chipSel]} onPress={() => setMotivo(m)}>
-            <Text style={[s.chipTexto, motivo === m && s.chipTextoSel]}>{m}</Text>
-          </Pressable>
-        ))}
+        {(
+          [
+            ['Feriado', false],
+            ['Recesso de fim de ano', true],
+            ['Manutenção', false],
+          ] as const
+        ).map(([m, ehRecesso]) => {
+          const sel = motivo === m && recesso === ehRecesso;
+          return (
+            <Pressable
+              key={m}
+              style={[s.chip, sel && s.chipSel]}
+              onPress={() => {
+                setMotivo(m);
+                setRecesso(ehRecesso);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: sel }}
+            >
+              <Text style={[s.chipTexto, sel && s.chipTextoSel]}>{m}</Text>
+            </Pressable>
+          );
+        })}
       </View>
+      <Text style={s.fecharTexto}>
+        {recesso
+          ? `Ninguém consegue marcar aula nesse dia. Cada aluno que tinha aula nele ganha 1 crédito extra (termo, ` +
+            `seção 4): não conta no limite de 3 reposições e vale para aulas de 01/01 a 31/12/${anoDoCreditoExtra(fechando)}. ` +
+            'Quem marcou reposição nesse dia recebe o crédito de volta.'
+          : 'Ninguém consegue marcar aula nesse dia. As aulas já marcadas saem da agenda e contam como dadas na ' +
+            'semana de cada aluno, sem crédito de reposição (termo, seção 3). Quem marcou reposição nesse dia ' +
+            'recebe o crédito de volta. Quem já tinha cancelado aula desse dia perde o crédito, se ainda não usou.'}
+      </Text>
       <Input label="Motivo (aparece para os alunos)" value={motivo} onChangeText={setMotivo} maxLength={60} placeholder="Feriado de N. Sra. Aparecida" />
       <View style={s.fecharBotoes}>
         <Button title="Voltar" variant="outline" size="sm" fullWidth={false} onPress={() => setFechando(null)} />

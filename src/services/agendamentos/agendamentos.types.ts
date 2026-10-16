@@ -35,7 +35,7 @@ export interface Agendamento {
   horario: Horario;
   presenca?: Presenca | null;
   /** Aula que caiu em dia fechado (feriado/recesso). */
-  diaFechado?: { motivo: string } | null;
+  diaFechado?: { motivo: string; recesso?: boolean } | null;
   /** Id do dia fechado que tirou a aula da agenda (vem em toda aula da API). */
   diaFechadoId?: string | null;
 }

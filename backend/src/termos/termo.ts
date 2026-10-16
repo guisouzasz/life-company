@@ -7,11 +7,13 @@
  *
  * COMO ATUALIZAR: mude o texto e mude a `VERSAO` junto, sempre. A versão vai
  * gravada no aceite de cada aluno — é ela que diz qual redação a pessoa leu.
- * Quem já aceitou continua com a versão antiga registrada; para exigir o
- * aceite do texto novo de quem já usa o sistema é preciso uma tela à parte,
- * porque este termo só barra o primeiro acesso.
+ * Versão nova = todo aluno aceita de novo: o app (portao-do-termo.tsx) barra
+ * quem ainda não aceitou a versão vigente, mesmo quem já usava o sistema. O
+ * aceite antigo continua gravado com a versão que a pessoa leu.
+ *
+ * 2026-10-16: seção 4 — o recesso de fim de ano passou a dar crédito extra.
  */
-export const VERSAO_TERMO = '2026-09-09';
+export const VERSAO_TERMO = '2026-10-16';
 
 export interface SecaoDoTermo {
   titulo: string;
@@ -60,8 +62,8 @@ export const TERMO = {
     {
       titulo: '4. Recesso de fim de ano',
       itens: [
-        'A academia suspende suas atividades no período compreendido entre o Natal e o Ano Novo.',
-        'As aulas deste período integram o planejamento anual do plano e são contabilizadas regularmente, não havendo direito a desconto, reposição ou abatimento na mensalidade.',
+        'Durante o período de recesso, será disponibilizado um crédito extra aos alunos que teriam aulas regularmente nas datas de suspensão das atividades.',
+        'Esse crédito será concedido de forma extraordinária, sendo independente dos créditos de reposição previstos nas demais normas da Academia. Portanto, não será contabilizado no limite regular de reposições e poderá ser utilizado conforme a disponibilidade da agenda do próximo ano.',
       ],
     },
     {

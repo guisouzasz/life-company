@@ -7,9 +7,12 @@ export const diasFechadosService = {
     return data;
   },
 
-  /** Fecha o dia: as aulas marcadas saem da agenda e contam na semana do aluno. */
-  async fechar(dataDia: string, motivo: string): Promise<ResultadoFechamento> {
-    const { data } = await http.post<ResultadoFechamento>('/dias-fechados', { data: dataDia, motivo });
+  /**
+   * Fecha o dia: as aulas marcadas saem da agenda e contam na semana do aluno.
+   * `recesso`: cada aula do plano vira crédito extra (Termo, seção 4).
+   */
+  async fechar(dataDia: string, motivo: string, recesso = false): Promise<ResultadoFechamento> {
+    const { data } = await http.post<ResultadoFechamento>('/dias-fechados', { data: dataDia, motivo, recesso });
     return data;
   },
 

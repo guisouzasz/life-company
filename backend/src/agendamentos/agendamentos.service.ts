@@ -15,6 +15,7 @@ import {
 import { capacidadeEfetiva } from '../horarios/capacidade';
 import { cotaDaSemana } from './cota-semanal';
 import { reposicoesNaJanela } from '../creditos/reposicoes-na-janela';
+import { creditoQueValeNoDia } from '../creditos/credito-valido';
 import { contaComoPresenca, quemCancelou, temFaltaRegistrada } from '../presencas/regra-de-presenca';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
@@ -322,9 +323,28 @@ export class AgendamentosService {
          * pode ser marcada com até 60 dias de antecedência, o prazo de 30
          * dias virava quase 90. `expiraEm` é o fim do último dia, e a aula é
          * gravada à meia-noite: aula no próprio dia do vencimento ainda vale.
+         * (creditoQueValeNoDia — que também segura o extra do recesso até o
+         * ano em que ele vale.)
+         *
+         * Teto de reposições da janela (Termo de Normas, seção 3).
+         *
+         * Conta pela data em que a reposição foi MARCADA, não pela data da
+         * aula: o termo fala em "agendar até 3 a cada 30 dias", e é o ato de
+         * marcar que ocupa a vaga de outra pessoa. Reposição cancelada não
+         * conta — o crédito já se perdeu ali, cobrar de novo na cota seria
+         * punir duas vezes pelo mesmo cancelamento.
+         *
+         * Com o teto atingido, só o crédito extra do recesso ainda serve: ele
+         * "não será contabilizado no limite regular de reposições" (seção 4).
+         *
+         * O teto é regra do termo para o ALUNO se agendando. A dona é quem
+         * aplica o termo: quando ela mesma marca a reposição, a exceção é
+         * dela — travar ali só a mandaria procurar um jeito de contornar.
          */
+        const janela = ctx.admin ? null : await reposicoesNaJanela(tx, usuarioId);
+        const soExtra = janela?.restantes === 0;
         let credito = await tx.creditoReposicao.findFirst({
-          where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date(), gte: dataAula } },
+          where: { ...creditoQueValeNoDia(usuarioId, dataAula), ...(soExtra ? { extra: true } : {}) },
           orderBy: { expiraEm: 'asc' },
         });
         /**
@@ -343,9 +363,19 @@ export class AgendamentosService {
             },
           });
         }
+        if (!credito && soExtra && (await tx.creditoReposicao.count({ where: creditoQueValeNoDia(usuarioId, dataAula) })) > 0) {
+          // Tem crédito para o dia, mas é dos que contam no teto — e o teto acabou.
+          // Quando a mais antiga sair da janela, abre uma vaga de novo — dizer
+          // a data evita o aluno ficar tentando todo dia sem saber o porquê.
+          throw new ForbiddenException(
+            `Você já agendou ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
+              `que é o limite. A próxima vaga abre em ${dayjs(janela!.liberaEm).format('DD/MM')}.`,
+          );
+        }
         if (!credito) {
+          const vivo = { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } };
           const vencemAntes = await tx.creditoReposicao.findFirst({
-            where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date() } },
+            where: { ...vivo, expiraEm: { gt: new Date(), lt: dataAula } },
             orderBy: { expiraEm: 'desc' },
           });
           if (vencemAntes) {
@@ -354,35 +384,20 @@ export class AgendamentosService {
                 `${dayjs(vencemAntes.expiraEm).format('DD/MM')}. Escolha uma aula até essa data.`,
             );
           }
+          // O extra do recesso só vale no ano seguinte (termo, seção 4).
+          const extraDepois = await tx.creditoReposicao.findFirst({
+            where: { ...vivo, validoDe: { gt: dataAula } },
+            orderBy: { validoDe: 'asc' },
+          });
+          if (extraDepois) {
+            throw new ForbiddenException(
+              `${ctx.admin ? `O crédito extra do recesso de ${quem}` : 'Seu crédito extra do recesso'} vale para aulas a partir de ` +
+                `${dayjs(extraDepois.validoDe).format('DD/MM/YYYY')}.`,
+            );
+          }
           throw new ForbiddenException(
             ctx.admin ? `${quem} não tem crédito de reposição válido.` : 'Você não possui crédito de reposição válido',
           );
-        }
-
-        /**
-         * Teto de reposições da janela (Termo de Normas, seção 3).
-         *
-         * Conta pela data em que a reposição foi MARCADA, não pela data da
-         * aula: o termo fala em "agendar até 5 a cada 30 dias", e é o ato de
-         * marcar que ocupa a vaga de outra pessoa. Reposição cancelada não
-         * conta — o crédito já se perdeu ali, cobrar de novo na cota seria
-         * punir duas vezes pelo mesmo cancelamento.
-         *
-         * O teto é regra do termo para o ALUNO se agendando. A dona é quem
-         * aplica o termo: quando ela mesma marca a reposição, a exceção é
-         * dela — travar ali só a mandaria procurar um jeito de contornar.
-         */
-        if (!ctx.admin) {
-          // A mesma conta que o app usa para mostrar o botão (reposicoes-na-janela.ts).
-          const janela = await reposicoesNaJanela(tx, usuarioId);
-          if (janela.restantes === 0) {
-            // Quando a mais antiga sair da janela, abre uma vaga de novo — dizer
-            // a data evita o aluno ficar tentando todo dia sem saber o porquê.
-            throw new ForbiddenException(
-              `Você já agendou ${MAX_REPOSICOES_POR_PERIODO} reposições nos últimos ${DIAS_PERIODO_REPOSICOES} dias, ` +
-                `que é o limite. A próxima vaga abre em ${dayjs(janela.liberaEm).format('DD/MM')}.`,
-            );
-          }
         }
 
         const agendamento = await gravar({ reposicao: true, creditoId: credito.id });
@@ -453,9 +468,7 @@ export class AgendamentosService {
            * Com o número aqui, a tela oferece marcar como reposição, que gasta
            * o crédito e não mexe na semana do plano.
            */
-          const creditosParaODia = await tx.creditoReposicao.count({
-            where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date(), gte: dataAula } },
-          });
+          const creditosParaODia = await tx.creditoReposicao.count({ where: creditoQueValeNoDia(usuarioId, dataAula) });
           throw new ForbiddenException({
             statusCode: 403,
             codigo: 'LIMITE_SEMANAL',
@@ -500,9 +513,7 @@ export class AgendamentosService {
        * reenvia com `usarCredito` true (reposição) ou false (plano).
        */
       if (ctx.perguntarReposicao) {
-        const creditosParaODia = await tx.creditoReposicao.count({
-          where: { usuarioId, usado: false, revogado: false, expiraEm: { gt: new Date(), gte: dataAula } },
-        });
+        const creditosParaODia = await tx.creditoReposicao.count({ where: creditoQueValeNoDia(usuarioId, dataAula) });
         if (creditosParaODia > 0) {
           throw new ConflictException({
             statusCode: 409,
@@ -694,7 +705,7 @@ export class AgendamentosService {
         diaFechadoId: { not: null },
         dataAula: { gte: dayjs().startOf('day').toDate() },
       },
-      include: { horario: { include: { modalidade: true } }, diaFechado: { select: { motivo: true } } },
+      include: { horario: { include: { modalidade: true } }, diaFechado: { select: { motivo: true, recesso: true } } },
       orderBy: [{ dataAula: 'asc' }, { horario: { horaInicio: 'asc' } }],
     });
   }

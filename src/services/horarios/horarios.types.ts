@@ -75,7 +75,7 @@ export interface DiaDaSemana {
   data: string;
   diaSemana: DiaSemana;
   /** Feriado/recesso: a academia não abre e as aulas saíram da agenda. */
-  fechado?: { id: string; motivo: string } | null;
+  fechado?: { id: string; motivo: string; recesso?: boolean } | null;
   aulas: AulaNaGrade[];
 }
 

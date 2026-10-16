@@ -62,6 +62,7 @@ function detalhe(c: Credito): string {
   if (c.status === 'USADO' && c.usadoEm) return `Usado em ${dia(c.usadoEm)}`;
   if (c.status === 'EXPIRADO') return `Venceu em ${dia(c.expiraEm)}`;
   if (c.status === 'REVOGADO') return `Valia até ${dia(c.expiraEm)}`;
+  if (c.extra && c.validoDe) return `Vale de ${dia(c.validoDe)} a ${dia(c.expiraEm)} · fora do limite de 3`;
   return `Vale até ${dia(c.expiraEm)}`;
 }
 
@@ -114,7 +115,9 @@ export function CreditosAlunoModal({ aluno, onClose }: { aluno: AlunoAdmin | nul
     return (
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.rowMain}>{c.concedidoAdmin ? 'Dado pelo estúdio' : 'Aula cancelada no prazo'}</Text>
+          <Text style={styles.rowMain}>
+            {c.extra ? 'Crédito extra do recesso' : c.concedidoAdmin ? 'Dado pelo estúdio' : 'Aula cancelada no prazo'}
+          </Text>
           <Text style={styles.rowSub}>{detalhe(c)}</Text>
         </View>
         <Badge label={st.label} variant={st.variant} />

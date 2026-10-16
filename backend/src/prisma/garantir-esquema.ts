@@ -240,6 +240,23 @@ const AJUSTES: { descricao: string; sql: string }[] = [
     descricao: 'conferencias_diarias: uma por dia',
     sql: `CREATE UNIQUE INDEX IF NOT EXISTS "conferencias_diarias_data_key" ON "conferencias_diarias"("data")`,
   },
+  {
+    // Termo, seção 4: no recesso de fim de ano quem tinha aula ganha crédito extra.
+    descricao: 'dias_fechados: recesso (dá crédito extra) ou feriado',
+    sql: `ALTER TABLE "dias_fechados" ADD COLUMN IF NOT EXISTS "recesso" BOOLEAN NOT NULL DEFAULT false`,
+  },
+  {
+    descricao: 'creditos_reposicao: crédito extra do recesso',
+    sql: `ALTER TABLE "creditos_reposicao" ADD COLUMN IF NOT EXISTS "extra" BOOLEAN NOT NULL DEFAULT false`,
+  },
+  {
+    descricao: 'creditos_reposicao: a partir de quando vale',
+    sql: `ALTER TABLE "creditos_reposicao" ADD COLUMN IF NOT EXISTS "valido_de" TIMESTAMP(3)`,
+  },
+  {
+    descricao: 'creditos_reposicao: dia fechado que criou ou retirou o crédito',
+    sql: `ALTER TABLE "creditos_reposicao" ADD COLUMN IF NOT EXISTS "dia_fechado_id" TEXT`,
+  },
 ];
 
 /**

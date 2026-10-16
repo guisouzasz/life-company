@@ -448,6 +448,9 @@ model DiaFechado {
   /// Meia-noite (no fuso do estúdio) do dia fechado — igual a `dataAula`.
   data     DateTime @unique
   motivo   String
+  /// Recesso de fim de ano: quem tinha aula ganha crédito extra (Termo, seção 4).
+  /// Feriado (false): a aula sai sem reposição (seção 3).
+  recesso  Boolean  @default(false)
   criadoEm DateTime @default(now()) @map("criado_em")
 
   agendamentos Agendamento[]
@@ -484,6 +487,14 @@ model CreditoReposicao {
   usadoAgendamentoId  String?   @map("usado_agendamento_id") // aula agendada com este crédito
   revogado            Boolean   @default(false) // admin removeu
   concedidoAdmin      Boolean   @default(false) @map("concedido_admin")
+  /// Crédito extra do recesso de fim de ano (Termo, seção 4): não conta no
+  /// limite de reposições e só vale a partir de `validoDe`.
+  extra               Boolean   @default(false)
+  /// Primeiro dia em que o crédito pode ser usado (null = desde já).
+  validoDe            DateTime? @map("valido_de")
+  /// Dia fechado que criou este crédito (extra do recesso) ou que o retirou
+  /// (feriado não gera reposição) — é por ele que reabrir o dia desfaz.
+  diaFechadoId        String?   @map("dia_fechado_id")
 
   usuario Usuario @relation(fields: [usuarioId], references: [id])
 

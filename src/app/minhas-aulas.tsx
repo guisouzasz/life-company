@@ -91,12 +91,16 @@ export default function MinhasAulas() {
                     <View style={s.info}>
                       <View style={s.tituloRow}>
                         <Text style={[s.modalidade, s.riscado]}>{nomeModalidade(ag.horario.modalidade.nome)}</Text>
-                        <Badge label="Academia fechada" variant="warning" />
+                        <Badge label={ag.diaFechado.recesso ? 'Recesso' : 'Academia fechada'} variant="warning" />
                       </View>
                       <Text style={s.infoText}>
                         {DIAS_PT[ag.horario.diaSemana]} • {ag.horario.horaInicio} • {ag.diaFechado.motivo}
                       </Text>
-                      <Text style={s.fechadoNota}>Esta aula conta na semana e não gera reposição.</Text>
+                      <Text style={s.fechadoNota}>
+                        {ag.diaFechado.recesso
+                          ? 'Você ganhou 1 crédito extra por esta aula: vale no próximo ano e não conta no limite de 3 reposições.'
+                          : 'Esta aula conta na semana e não gera reposição.'}
+                      </Text>
                     </View>
                   </Card>
                 );

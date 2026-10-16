@@ -72,7 +72,7 @@ export class HorariosService {
         where: { data: { gte: segunda.toDate(), lte: sexta.endOf('day').toDate() } },
       }),
     ]);
-    const fechadoNoDia = new Map(fechados.map((f) => [dayjs(f.data).format('YYYY-MM-DD'), { id: f.id, motivo: f.motivo }]));
+    const fechadoNoDia = new Map(fechados.map((f) => [dayjs(f.data).format('YYYY-MM-DD'), { id: f.id, motivo: f.motivo, recesso: f.recesso }]));
 
     // Chave (turma + dia) → quem está marcado. Evita varrer a lista de
     // agendamentos uma vez por célula da grade.

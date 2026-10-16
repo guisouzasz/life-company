@@ -48,7 +48,17 @@ export default function Agendamento() {
   const creditos = useMeusCreditos();
   const validos = (creditos.data ?? []).filter((c) => c.status === 'VALIDO');
   const inicioDoDia = (data: string) => new Date(`${data}T00:00:00`).getTime();
-  const creditosParaODia = (data: string) => validos.filter((c) => new Date(c.expiraEm).getTime() >= inicioDoDia(data)).length;
+  /** O crédito extra do recesso só vale a partir de `validoDe` (o ano seguinte — termo, seção 4). */
+  const valeNoDia = (c: { expiraEm: string; validoDe?: string | null }, data: string) =>
+    new Date(c.expiraEm).getTime() >= inicioDoDia(data) && (!c.validoDe || new Date(c.validoDe).getTime() <= inicioDoDia(data));
+  const creditosParaODia = (data: string) => validos.filter((c) => valeNoDia(c, data)).length;
+  const extrasParaODia = (data: string) => validos.filter((c) => c.extra && valeNoDia(c, data)).length;
+  /** Crédito extra que ainda não começou a valer no dia escolhido — para explicar por que não há botão. */
+  const extraDepoisDe = (data: string) =>
+    validos
+      .filter((c) => c.extra && c.validoDe && new Date(c.validoDe).getTime() > inicioDoDia(data))
+      .map((c) => new Date(c.validoDe!))
+      .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
   /**
    * Último dia em que algum crédito ainda vale — para dizer "vale até 14/10".
    * Vira `Date` antes de formatar: o crédito vence às 23:59 daqui, que em UTC
@@ -153,8 +163,15 @@ export default function Agendamento() {
     const minha = jaAgendado(detalhe.id);
     const passou = jaComecou(detalhe) && !minha;
     const creditosDoDia = creditosParaODia(diaSel.data);
-    const usaveis = reposicoesRestantes === undefined ? creditosDoDia : Math.min(creditosDoDia, reposicoesRestantes);
-    const limiteDeReposicoes = creditosDoDia > 0 && reposicoesRestantes === 0;
+    /**
+     * O que dá para usar: todo crédito extra do recesso (fora do limite —
+     * termo, seção 4) mais os comuns, até o que resta do limite de 3.
+     */
+    const extrasDoDia = extrasParaODia(diaSel.data);
+    const comunsDoDia = creditosDoDia - extrasDoDia;
+    const usaveis = extrasDoDia + (reposicoesRestantes === undefined ? comunsDoDia : Math.min(comunsDoDia, reposicoesRestantes));
+    const limiteDeReposicoes = comunsDoDia > 0 && reposicoesRestantes === 0 && extrasDoDia === 0;
+    const extraFuturo = usaveis === 0 ? extraDepoisDe(diaSel.data) : null;
     /**
      * Marcar depois do prazo de cancelamento vale, mas a aula não pode mais ser
      * desmarcada e conta como feita (termo, seção 2). Quem marca às 21h a aula
@@ -231,6 +248,10 @@ export default function Agendamento() {
                 onPress={() => agendar(detalhe, true)}
                 leftIcon={<Icon name="ticket-outline" size={18} color={LC.primary} />}
               />
+            ) : !lotado && !minha && !passou && extraFuturo ? (
+              <Text style={s.creditoNota}>
+                Seu crédito extra do recesso vale para aulas a partir de {formatDate(extraFuturo, 'DD/MM/YYYY')}.
+              </Text>
             ) : !lotado && !minha && !passou && validos.length > 0 && ultimoDiaDeCredito ? (
               <Text style={s.creditoNota}>
                 Seu crédito de reposição vale para aulas até {formatDate(ultimoDiaDeCredito, 'DD/MM')}.

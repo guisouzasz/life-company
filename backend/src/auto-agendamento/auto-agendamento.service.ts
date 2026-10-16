@@ -4,6 +4,7 @@ import * as dayjs from 'dayjs';
 import * as isoWeek from 'dayjs/plugin/isoWeek';
 import { PrismaService } from '../prisma/prisma.service';
 import { AgendamentosService } from '../agendamentos/agendamentos.service';
+import { validadeDoCreditoExtra } from '../creditos/credito-valido';
 
 (dayjs as any).extend((isoWeek as any).default || isoWeek);
 
@@ -185,6 +186,49 @@ export class AutoAgendamentoService {
     return total;
   }
 
+  /**
+   * A aula do fixo que cai num dia fechado nasce já fora da agenda.
+   *
+   * Recesso (termo, seção 4): ela também vira o crédito extra, como a de
+   * quem já tinha a aula quando a dona fechou o dia — sem isso, quem fecha
+   * o recesso em outubro deixaria sem crédito os fixos de janeiro, que só
+   * são gerados depois. Tudo com a turma travada, como o fechamento e a
+   * reabertura: se o dia foi reaberto no meio do caminho, devolve false e a
+   * aula segue o caminho normal.
+   */
+  private async registrarNoDiaFechado(
+    fixo: { usuarioId: string; horarioId: string },
+    dataAula: Date,
+    diaFechadoId: string,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM horarios WHERE id = ${fixo.horarioId} FOR UPDATE`;
+      const fechado = await tx.diaFechado.findUnique({ where: { id: diaFechadoId } });
+      if (!fechado) return false;
+      const { count } = await tx.agendamento.createMany({
+        data: [{ usuarioId: fixo.usuarioId, horarioId: fixo.horarioId, dataAula, status: 'CANCELADO', diaFechadoId }],
+        skipDuplicates: true,
+      });
+      if (count > 0 && fechado.recesso) {
+        const aula = await tx.agendamento.findFirst({
+          where: { usuarioId: fixo.usuarioId, horarioId: fixo.horarioId, dataAula },
+          select: { id: true },
+        });
+        await tx.creditoReposicao.create({
+          data: {
+            usuarioId: fixo.usuarioId,
+            origemAgendamentoId: aula!.id,
+            extra: true,
+            concedidoAdmin: true,
+            diaFechadoId,
+            ...validadeDoCreditoExtra(dataAula),
+          },
+        });
+      }
+      return true;
+    });
+  }
+
   /** Dias fechados do período: "YYYY-MM-DD" → id. */
   private async diasFechados(inicio: dayjs.Dayjs, fim: dayjs.Dayjs) {
     const dias = await this.prisma.diaFechado.findMany({
@@ -314,17 +358,7 @@ export class AutoAgendamentoService {
        * de dezembro livres para remarcar, e os de outubro não.
        */
       const fechadoId = diasFechados.get(dataAula);
-      if (fechadoId) {
-        await this.prisma.agendamento.createMany({
-          data: [{
-            usuarioId: fixo.usuarioId,
-            horarioId: fixo.horarioId,
-            dataAula: dia.toDate(),
-            status: 'CANCELADO',
-            diaFechadoId: fechadoId,
-          }],
-          skipDuplicates: true,
-        });
+      if (fechadoId && (await this.registrarNoDiaFechado(fixo, dia.toDate(), fechadoId))) {
         jaResolvidos.add(chave);
         ignorados++;
         continue;
