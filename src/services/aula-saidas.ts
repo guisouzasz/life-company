@@ -7,7 +7,7 @@ import { Storage } from './storage';
  * A turma que acabou continua na tela por 15 minutos (use-aula-agora.ts) —
  * aluno atrasa, termina a última série. Mas quem já foi embora ficava ali
  * misturado com a turma nova até o relógio virar. Pedido da dona: o
- * professor de musculação tira da tela quem saiu.
+ * professor de musculação toca em "Concluir" e tira da tela quem saiu.
  *
  * Como os encaixes (aula-extras.ts), é só o que ESTE professor enxerga, no
  * próprio aparelho: não mexe em agenda, presença, cota nem crédito.
