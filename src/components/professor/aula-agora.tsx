@@ -18,6 +18,7 @@ import { useIsTablet } from '../../hooks/use-is-desktop';
 import { useAnamneseDoAluno } from '../../services/anamnese/anamnese.queries';
 import { useAulaAgora, useMinutoAtual } from '../../hooks/use-aula-agora';
 import { useAlunosExtras } from '../../services/aula-extras';
+import { useSaidasDaSala } from '../../services/aula-saidas';
 import { useAgendamentosDoHorario } from '../../services/agendamentos/agendamentos.queries';
 import type { HorarioVaga } from '../../services/horarios/horarios.types';
 import { nomeCurto } from '../../services/nome';
@@ -40,6 +41,9 @@ interface Props {
   /** Data de hoje em YYYY-MM-DD. */
   hoje: string;
 }
+
+/** "Academia" no banco, Musculação para as pessoas — é lá que a turma fica depois da hora. */
+const ehMusculacao = (h?: HorarioVaga | null) => !!h && nomeModalidade(h.modalidade?.nome) === 'Musculação';
 
 const emMinutos = (h: string) => {
   const m = /^(\d{1,2}):(\d{2})/.exec(h ?? '');
@@ -66,6 +70,16 @@ export function AulaAgora({ aulasDeHoje, hoje }: Props) {
   // horário continua treinando, e o professor precisa da ficha dele.
   const daAnterior = useAgendamentosDoHorario(anterior?.id, hoje, !!anterior);
   const { extras, adicionar, remover } = useAlunosExtras(hoje, aula?.id);
+  /**
+   * Quem já saiu da sala depois do fim da aula (pedido da dona, musculação).
+   * Vale para a turma anterior que ainda aparece por 15 min ("Ainda na sala")
+   * e para a aula que acabou e está "encerrando". Só limpa a tela do professor.
+   */
+  const { sairam, marcarSaida } = useSaidasDaSala(hoje);
+  const sairamDaAula = sairam(aula?.id);
+  const sairamDaAnterior = sairam(anterior?.id);
+  const podeTirarAnterior = ehMusculacao(anterior);
+  const podeTirarDaAula = foco?.estado === 'encerrando' && ehMusculacao(aula);
 
   const [indice, setIndice] = useState<number | null>(null);
   const [adicionando, setAdicionando] = useState(false);
@@ -85,6 +99,7 @@ export function AulaAgora({ aulasDeHoje, hoje }: Props) {
 
   const alunos: AlunoDaAula[] = useMemo(() => {
     const daAgenda = (agendamentos.data ?? [])
+      .filter((ag) => !sairamDaAula.has(ag.usuario.id))
       .map((ag) => ({ id: ag.usuario.id, nome: ag.usuario.nome, reposicao: !!ag.reposicao }))
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     // Encaixes ficam no fim: quem está na agenda oficial vem primeiro.
@@ -95,12 +110,13 @@ export function AulaAgora({ aulasDeHoje, hoje }: Props) {
     // Quem ficou da turma anterior entra por último e sinalizado.
     const restantes = anterior
       ? (daAnterior.data ?? [])
-          .filter((ag) => !atuais.some((a) => a.id === ag.usuario.id))
+          .filter((ag) => !atuais.some((a) => a.id === ag.usuario.id) && !sairamDaAnterior.has(ag.usuario.id))
           .map((ag) => ({ id: ag.usuario.id, nome: ag.usuario.nome, daTurmaDe: anterior.horaInicio }))
           .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
       : [];
     return [...atuais, ...restantes];
-  }, [agendamentos.data, extras, daAnterior.data, anterior]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendamentos.data, extras, daAnterior.data, anterior, sairamDaAula.size, sairamDaAnterior.size]);
 
   const status = useStatusDaTurma(porAluno ? alunos.map((a) => a.id) : []);
 
@@ -130,6 +146,18 @@ export function AulaAgora({ aulasDeHoje, hoje }: Props) {
   const semFicha = alunos.filter((a) => status[a.id]?.situacao.urgente).length;
 
   const abrir = (i: number) => (painel ? setSelecionado(i) : setIndice(i));
+
+  /** Tirar da tela: da turma anterior, ou da aula que já acabou (encaixe sai pelo próprio x). */
+  const saiu = (a: AlunoDaAula) => {
+    if (a.daTurmaDe && anterior && podeTirarAnterior) return () => marcarSaida(anterior.id, [a.id]);
+    if (!a.daTurmaDe && !a.extra && podeTirarDaAula) return () => marcarSaida(aula.id, [a.id]);
+    return undefined;
+  };
+  const restantesDaAnterior = alunos.filter((a) => a.daTurmaDe);
+  const todosSairamDaAula = () => {
+    marcarSaida(aula.id, alunos.filter((a) => !a.daTurmaDe && !a.extra).map((a) => a.id));
+    alunos.filter((a) => a.extra).forEach((a) => remover(a.id));
+  };
 
   return (
     <View style={[s.wrap, painel && s.wrapLargo]}>
@@ -180,12 +208,26 @@ export function AulaAgora({ aulasDeHoje, hoje }: Props) {
                 <Loading />
               </View>
             ) : alunos.length === 0 ? (
-              <Text style={s.vazio}>Nenhum aluno agendado nesta aula.</Text>
+              <Text style={s.vazio}>
+                {sairamDaAula.size > 0 ? 'Todos os alunos já saíram da sala.' : 'Nenhum aluno agendado nesta aula.'}
+              </Text>
             ) : (
               alunos.map((a, i) => (
                 <Fragment key={a.id}>
                   {i === inicioRestantes ? (
-                    <Text style={s.separador}>Ainda na sala · turma das {a.daTurmaDe}</Text>
+                    <View style={s.separadorLinha}>
+                      <Text style={s.separador}>Ainda na sala · turma das {a.daTurmaDe}</Text>
+                      {podeTirarAnterior && anterior ? (
+                        <Pressable
+                          style={({ pressed }) => [s.saiuTodos, pressed && { opacity: 0.7 }]}
+                          onPress={() => marcarSaida(anterior.id, restantesDaAnterior.map((x) => x.id))}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Todos da turma das ${a.daTurmaDe} saíram`}
+                        >
+                          <Text style={s.saiuTodosTexto}>Todos saíram</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   ) : null}
                   <LinhaAluno
                     aluno={a}
@@ -194,10 +236,23 @@ export function AulaAgora({ aulasDeHoje, hoje }: Props) {
                     compacto={painel}
                     onPress={porAluno ? () => abrir(i) : undefined}
                     onRemover={a.extra ? () => remover(a.id) : undefined}
+                    onSaiu={saiu(a)}
                   />
                 </Fragment>
               ))
             )}
+
+            {podeTirarDaAula && alunos.some((a) => !a.daTurmaDe) ? (
+              <Pressable
+                style={({ pressed }) => [s.encerrarTodos, pressed && { opacity: 0.7 }]}
+                onPress={todosSairamDaAula}
+                accessibilityRole="button"
+                accessibilityLabel="Todos os alunos desta aula saíram"
+              >
+                <Icon name="exit-outline" size={16} color={LC.textSecondary} />
+                <Text style={s.encerrarTodosTexto}>Todos saíram da sala</Text>
+              </Pressable>
+            ) : null}
 
             <View style={[s.rodape, painel && s.rodapeColuna]}>
               <Pressable
@@ -322,6 +377,7 @@ function LinhaAluno({
   compacto,
   onPress,
   onRemover,
+  onSaiu,
 }: {
   aluno: AlunoDaAula;
   status?: StatusDoAluno;
@@ -329,6 +385,8 @@ function LinhaAluno({
   compacto: boolean;
   onPress?: () => void;
   onRemover?: () => void;
+  /** Depois do fim da aula: tira o aluno da tela (ele já foi embora). */
+  onSaiu?: () => void;
 }) {
   const sit = status && !status.carregando ? status.situacao : null;
   const mostraSituacao = sit && sit.chave !== 'em-dia';
@@ -369,7 +427,17 @@ function LinhaAluno({
           <Text style={[s.situacaoTexto, { color: sit!.cor }]}>{sit!.rotulo}</Text>
         </View>
       ) : null}
-      {onRemover ? (
+      {onSaiu ? (
+        <Pressable
+          hitSlop={8}
+          style={({ pressed }) => [s.saiu, pressed && { opacity: 0.7 }]}
+          onPress={onSaiu}
+          accessibilityRole="button"
+          accessibilityLabel={`${aluno.nome} saiu da sala`}
+        >
+          <Text style={s.saiuTexto}>Saiu</Text>
+        </Pressable>
+      ) : onRemover ? (
         <Pressable hitSlop={8} onPress={onRemover} accessibilityRole="button" accessibilityLabel={`Tirar ${aluno.nome} da aula`}>
           <Icon name="close-circle" size={20} color={LC.textMuted} />
         </Pressable>
@@ -438,6 +506,16 @@ const s = StyleSheet.create({
     fontSize: 11, fontWeight: '800', color: LC.textMuted, letterSpacing: 0.4,
     textTransform: 'uppercase', marginTop: 8, marginBottom: 2, marginLeft: 10,
   },
+  separadorLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  saiuTodos: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, backgroundColor: LC.neutralBg },
+  saiuTodosTexto: { fontSize: 12, fontWeight: '800', color: LC.textSecondary },
+  saiu: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: LC.border, backgroundColor: LC.bgCard },
+  saiuTexto: { fontSize: 12, fontWeight: '800', color: LC.textSecondary },
+  encerrarTodos: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    marginTop: 8, paddingVertical: 10, borderRadius: 12, backgroundColor: LC.neutralBg,
+  },
+  encerrarTodosTexto: { fontSize: 13.5, fontWeight: '800', color: LC.textSecondary },
   vazio: { fontSize: 13.5, color: LC.textSecondary, padding: 12 },
 
   rodape: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8, paddingHorizontal: 4 },
